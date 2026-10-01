@@ -18,9 +18,13 @@ The isolation rules in `CLAUDE.md` apply to every step below.
 - [x] New `CLAUDE.md` (short, isolation rules on top). Old `CHANGELOG.md` and Rule 0 dropped;
       this file replaces them.
 - [x] First commit made locally (`main`), remote set to `dnc-bajaur/dnc-bajaur`, pre-push guard on.
-- [ ] **Push** — blocked: GitHub refused `imtiazai004` (403). Needs write access for that account
-      (add it as a collaborator on `dnc-bajaur/dnc-bajaur`) or sign-in as the `dnc-bajaur` account.
-- [ ] CI green on GitHub (this is the first full run of the database tests).
+- [x] Pushed to `dnc-bajaur/dnc-bajaur` (`imtiazai004` added as a collaborator with push access).
+- [ ] **CI green on GitHub.** First full run (2026-10-01): 2086 of 2095 tests pass; **9 fail in 3
+      files** — `lifecycleInWhatsApp`, `acknowledgementThanks.e2e`, `availabilityInWhatsApp`.
+      Inherited, not caused by the clean-up (no logic changed): the tests expect an *Acknowledge*
+      tap to leave the incident `acknowledged`, the code now moves it to `responding` (see the
+      2026-09-04 note in `src/api/webhooks.ts` ~line 917). **Owner to decide** which behaviour is
+      right; then fix the tests or the code.
 
 ## 2. Information needed from the owner
 
