@@ -770,8 +770,13 @@ describe.skipIf(dbUrl === undefined)('the district answers an acknowledgement', 
     };
 
     expect(body.state.notifications.some((n) => n.said === 'Unable to Respond')).toBe(true);
-    /** Acknowledged, and no further. Nobody is dealing with this. */
-    expect(body.state.status).toBe('acknowledged');
+    /**
+     * ⚠️ **Responding, by the owner's decision of 2026-10-01** — the Acknowledge tap itself moves
+     * an emergency to Responding, and a later *Unable to Respond* does not pull it back. What
+     * still says nobody is dealing with it is the officer's own answer, on the record above, and
+     * the three ways to be unavailable that follow below.
+     */
+    expect(body.state.status).toBe('responding');
 
     /** And the three ways to be unavailable follow, rather than the closing sentence. */
     const out = messages();
@@ -819,8 +824,9 @@ describe.skipIf(dbUrl === undefined)('the district answers an acknowledgement', 
   });
 
   it('never thanks a stage tap for an acknowledgement', async () => {
+    // Not acknowledged first: since 2026-10-01 that tap is already Responding, and the chase
+    // would no longer offer the Responding button this test needs.
     const id = await tellOfficer({ kind: 'alert', description: `Bridge inspection ${RUN}` });
-    await inbound(tap(ACKNOWLEDGE_REPLY));
 
     /**
      * 🔴 **The control room's *Follow up* is how *Responding* is reached now, and driving the test

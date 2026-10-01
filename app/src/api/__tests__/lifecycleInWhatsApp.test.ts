@@ -333,8 +333,10 @@ describe.skipIf(dbUrl === undefined)('the lifecycle, inside WhatsApp', () => {
 
     expect(await inbound(templateTap('Acknowledge'))).toBe(200);
 
-    // The acknowledgement itself still happens, exactly as it did before Phase C.
-    expect(await statusOf(id)).toBe('acknowledged');
+    // The acknowledgement is recorded — and, by the owner's decision of 2026-10-01, the reply that
+    // carries it reads as *Responding* straight away (`action_logged` moves it; `acknowledged`
+    // never pulls it back — see `domain/incident.ts`).
+    expect(await statusOf(id)).toBe('responding');
 
     /**
      * 🔴 **This test asserted the OPPOSITE until 2026-08-23** — *"hands the officer the rest of
@@ -353,8 +355,9 @@ describe.skipIf(dbUrl === undefined)('the lifecycle, inside WhatsApp', () => {
   });
 
   it('hands the officer the rest of the lifecycle when the control room chases', async () => {
+    // Chased BEFORE any answer — the ordinary case. An Acknowledge tap already reads as
+    // Responding (2026-10-01), so only an unanswered officer is still offered all three.
     const id = await raise(`Road accident ${RUN}`);
-    await inbound(templateTap('Acknowledge'));
     sent = [];
 
     await chase(id);
@@ -387,8 +390,9 @@ describe.skipIf(dbUrl === undefined)('the lifecycle, inside WhatsApp', () => {
   });
 
   it('records Responding on the tap, and then offers only what is still ahead', async () => {
+    // No Acknowledge first: since 2026-10-01 that tap is already Responding, and the button
+    // would not be offered.
     const id = await raise(`Building collapse ${RUN}`);
-    await inbound(templateTap('Acknowledge'));
     await chase(id);
 
     const responding = lastButtons().find((b) => b.title === 'Responding');
@@ -420,9 +424,10 @@ describe.skipIf(dbUrl === undefined)('the lifecycle, inside WhatsApp', () => {
      * **Nothing was recorded on the way to that question**, and that is the assertion worth
      * keeping. An officer who taps *Resolved* and then says nothing has resolved nothing — the
      * emergency stays open and keeps its clock, which is what the page does when somebody closes
-     * the browser on an empty box.
+     * the browser on an empty box. (It reads *Responding* because the Acknowledge tap put it
+     * there — 2026-10-01 — not because of the *Resolved* tap.)
      */
-    expect(await statusOf(id)).toBe('acknowledged');
+    expect(await statusOf(id)).toBe('responding');
 
     expect(
       await inbound(typed('Two vehicles, both drivers walked away. Road cleared 21:40.')),
@@ -437,8 +442,8 @@ describe.skipIf(dbUrl === undefined)('the lifecycle, inside WhatsApp', () => {
   });
 
   it('says a stage is already recorded rather than refusing it', async () => {
+    // No Acknowledge first, for the same reason as the test above.
     const id = await raise(`Fire ${RUN}`);
-    await inbound(templateTap('Acknowledge'));
     await chase(id);
     const responding = lastButtons().find((b) => b.title === 'Responding');
 
@@ -515,9 +520,9 @@ describe.skipIf(dbUrl === undefined)('the lifecycle, inside WhatsApp', () => {
     /**
      * The direction that must hold: the officer answered, and the district knows it. A failure to
      * offer the buttons costs one road to the same place — the **link** on the original message
-     * is still there — and never the answer itself.
+     * is still there — and never the answer itself. (Responding, not acknowledged: 2026-10-01.)
      */
-    expect(await statusOf(id)).toBe('acknowledged');
+    expect(await statusOf(id)).toBe('responding');
   });
 
   it('offers the buttons back when the officer TYPES instead of tapping — the owner’s own journey', async () => {

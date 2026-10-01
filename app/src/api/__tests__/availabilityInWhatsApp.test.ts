@@ -265,8 +265,9 @@ describe.skipIf(dbUrl === undefined)('where are you, inside WhatsApp', () => {
   }
 
   it('offers Where I am beside the stages, and it is the third of three', async () => {
+    // Chased before any answer: an Acknowledge tap already reads as Responding (2026-10-01), and
+    // only an unanswered officer is offered both stages.
     const id = await raise(`Offer test ${RUN}`);
-    await inbound(templateTap('Acknowledge'));
     sent = [];
     await chase(id);
 

@@ -23,8 +23,8 @@ The isolation rules in `CLAUDE.md` apply to every step below.
       files** — `lifecycleInWhatsApp`, `acknowledgementThanks.e2e`, `availabilityInWhatsApp`.
       Inherited, not caused by the clean-up (no logic changed): the tests expect an *Acknowledge*
       tap to leave the incident `acknowledged`, the code now moves it to `responding` (see the
-      2026-09-04 note in `src/api/webhooks.ts` ~line 917). **Owner to decide** which behaviour is
-      right; then fix the tests or the code.
+      2026-09-04 note in `src/api/webhooks.ts` ~line 917). **Owner decided (b): an Acknowledge tap
+      goes straight to Responding**, as the code does — the 9 tests were updated to match.
 
 ## 2. Information needed from the owner
 
