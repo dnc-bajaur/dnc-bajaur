@@ -8,6 +8,7 @@ url="$2"
 case "$url" in
   https://github.com/dnc-bajaur/dnc-bajaur.git | \
   https://github.com/dnc-bajaur/dnc-bajaur | \
+  https://dnc-bajaur@github.com/dnc-bajaur/dnc-bajaur.git | \
   git@github.com:dnc-bajaur/dnc-bajaur.git)
     exit 0
     ;;
