@@ -74,6 +74,9 @@ The ones most often needed:
 | 0022 | The control room assigns. Nothing routes itself. |
 | 0027 | Each incident gets a human number, `DNC-BAJAUR-1, 2, …` (`src/domain/reference.ts`). |
 | 0032 | Settings panel: roles (`owner`/`admin`/`operator`/`viewer`) + allow/deny overrides. |
+| 0038 | **Bajaur:** `member` role — officers sign in for Activities only; one gate (`requireSeat`) keeps them out of every operational route. |
+| 0039 | **Bajaur:** Activities — a separate module (own tables, own Department list), soft/hard delete, 30-day retention. Never touches incidents or evidence. |
+| 0040 | **Bajaur:** WhatsApp media to the district number becomes Activities; unknown senders → Pending list. |
 
 **Note on older text:** the ADRs, `docs/` and many code comments were written while building
 the original deployment. Their *reasoning* applies here; their *examples, counts and dated
@@ -101,11 +104,14 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
 > Detailed plans and progress live in **`PLAN.md`**.
 
 - **2026-10-01** — Repository created from the original codebase. All other-district data
-  removed; neutral placeholders in its place (listed in `PLAN.md` §2). Baseline verified:
-  typecheck, lint, format clean; 933 non-database tests pass. Database-backed suites
-  (~1,160 tests) run in GitHub Actions CI (`.github/workflows/ci.yml`); no local database yet.
+  removed; neutral placeholders in its place (listed in `PLAN.md` §2). CI green: all 148 test
+  files, database suites included (they run only in GitHub Actions; no local database yet).
+- **Decided, not built:** Bajaur's three requirements — install banner, `member` accounts,
+  Activities (+ WhatsApp route). ADR-0038/0039/0040; phases A–D in `PLAN.md` §4.
+- ⚠️ **Until ADR-0038 ships, every account of any role acts as the full control room.** Create
+  no account except the control room's.
 - **Not deployed.** No server, domain, WhatsApp number or backup bucket exists for Bajaur yet.
-- **Next:** collect Bajaur's facts from the owner (`PLAN.md` §2), then go-live steps (§3).
+- **Next:** collect Bajaur's facts (`PLAN.md` §2); build phases A–D only with the owner's go-ahead.
 
 ## 6. Repository map
 

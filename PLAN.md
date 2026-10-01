@@ -19,12 +19,11 @@ The isolation rules in `CLAUDE.md` apply to every step below.
       this file replaces them.
 - [x] First commit made locally (`main`), remote set to `dnc-bajaur/dnc-bajaur`, pre-push guard on.
 - [x] Pushed to `dnc-bajaur/dnc-bajaur` (`imtiazai004` added as a collaborator with push access).
-- [ ] **CI green on GitHub.** First full run (2026-10-01): 2086 of 2095 tests pass; **9 fail in 3
-      files** — `lifecycleInWhatsApp`, `acknowledgementThanks.e2e`, `availabilityInWhatsApp`.
-      Inherited, not caused by the clean-up (no logic changed): the tests expect an *Acknowledge*
-      tap to leave the incident `acknowledged`, the code now moves it to `responding` (see the
-      2026-09-04 note in `src/api/webhooks.ts` ~line 917). **Owner decided (b): an Acknowledge tap
-      goes straight to Responding**, as the code does — the 9 tests were updated to match.
+- [x] **CI green on GitHub** — all 148 test files, database suites included. The first run had 9
+      inherited failures (tests expected an *Acknowledge* tap to stay `acknowledged`; the code
+      moves it to `responding`). **Owner decided: an Acknowledge tap goes straight to Responding**,
+      as the code does — the tests were updated to match.
+      Note: `board.e2e` test 24 failed once and passed on re-run (flaky; untouched).
 
 ## 2. Information needed from the owner
 
@@ -64,7 +63,26 @@ Accounts and services must be **new and Bajaur's own** — never reuse the other
 11. [ ] **Restore drill** — restore a backup beside production once (`docs/08-runbook.md`).
 12. [ ] Repository → **private** (owner).
 
-## 4. To verify (open points)
+## 4. Bajaur's own requirements (agreed 2026-10-01)
+
+Built in this order. Nothing here changes how the control room works today.
+
+| Phase | What | Decision | Needs first |
+|---|---|---|---|
+| A | **"Install this app" banner** after first sign-in — one tap on Android/Windows (Chrome, Edge); step-by-step "Share → Add to Home Screen" on iPhone | — | domain + HTTPS (D-04) |
+| B | **`member` role** + the one gate; accounts by Name / Post / Phone; "Give login" from the contact list; DC/DNC create accounts (up to ~50) | [ADR-0038](docs/adr/ADR-0038-member-accounts.md) | — |
+| C | **Activities**: upload (photo compression on phone, video → 720p on server, max 3 min), Department list (made by the DC), views by department / person / date, soft + hard delete, 30-day auto-delete, media backup | [ADR-0039](docs/adr/ADR-0039-activities.md) | B; server disk; ffmpeg on server; media backup bucket |
+| D | **WhatsApp → Activities** on the same number; officer with an open emergency is asked which it is; unknown numbers → Pending list | [ADR-0040](docs/adr/ADR-0040-whatsapp-to-activities.md) | C; Bajaur's **new** Meta business portfolio |
+
+Rules that hold until these ship:
+- **Until Phase B ships, create no account except the control room's.** Today every account,
+  of any role, acts as the full control room (ADR-0038, Context).
+- Existing gap: the `viewer` role is not enforced on operational writes. Do not issue viewer
+  accounts until it is.
+- WhatsApp setup and template submission happen **only** on Bajaur's new Meta business
+  portfolio — never on any other district's.
+
+## 5. To verify (open points)
 
 - Legal pages (`installer/cloud/*.html`) name the controller of the data — re-read them with the
   DC office before publishing.
