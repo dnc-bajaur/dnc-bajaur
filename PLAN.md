@@ -17,7 +17,9 @@ The isolation rules in `CLAUDE.md` apply to every step below.
       (same as before the clean-up). Database-backed tests run in CI.
 - [x] New `CLAUDE.md` (short, isolation rules on top). Old `CHANGELOG.md` and Rule 0 dropped;
       this file replaces them.
-- [ ] First commit and push to `https://github.com/dnc-bajaur/dnc-bajaur.git`.
+- [x] First commit made locally (`main`), remote set to `dnc-bajaur/dnc-bajaur`, pre-push guard on.
+- [ ] **Push** — blocked: GitHub refused `imtiazai004` (403). Needs write access for that account
+      (add it as a collaborator on `dnc-bajaur/dnc-bajaur`) or sign-in as the `dnc-bajaur` account.
 - [ ] CI green on GitHub (this is the first full run of the database tests).
 
 ## 2. Information needed from the owner
