@@ -1,0 +1,217 @@
+<!doctype html>
+<!--
+  How to have data deleted, served at https://dnc.example.com/data-deletion
+
+  Same reason and same mechanism as privacy.html and terms.html: Meta's app settings ask for a
+  "User data deletion" URL beside the privacy and terms ones, and the app cannot be published
+  without it. An unpublished app receives no production webhooks — no delivery state, no
+  replies, no acknowledgements — so this page is load-bearing for INV-03, not paperwork.
+
+  DEPLOYED BY COPYING. This file is the source; Caddy serves /var/www/dnc-legal/data-deletion.html
+  on the server. Deliberately NOT an application route, for the reasons in privacy.html's header.
+
+      scp installer/cloud/data-deletion.html root@HOST:/var/www/dnc-legal/data-deletion.html
+
+  It also has to be in sw.ts's NOT_THE_APP list, or the service worker's navigation branch hands
+  a real person the cached shell — the report screen — instead of this document. Meta's crawler
+  is never affected by that; only officers who have opened the app are.
+
+  WHAT THIS PAGE MAY AND MAY NOT SAY. Meta asks this question about data an app obtained through
+  a Facebook Login, and this system has no Facebook Login and never has: nobody signs in with a
+  Meta account, and the only Meta surface it touches is the WhatsApp Business Platform, used to
+  notify the district's own officers. That is said plainly rather than papered over with generic
+  wording, because a page that describes a login flow the district does not operate is a false
+  statement made in the district's name.
+
+  Retention is stated as indefinite because it is (R-11). The district has not set a retention
+  period, and inventing one here would publish a policy they never agreed to.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Deleting your data — District Nerve Center, Bajaur</title>
+    <style>
+      :root {
+        --paper: #ffffff;
+        --ink: #16181d;
+        --muted: #5c6270;
+        --line: #e3e5ea;
+        --primary: #5b3fd6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #08090c;
+          --ink: #f4f4f7;
+          --muted: #9aa0ae;
+          --line: #23262e;
+          --primary: #a894ff;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font:
+          16px/1.65 system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+      }
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+        padding: 3rem 1.25rem 5rem;
+      }
+      h1 {
+        font-size: 1.8rem;
+        line-height: 1.2;
+        margin: 0 0 0.35rem;
+        letter-spacing: -0.02em;
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin: 2.4rem 0 0.6rem;
+        letter-spacing: -0.01em;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 2rem;
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 2.5rem 0 0;
+      }
+      ul,
+      ol {
+        padding-left: 1.2rem;
+      }
+      li {
+        margin: 0.35rem 0;
+      }
+      a {
+        color: var(--primary);
+      }
+      footer {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 2rem;
+      }
+      code {
+        background: var(--line);
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Deleting your data</h1>
+      <p class="sub">
+        District Nerve Center — Office of the Deputy Commissioner, Bajaur, Khyber
+        Pakhtunkhwa, Pakistan
+      </p>
+
+      <p>
+        This page explains how to ask the district to delete information it
+        holds about you, and what happens when you do. It sits beside the
+        <a href="/privacy">privacy notice</a>, which describes what is held and
+        why.
+      </p>
+
+      <h2>There is no Facebook sign-in to disconnect</h2>
+      <p>
+        Nobody signs in to this system with a Facebook, Instagram or other Meta
+        account, and this system has never asked for one. The only Meta service
+        it uses is the WhatsApp Business Platform, and it uses it in one
+        direction: to send notifications about emergencies to the district's own
+        officers, from one number the district controls, and to receive their
+        replies. So there is no login to revoke and no Meta profile data to
+        remove — what can be deleted is described below.
+      </p>
+
+      <h2>What can be deleted</h2>
+      <ul>
+        <li>
+          <strong>Your contact details</strong> — a name, post, department and
+          telephone number held in the district's directory so an emergency can
+          be routed to whoever holds a post today, or so a responding department
+          can call a reporter back.
+        </li>
+        <li>
+          <strong>Messages sent to you, and your replies</strong> — the WhatsApp
+          notifications the district sent to your number, their delivery state,
+          and anything you sent back to the district's number.
+        </li>
+        <li>
+          <strong>Contact details you gave when reporting an emergency</strong>,
+          where you chose to give them.
+        </li>
+      </ul>
+
+      <h2>How to ask</h2>
+      <ol>
+        <li>
+          Write to <a href="mailto:dc-office@example.com">dc-office@example.com</a> with
+          the subject <strong>Data deletion request</strong>, or write to the
+          Office of the Deputy Commissioner, Bajaur.
+        </li>
+        <li>
+          Say which telephone number or which record the request is about.
+          Without enough detail to identify it, the office cannot act on the
+          request.
+        </li>
+        <li>
+          The office answers the request. Where something cannot be deleted, you
+          are told which part and why, rather than the request being closed
+          silently.
+        </li>
+      </ol>
+      <p>
+        There is no self-service button for this, and that is deliberate: this
+        is an emergency record belonging to a government office, and deleting
+        part of it is an act a person in that office takes and is accountable
+        for.
+      </p>
+
+      <h2>What cannot be deleted, and why</h2>
+      <p>
+        Records that form part of the district's account of an emergency
+        response may be retained where there is a legal reason to keep them.
+        What was reported, when, who was told, and whether it was acted on is
+        the district's own record of an emergency, and it is the thing this
+        system exists to keep. The district will say when this applies to your
+        request.
+      </p>
+
+      <h2>How long data is kept otherwise</h2>
+      <p>
+        Emergency records are retained indefinitely at present. The district has
+        not yet set a retention period, and this page and the privacy notice
+        will be updated to state one when it does, rather than implying a limit
+        that is not in force.
+      </p>
+
+      <h2>Asking a question instead</h2>
+      <p>
+        The same address answers questions about what is held and why:
+        <a href="mailto:dc-office@example.com">dc-office@example.com</a>, or the Office
+        of the Deputy Commissioner, Bajaur.
+      </p>
+
+      <hr />
+      <footer>
+        <p>
+          Last updated 12 August 2026. Served at
+          <code>https://dnc.example.com/data-deletion</code>.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,477 @@
+/*
+ * The recipient picker and the "who was told" panel — control-room work, and not in the shell.
+ *
+ * ## Why this file exists
+ *
+ * `dispatch.js` left the shell on 2026-08-06 (M7-26) because the M1 gate refused a 161 KB
+ * build, and `dispatchBundle.ts` states the reason: under ADR-0018 nobody outside the control
+ * room signs in, so an officer at a road accident will never open this panel. **Its CSS did not
+ * go with it.** For eight days the shell carried the styling for a screen its own comment says
+ * that reader will never see.
+ *
+ * Same finding, same day and same fix as `office.css` — see that file's header for the audit
+ * that turned all of this up.
+ *
+ * ## What deliberately stayed behind
+ *
+ * The group editor's `.gname`, `.gmember`, `.gorder`, `.glabel`, `.gkind`, `.gwarn` and
+ * `.gpick` are drawn by **both** `admin.ts` (the console's Groups tab) and this bundle's
+ * `.dpick.k-group`. Moving them here would leave the console unstyled; copying them into both
+ * files would put one rule in two places, which is the drift this repository has a standing
+ * lesson about. They stay in the shell until somebody has a better answer than either.
+ *
+ * ## The one thing to know before editing
+ *
+ * Fetched, not precached — stored under `sw.ts`'s generic handler with the `CACHE` string.
+ * **Changing this file needs a `CACHE` bump**, or a control room that has already opened the
+ * app keeps the old picker styling for ever.
+ */
+
+.dresult { margin-top: 0.5rem; }
+.dtold { font-size: var(--t4); font-weight: var(--w2); margin: 0.3rem 0; }
+
+/*
+  Adding to the directory from the picker (M9-23). Every one of these is a bordered,
+  quiet control: the only filled button on this screen is the one that sends, and an
+  administrative errand must never look like the emergency action beside it.
+*/
+.dadd {
+  min-height: 44px; padding: 0 0.7rem; margin: 0.3rem 0.3rem 0.3rem 0;
+  background: transparent; color: var(--slate);
+  border: 1px dashed var(--line); border-radius: 8px;
+  font: inherit; font-size: var(--t3); cursor: pointer;
+}
+.dadd:hover { border-style: solid; color: var(--primary); border-color: var(--primary); }
+.dtools { margin-top: 0.4rem; }
+.doffer { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0 0.5rem 0.4rem; }
+.dform {
+  display: flex; flex-direction: column; gap: 0.4rem;
+  margin-top: 0.4rem; padding: 0.7rem;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--card2);
+}
+.dform h3 { margin: 0; font-size: var(--t4); }
+.dform input, .dform select {
+  font: inherit; font-size: var(--t4); min-height: 44px; padding: 0 0.6rem;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.dform .note { margin: 0; font-size: var(--t2); }
+button.dfsave {
+  font: inherit; font-weight: var(--w2); min-height: 44px;
+  background: var(--primary-fill); color: #fff; border: none; border-radius: 8px; cursor: pointer;
+}
+button.dfsave:disabled { background: var(--card2); color: var(--muted); cursor: default; }
+button.dfcancel {
+  font: inherit; min-height: 44px; background: transparent; color: var(--slate);
+  border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+
+#whoTold { margin: 1rem 0; }
+#whoTold h3 { font-size: var(--t4); margin: 0 0 0.4rem; }
+/*
+  The group a dispatch expanded, as a heading over its members — Case 3, 2026-09-10.
+
+  `expand()` dissolves a ticked group into loose recipients on purpose, so the rows below are
+  ordinary `.told` rows and this is a label between them, read off `dispatched.payload.fromGroups`.
+  Styled as the panel's sub-heads are (`.atth`: caps, `--slate`, `--t2`) so it reads as structure
+  and never competes with a recipient's name. The "N of M responded" count beside it is plain
+  text — INV-04: the tally at the top of the panel carries the colour, this only says which
+  slice of it is this group.
+*/
+.toldgroup {
+  margin: 0.7rem 0 0.1rem; font-size: var(--t2);
+  letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--slate);
+}
+.toldgroup:first-child { margin-top: 0; }
+.toldgroupname { font-weight: var(--w2); }
+.told {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem;
+  padding: 0.4rem 0; border-bottom: 1px solid var(--line);
+}
+.tname { font-size: var(--t4); font-weight: var(--w1); }
+/* Three states, three colours, and the words say it too — colour never carries it alone.
+   `--t3` since 2026-09-10: the district asked for each recipient's answer to be read at a
+   glance, not squinted at, and this is the word that names it. */
+.tstate { font-size: var(--t3); font-weight: var(--w2); }
+.tstate.ok { color: var(--ok); }
+.tstate.pending { color: var(--pending); }
+.tstate.bad { color: var(--critical); }
+/*
+  Delivered to a handset and answered by nobody — better than "not reached" and emphatically
+  not "they know" (ADR-0014).
+
+  **This rule used to claim it had "its own colour because it is genuinely its own state", and
+  it never did** — it has always been `--pending`, the same as the two rungs above it. Corrected
+  2026-08-14 rather than "fixed", because the code was right and the sentence was not.
+
+  Amber is the category — *this is not finished* — and the **word** is the state. There are four
+  words on three colours here and every one of them is different:
+
+    pending  "being recorded"  ·  "waiting — not yet opened"
+    part     "reached their handset — no answer yet"
+    bad      "not reached"
+
+  Adding a fifth colour would say that `part` differs from `pending` **more** than "waiting"
+  differs from "being recorded", which is not true, and would spend a colour on a distinction
+  the sentence already draws exactly. INV-04 asks that colour never carry meaning alone; it does
+  not ask that every state own a colour.
+*/
+.tstate.part { color: var(--pending); }
+.twhy { font-size: var(--t2); color: var(--slate); }
+/*
+  What the officer actually said, in their words. The point of the whole entry (M7-05).
+
+  ⚠️ **No longer small, slate and italic — 2026-09-10, the district's own note.** Squeezed
+  under the row as `--t2` slate italic it read as an aside, on the one line that is the whole
+  reason this panel exists. It is `--t3`, `--w2` and upright now, in `--ok` — the green the
+  product already uses for "somebody has this", so an owning reply and a declined one
+  (`.tsaid.unheld`, burnt orange, in `index.html`) are told apart at a glance. The quotation
+  marks and the words carry it regardless (INV-04); the colour is the fast read, not the only
+  one.
+*/
+.tsaid { font-size: var(--t3); font-weight: var(--w2); color: var(--ok); font-style: normal; }
+/*
+  WHAT WE SENT THIS RECIPIENT — the district asked for it 2026-08-24.
+
+  ⚠️ **It is no longer on every row.** `renderWhoWasTold` draws it only where the recipients
+  hold DIFFERENT words (2026-09-08): repeated identically under every name it was a second copy
+  of "The alert we sent" directly above, which is what the district photographed. The rules
+  below still hold wherever it does appear — an incident told twice is exactly where it earns
+  its width.
+
+  It takes the whole width of the row on purpose. Everything else in `.told` is a short phrase
+  that sits beside the name; this is a sentence, and a sentence squeezed between two chips is a
+  sentence nobody reads. `flex-basis: 100%` rather than a second container: `.told` is already a
+  wrapping flex row, so one line breaking to its own row is what that layout is for.
+
+  `pre-wrap` because these are the words that went to a handset, and flattening their line breaks
+  is the screen editing what the district said. Quiet — `--slate`, `--t2` — because it appears on
+  every recipient and the states above it are what an operator is scanning for.
+
+  `.none` is *we do not know*, which is a different fact from a message with no words in it.
+  Italic rather than a colour, the same as `.tsaid`: the words carry the meaning (INV-04) and the
+  slant only stops "not recorded" being mistaken for a message that read "not recorded".
+
+  ⚠️ No `opacity` — `scripts/contrast.mjs` composites a colour's own alpha and cannot see an
+  element's, so an opacity here lowers a measured pairing to a number no check in this repository
+  would ever read. `--slate` on `--card2` is measured; only the slant changes.
+*/
+.tsent {
+  flex-basis: 100%; font-size: var(--t3); color: var(--slate); white-space: pre-wrap;
+}
+.tsent.none { font-style: italic; }
+
+/*
+  The operator's own record — M7-08. Pushed to the end of the row and kept quiet: it is
+  used forty times a day and must not shout, but it must never be hunted for either.
+*/
+.trec { margin-left: auto; display: flex; align-items: center; gap: 0.3rem; }
+.tbtn {
+  font: inherit; font-size: var(--t1); font-weight: var(--w2);
+  padding: 0.2rem 0.5rem; cursor: pointer;
+  color: var(--ink); background: var(--card);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+.tbtn:hover { border-color: var(--slate); }
+.tbtn[disabled] { opacity: 0.5; cursor: default; }
+.tbtn-no { color: var(--slate); }
+.tsaidin { font-size: var(--t2); padding: 0.2rem 0.4rem; min-width: 14rem; }
+
+#dispatchPanel { margin: 1rem 0 0; }
+#dispatchPanel h2 { font-size: var(--t5); margin: 0 0 0.3rem; }
+.dsearch {
+  font: inherit; width: 100%; min-height: 44px; padding: 0 0.7rem; margin: 0 0 0.5rem;
+  background: var(--card2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 12px;
+}
+.dbody { max-height: 22rem; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; }
+.dgroup { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--line); }
+.dgroup:last-child { border-bottom: none; }
+.dgroup h3 {
+  margin: 0.2rem 0 0.3rem; font-size: var(--t2); letter-spacing: var(--ls-caps);
+  text-transform: uppercase; color: var(--slate);
+}
+/* "Tell all 8" (M9-20). Bordered, not filled — the filled button is the one that sends. */
+.dall {
+  min-height: 44px; padding: 0 0.7rem; margin-bottom: 0.3rem;
+  background: transparent; color: var(--primary);
+  border: 1px solid var(--line); border-radius: 8px;
+  font-size: var(--t3); cursor: pointer;
+}
+.dall:hover { border-color: var(--primary); }
+/* Amber border when some cannot be reached. The count is in the title — INV-04. */
+.dall:not([data-unreachable="0"]) { border-color: var(--pending); }
+.dpick {
+  /*
+    `wrap`, so the number can take a line of its own — M10-38. Everything else on the row still
+    sits on one line; only `.dnum` claims a full basis, so nothing else can be pushed down by a
+    long designation without the layout saying so.
+  */
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.5rem;
+  min-height: 44px; padding: 0.2rem 0.3rem; cursor: pointer;
+}
+/*
+  The number, beneath the name — M10-38.
+
+  `flex-basis: 100%` puts it on its own line and the left padding lines it up under the label
+  rather than under the checkbox. `tabular-nums` because these are read out loud and compared by
+  eye: two officers sharing one handset is real here (Kamran Ali and Kamran Aziz, M10-05), and
+  proportional digits make two identical numbers look different.
+*/
+.dnum {
+  flex-basis: 100%; padding-left: calc(20px + 0.5rem);
+  font-size: var(--t2); color: var(--slate); font-variant-numeric: tabular-nums;
+}
+/*
+  Which row is under the pointer, and which rows are already chosen — 2026-08-14.
+
+  This list can run to forty officers inside a 22rem scroller, and it had **neither**. Moving
+  the mouse gave no answer to "which one am I about to tick", and a row already ticked was
+  distinguishable only by reading its checkbox, one at a time, in a box that scrolls.
+
+  This is the screen that decides who is told about an emergency. A mis-tick here is not a
+  cosmetic error: it means the person who should have been told was not, and the operator has
+  no reason to suspect it, because the confirmation afterwards lists exactly who they picked.
+
+  `:has()` rather than a class toggled in `dispatch.ts`: the checkbox already holds this state,
+  and a second copy of it in a class is a second thing that can be wrong. The build targets
+  chrome110 and `:has()` has been available since 105.
+
+  Declared after the hover rule on purpose — a chosen row keeps saying so while the pointer is
+  over it, and the tint is `--primary-wash`, the same tint the board uses to mean *this one*.
+*/
+.dpick:hover { background: var(--card2); }
+.dpick:has(input:checked) { background: var(--primary-wash); }
+.dpick input { width: 20px; height: 20px; margin: 0; flex: none; }
+.dlabel { font-size: var(--t4); font-weight: var(--w1); }
+.dkind { font-size: var(--t1); color: var(--slate); text-transform: uppercase; letter-spacing: var(--ls-caps); }
+/* A group's own photo on the picker row — 2026-09-01. Same 26px round face as the console. */
+.davatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; }
+.dwho { font-size: var(--t2); color: var(--slate); }
+/* The designation, on its own indented line under the name — 2026-09-01, so a contact row reads
+   the way a phone's contact list does (Name / post / phone). Same `flex-basis`/`padding-left` as
+   `.dnum` so both align under the label, not the checkbox. A step above `.dwho` in ink, because
+   it is the half of the row an operator is usually searching for: they know the post they want
+   and not the name of whoever holds it tonight. `--ink`, no new colour. */
+.ddesig {
+  flex-basis: 100%; padding-left: calc(20px + 0.5rem);
+  font-size: var(--t2); color: var(--ink);
+}
+/*
+  ~~Somebody holding no post says so rather than showing a blank — M10-39.~~ **Reversed the same
+  day.** They are their name alone: a person with no post has no department either, so the row is
+  already under a heading reading "No department", and the dimmed text was that fact twice on the
+  row the district asked to make shorter. `.ddesig.none` is gone with it.
+*/
+
+/*
+  "3 designations vacant — show" — M10-34. Quiet and full width, sitting UNDER the officers: the
+  gap is stated as a number, and the number is what the district acts on. Not a filled control —
+  the only filled button on this screen is the one that sends.
+*/
+.dfold {
+  display: block; width: 100%; min-height: 44px; margin: 0.2rem 0;
+  padding: 0 0.3rem; text-align: left;
+  background: transparent; color: var(--slate);
+  border: none; border-top: 1px dashed var(--line);
+  font: inherit; font-size: var(--t2); cursor: pointer;
+}
+.dfold:hover { color: var(--ink); }
+
+/*
+  "Already ticked for you" — M10-37. Above everything, because its whole reason is that the rows
+  it describes are somewhere down an 80-department scroller.
+
+  `--primary-wash` is the same tint a chosen row carries, so the band reads as *part of the
+  selection* rather than as an alert. No new colour.
+*/
+.dhint {
+  margin: 0 0 0.5rem; padding: 0.4rem 0.5rem;
+  background: var(--primary-wash); border: 1px solid var(--line); border-radius: 12px;
+}
+.dhint h3 {
+  margin: 0 0 0.3rem; font-size: var(--t1); letter-spacing: var(--ls-caps);
+  text-transform: uppercase; color: var(--slate);
+}
+.dhintrow {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.5rem;
+  width: 100%; min-height: 36px; padding: 0.2rem;
+  background: transparent; border: none; text-align: left;
+  font: inherit; cursor: pointer;
+}
+.dhintrow:hover .dlabel { text-decoration: underline; }
+/* Both numbers, never the ratio — see `learning.ts`. "90%" reads the same at 9/10 and 90/100. */
+.dhintwhy { font-size: var(--t2); color: var(--slate); }
+/* Dimmed, never removed, and never disabled. */
+.dpick.unreachable .dlabel { color: var(--muted); }
+.dwarn { font-size: var(--t2); color: var(--pending); font-weight: var(--w1); }
+button.dsend {
+  font: inherit; font-weight: var(--w2); min-height: 48px; width: 100%; margin: 0.6rem 0 0;
+  background: var(--primary-fill); color: #fff; border: none; border-radius: 12px; cursor: pointer;
+}
+button.dsend:disabled { background: var(--card2); color: var(--muted); cursor: default; }
+
+/* A group is a set, not a department's row — it needs its own weight at intake. The `.g*`
+   rules it sits beside stayed in the shell: `admin.ts` draws those too. */
+.dpick.k-group .dlabel { font-weight: var(--w2); }
+
+/*
+ * "Somebody with that name is already here" — M10-35.
+ *
+ * Amber, never red, and the distinction is the whole design. This is ADVICE about something the
+ * operator may perfectly well intend: two officers in Bajaur share one handset, and this form is
+ * how the district's own roster is entered. Red would read as a refusal on a control that does
+ * not refuse, and an operator who believes they have been stopped goes and asks somebody instead
+ * of finishing the call they are on.
+ *
+ * The left edge is the same device the board uses to say "look at this row" — one vocabulary for
+ * "this needs your eye", not a second one for forms.
+ */
+.dform .dupe,
+.addperson .dupe {
+  margin: 0;
+  font-size: var(--t2);
+  color: var(--pending);
+  border-left: 3px solid var(--pending);
+  background: var(--pending-wash);
+  padding: 0.4rem 0.55rem;
+  border-radius: 0 4px 4px 0;
+}
+
+/* -----------------------------------------------------------------------
+   "Who is coming" — the attendance tally (Phase D, 2026-08-20)
+   -----------------------------------------------------------------------
+   Drawn only on a meeting, above the recipient rows, folded from those rows.
+
+   NO NEW COLOUR. Every value here is a token already measured on --card by
+   contrast.e2e, in both themes — which is why "no answer yet" is --pending
+   rather than a fifth hue invented for this panel. INV-04 reaches here too:
+   the count is carried by the NUMBER and the WORD beside it, so the tally
+   reads correctly with no colour at all.
+   ----------------------------------------------------------------------- */
+
+.att {
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.atth {
+  margin: 0 0 0.5rem;
+  font-size: var(--t2);
+  font-weight: var(--w2);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--slate);
+}
+
+/* Wraps rather than scrolls: this sits in a column that is narrow on a handset,
+   and a tally somebody must scroll sideways to finish is one they read half of. */
+.attn {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+}
+
+.attc {
+  font-size: var(--t3);
+  font-weight: var(--w1);
+  color: var(--slate);
+}
+
+/* tabular-nums so the figures do not shuffle sideways as they change — the same
+   reason .key .n carries it on the wall. */
+.attv {
+  font-size: var(--t5);
+  font-weight: var(--w3);
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.2rem;
+}
+
+.attc-unanswered .attv {
+  color: var(--pending);
+}
+
+.attc-attending .attv {
+  color: var(--ok);
+}
+
+.attc-not-attending .attv {
+  color: var(--critical);
+}
+
+.attc-sending-someone .attv,
+.attc-other .attv {
+  color: var(--ink);
+}
+
+.attof {
+  margin: 0.5rem 0 0;
+  font-size: var(--t1);
+  font-weight: var(--w1);
+  color: var(--muted);
+}
+
+/*
+ * Take action — Phase 8c.
+ *
+ * `button.act` is the shell's own primary control (44px minimum touch, already measured), so
+ * nothing here restates a colour or a size. What is added is the layout, the greyed-out state
+ * and the sentence that explains it.
+ */
+.takeacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: flex-start;
+}
+
+/* A disabled button and its reason travel together, so the sentence cannot end up beside the
+   wrong button when the row wraps. */
+.takeheld {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-width: 18rem;
+}
+
+.takeheld button.act[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.takewhy {
+  font-size: var(--t1);
+  font-weight: var(--w1);
+  color: var(--slate);
+}
+
+.takecount {
+  margin: 0.6rem 0 0;
+  font-size: var(--t3);
+  font-weight: var(--w1);
+  color: var(--slate);
+}
+
+/*
+ * What happened, in the server's own words — INV-03 on the screen somebody acted on.
+ *
+ * A failure is a WASH with a hard left edge, which is how this product already says bad news;
+ * it is never the only carrier, because the sentence says it too.
+ */
+.takenote {
+  margin: 0.6rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid var(--ok);
+  background: var(--ok-wash);
+  font-size: var(--t3);
+  font-weight: var(--w2);
+  color: var(--ink);
+}
+
+.takenote.takebad {
+  border-left-color: var(--critical);
+  background: var(--critical-wash);
+}

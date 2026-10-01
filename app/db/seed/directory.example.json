@@ -1,0 +1,40 @@
+{
+  "source": "EXAMPLE ONLY. The real file is db/seed/directory.json, which is gitignored.",
+  "note": [
+    "Copy this to directory.json and replace it with the district's list. Real names and",
+    "mobile numbers never go in the repository: git history is permanent, and a private repo",
+    "can be shared, forked or gain a collaborator later. The same rule as .env.",
+    "",
+    "One row per post. `department` is the office verbatim; the loader does not infer that",
+    "'ADC (General)' sits under the DC Office, because how Bajaur is organised is a fact to be",
+    "confirmed rather than guessed (Q-18).",
+    "",
+    "A row with no `name` or no `phone` loads as a VACANT post. That is a real state, not a",
+    "broken row — escalation and notification both surface a vacant seat rather than skipping",
+    "it (ADR-0004).",
+    "",
+    "`tier` defaults to 'district' when absent. It drives the escalation ladder, so a",
+    "directory that leaves it out will not escalate correctly. See Q-18."
+  ],
+  "rows": [
+    {
+      "department": "Example Emergency Service",
+      "designation": "District Emergency Officer",
+      "name": "A. N. Other",
+      "phone": "03001234567",
+      "tier": "district"
+    },
+    {
+      "department": "Example Emergency Service",
+      "designation": "Station In-Charge, Example Tehsil",
+      "name": "B. Someone",
+      "phone": "03007654321",
+      "tier": "station"
+    },
+    {
+      "department": "Example Line Department",
+      "designation": "Executive Engineer",
+      "tier": "district"
+    }
+  ]
+}

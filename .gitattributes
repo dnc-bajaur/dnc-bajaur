@@ -1,0 +1,8 @@
+# Keep LF everywhere: prettier checks for LF, and a Windows checkout with
+# core.autocrlf=true would otherwise turn every file into CRLF and fail `npm run check`.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

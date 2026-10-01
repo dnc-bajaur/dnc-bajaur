@@ -1,0 +1,143 @@
+# CI — M0-04.
+#
+# One job, and it runs the same command a developer runs: `npm run check`. If CI and local
+# can disagree about what "green" means, the one nobody is watching wins.
+#
+# Two things this deliberately does the expensive way:
+#
+#   * **A real PostgreSQL 17**, matching the local cluster's major version. The project
+#     forbids faking the database (see CLAUDE.md) because the properties under test are
+#     durability and genuine immutability, and an in-memory stand-in demonstrates neither.
+#   * **A real Chromium.** Five suites cut the network at the driver and reload the page to
+#     prove an emergency survives. Nothing else can show that.
+#
+# It is slower than a mocked build. That is the point of it.
+
+name: CI
+
+# ⚠️ **Every branch, and it was `main` only until 2026-08-16.**
+#
+# `main` stopped at the 3 August provider-ladder removal. Everything since — M6, M7, M8, all
+# eleven phases of M9, M10 Phase A and the card work — landed on `m6-control-room`, which by the
+# day this changed was **147 commits ahead**. None of it had ever been run by anything except one
+# laptop, on a machine whose own notes record a full disk killing the cluster twice and an
+# intermittent worker crash that loses a whole file's results with zero failed assertions.
+#
+# So the one thing this workflow exists for — *"if CI and local can disagree about what green
+# means, the one nobody is watching wins"* — was true of the entire product for six weeks. The
+# guard was configured to watch a branch nobody was working on.
+#
+# **No branch filter at all**, rather than a longer list. A list means a branch created next month
+# is covered by somebody remembering to add it, and this workflow has just spent six weeks proving
+# what happens when the guard's own configuration is the thing nobody re-reads. Omitting the
+# filter is GitHub's documented "every branch"; `branches-ignore: []` would have said the same
+# thing by a route whose behaviour is not written down anywhere.
+on:
+  push:
+  pull_request:
+
+# A superseded run proves nothing about the commit that replaced it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # No count in this name, deliberately. It read "297 tests" while the suite ran 698, because
+    # a number here has to be edited by hand every time somebody adds a test — so it is wrong
+    # by default and right only by accident. A label that overstates what CI covers is the
+    # same failure this workflow exists to prevent; the run's own summary is the honest count.
+    name: typecheck · lint · format · tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        # Pinned to the local cluster's major version. A boring stack is only boring if
+        # everyone is running the same one.
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci_only_not_a_secret
+          POSTGRES_DB: dnc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # The integration suites skip when this is unset. `src/testing/loadEnv.ts` turns that
+      # skip into a hard failure whenever CI is set, so a broken secret cannot produce a
+      # green build that tested almost nothing.
+      TEST_DATABASE_URL: postgres://postgres:ci_only_not_a_secret@127.0.0.1:5432/dnc_test
+      DATABASE_URL: postgres://postgres:ci_only_not_a_secret@127.0.0.1:5432/dnc_test
+      NODE_ENV: test
+
+      # Point at the 17 binaries directly rather than trusting PATH.
+      #
+      # `/usr/bin/pg_dump` on Debian is `pg_wrapper`, which chooses a version — and with
+      # client 16 also on the image it chose 16, against a 17 server, which pg_dump refuses.
+      # The first CI run failed exactly there. `PG_BIN` is the seam `ops/backup.ts` already
+      # has for the portable local cluster; the same seam solves this.
+      PG_BIN: /usr/lib/postgresql/17/bin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # pg_dump and psql, for the backup round-trip tests (M0-37).
+      #
+      # Version 17 specifically: pg_dump refuses to dump a server newer than itself, and
+      # the runner image ships client 16 against our 17 server. Installing the matching
+      # client is the difference between the backup suite running and the backup suite
+      # failing for a reason that has nothing to do with the code.
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc > /dev/null
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          # Assert the version rather than print it. `pg_dump --version` on PATH reported 16
+          # on the first run while 17 was installed — a mismatch that showed up six steps
+          # later as a confusing test failure. Fail here, where the cause is obvious.
+          "$PG_BIN/pg_dump" --version
+          "$PG_BIN/pg_dump" --version | grep -q ' 17\.' \
+            || { echo "::error::pg_dump at \$PG_BIN is not version 17"; exit 1; }
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: app
+        run: npx playwright install --with-deps chromium
+
+      - name: Check
+        working-directory: app
+        run: npm run check
+
+      # The suite has shown an intermittent `Worker exited unexpectedly` twice in roughly
+      # twelve local runs, and four attempts to reproduce it on demand were all clean. One
+      # person running it by hand is not a sample size. Uploading the log on failure is how
+      # that gets characterised instead of shrugged at — see CHANGELOG.md, 2026-08-02.
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-failure-${{ github.run_id }}
+          path: |
+            app/*.log
+            app/test-results/
+          if-no-files-found: ignore
+          retention-days: 14

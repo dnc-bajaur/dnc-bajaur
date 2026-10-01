@@ -1,0 +1,50 @@
+{
+  "name": "district-nerve-center",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "District Nerve Center — Bajaur. Domain core.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "build:prod": "node build.mjs --production",
+    "build:server": "tsc -p tsconfig.build.json",
+    "start": "npm run build && npm run build:server && node dist/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src web/src",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
+    "test:reset": "npm run build:server && node scripts/reset-test-db.mjs",
+    "sweep": "npm run build:server && node scripts/sweep.mjs",
+    "demo": "npm run build:server && node scripts/demo-data.mjs",
+    "demo:clear": "npm run build:server && node scripts/demo-data.mjs --clear",
+    "shell:record": "npm run build:server && node scripts/record-shell.mjs",
+    "doctor": "npm run build:server && node scripts/doctor.mjs",
+    "setup:whatsapp": "npm run build:server && node scripts/setup-whatsapp.mjs",
+    "submit:template": "npm run build:server && node scripts/submit-template.mjs",
+    "setup:domain": "node scripts/setup-domain.mjs",
+    "dev:account": "npm run build:server && node scripts/dev-account.mjs",
+    "preflight:0038": "npm run build:server && node scripts/preflight-0038.mjs",
+    "preflight:0039": "npm run build:server && node scripts/preflight-0039.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.20.3",
+    "esbuild": "0.21.5",
+    "eslint": "^9.17.0",
+    "playwright": "^1.62.1",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "pg": "^8.22.0"
+  }
+}

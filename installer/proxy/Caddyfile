@@ -1,0 +1,108 @@
+# The district's own domain, over TLS, in front of the district's own machine — ADR-0017, M6-36.
+#
+# ## Why there is a proxy at all
+#
+# The application is served over plain HTTP, and that is a **live defect** rather than a
+# hardening task. Service workers and geolocation only run in a secure context, and the install
+# guide told officers to open `http://<office-IP>:3000`, which is not one. So on every real
+# handset in Bajaur the service worker never registered and the app did not open offline — the
+# single claim ADR-0002 exists to make — and location capture fell back to typed guesses.
+# `navigator.clipboard` failed for the same reason, which was noticed, patched where it appeared,
+# and never traced to its cause.
+#
+# ## Why Caddy
+#
+# ADR-0007 asks for boring, single-node, and operable by one person at 02:00. Caddy is one
+# executable with no dependencies that obtains and renews certificates by itself. The
+# alternative — nginx plus certbot plus a scheduled task plus a renewal nobody watches — is
+# three things that can fail silently on the machine holding the district's record, and the
+# failure surfaces ninety days later as "the site stopped working" on a Sunday.
+#
+# ## What does NOT change
+#
+# **The record does not move.** ADR-0011 stands in full: this terminates TLS in front of the
+# same Node process on the same machine in the DC office. The control room still reaches it on
+# the LAN, and the district's internet line going down still does not stop the control room
+# working — see the second site block.
+
+{
+	# Where Let's Encrypt sends expiry warnings. **Set this.** An unwatched certificate is the
+	# thing this file exists to stop being unwatched, and the warning email is the last defence
+	# when renewal has silently failed for two months.
+	email REPLACE_ME@example.com
+
+	# One access log, in the same JSON shape the application already logs in, so an operator
+	# reading a bad night has one format rather than two.
+	log {
+		output file C:\ProgramData\District Nerve Center\proxy.log {
+			roll_size 20MiB
+			roll_keep 10
+		}
+	}
+}
+
+# The district's own name. Replace with the subdomain the district pointed at this machine
+# (R-21) — a DNS record and an afternoon, since they already own the domain.
+dnc.REPLACE_ME.gkp.pk {
+	# Certificates obtained and renewed automatically. Nothing to schedule and nothing to
+	# remember; if this fails it fails loudly at startup rather than in ninety days.
+	encode gzip
+
+	reverse_proxy 127.0.0.1:3001 {
+		# `X-Forwarded-For`, which the application reads **only from this proxy's own address**
+		# and only when `TRUSTED_PROXIES` names it — see `auth/throttle.ts` and M6-37.
+		#
+		# The two ship together or the second is an outage: behind a proxy every request
+		# arrives from 127.0.0.1, so without the pinned trust one officer mistyping a password
+		# would throttle sign-in for the whole district, at 02:00, invisibly.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+
+		# The district's machine is not a datacentre. A long-running request is a slow disk or
+		# a large evidence upload, not a hung backend, and killing it would lose an upload.
+		transport http {
+			read_timeout 120s
+			write_timeout 120s
+		}
+	}
+
+	header {
+		# HSTS, and deliberately **without `preload` and without `includeSubDomains`**. Both are
+		# hard to reverse: preload is a list you ask to be removed from and wait, and the
+		# subdomain flag would silently break any other service the district runs on that domain
+		# — on hardware this project does not control and cannot test.
+		Strict-Transport-Security "max-age=31536000"
+
+		# A district's emergency board is nobody else's to frame.
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		# The referrer of a link opened from an incident must not carry an incident id to
+		# whatever was linked to.
+		Referrer-Policy "same-origin"
+	}
+}
+
+# ------------------------------------------------------------------------------
+# The LAN path — M6-41
+# ------------------------------------------------------------------------------
+#
+# **The control room must not route through the internet to reach a machine in the same room.**
+#
+# This is the whole reason ADR-0011 put the record on district hardware, and a proxy that only
+# answered on the public name would have quietly undone it: the district's line goes down, the
+# domain stops resolving, and the control room loses sight of a server three metres away.
+#
+# So the plain-HTTP LAN address keeps working, on the same port officers already have written
+# up in the office. It is not a secure context, so a handset added to a home screen from it will
+# not work offline — which is exactly why the guide now tells officers to use the domain. What
+# this address is for is the control room's own desktop and the office machine itself, where the
+# app is open all day on a connection that cannot go down without the building going with it.
+#
+# **The application moves to 127.0.0.1:3001 when this proxy is installed**, bound to loopback so
+# nothing but Caddy can reach it. Two things had to be true at once: `:3000` on the LAN keeps
+# meaning what the guide and the office wall say it means, and the Node process stops being
+# reachable directly — otherwise somebody could bypass the proxy, and then `X-Forwarded-For`
+# would be a header the caller writes again (M6-37).
+:3000 {
+	reverse_proxy 127.0.0.1:3001
+}

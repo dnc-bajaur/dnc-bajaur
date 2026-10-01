@@ -1,0 +1,153 @@
+/*
+  The post-incident report's styling, and the print rules that make the PDF.
+
+  Kept out of index.html for the same reason report.js is kept out of app.js: the shell is
+  what a field officer downloads at a scene on a weak connection, and none of this is of any
+  use there. Fetched by the report screen the first time somebody asks for a report.
+
+  The shell stood at 159 KB against a 160 KB budget when this screen was written. The budget
+  exists to make that visible, and it did — the answer to it is not a bigger number.
+*/
+
+/* The post-incident report, on screen. */
+.reportPairs {
+  display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr;
+  gap: 0.35rem 1rem; margin: 0 0 1rem;
+}
+.reportPairs dt { font-weight: var(--w1); opacity: 0.75; }
+.reportPairs dd { margin: 0; }
+.reportNarrative { margin: 0 0 1rem; padding-left: 1.2rem; }
+.reportNarrative li { margin-bottom: 0.5rem; }
+.reportGaps { margin: 0 0 1rem; padding-left: 1.2rem; }
+.reportRecipients { margin: 0 0 1rem; padding-left: 1.2rem; list-style: none; }
+.reportRecipients li { margin-bottom: 0.5rem; }
+/* The group a dispatch expanded, heading its members — Case 3. A label between rows, not a
+   container: expand() dissolves the group at send. Caps + muted, like the section heads. */
+.reportRecipientGroup {
+  margin: 0.9rem 0 0.4rem; font-size: var(--t2);
+  letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--slate);
+}
+.reportRecipientGroup:first-child { margin-top: 0; }
+#piReportBody h3 {
+  margin: 1.4rem 0 0.6rem; padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--t5); letter-spacing: var(--ls-caps); text-transform: uppercase;
+}
+
+/*
+  The district's official letterhead — the Deputy Commissioner, Bajaur — above the report's own
+  title. On screen it is quiet; on paper it is the masthead the page is filed under. Drawn in
+  `currentColor` so the double rule and the type follow the palette on screen and go black on
+  the printed page without a second set of colours to keep in step.
+*/
+.reportLetterhead { text-align: center; margin: 0 0 1.4rem; }
+.reportLetterhead__govt {
+  margin: 0; font-size: var(--t5); letter-spacing: var(--ls-caps);
+  text-transform: uppercase; opacity: 0.7;
+}
+.reportLetterhead__seal {
+  display: block; width: 74px; height: 74px; margin: 0.5rem auto 0.4rem;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.reportLetterhead__office {
+  margin: 0; font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.4rem; font-weight: var(--w1);
+}
+.reportLetterhead__district {
+  margin: 0.1rem 0 0; font-family: Georgia, "Times New Roman", serif;
+  font-size: 1rem; letter-spacing: 0.32em; text-transform: uppercase;
+}
+.reportLetterhead__rule {
+  margin: 0.6rem 0 0; height: 3px;
+  border-top: 2px solid currentColor; border-bottom: 1px solid currentColor;
+}
+.reportLetterhead__system {
+  margin: 0.5rem 0 0; font-size: var(--t5); letter-spacing: var(--ls-caps);
+  text-transform: uppercase; opacity: 0.7;
+}
+
+/*
+  The PDF, and there is no library behind it.
+  ------------------------------------------
+  ADR-0007 asks of every dependency: who restarts this when it fails, and how do they
+  know it failed? A PDF library answers that badly — it is a rendering engine, a font
+  stack and a layout implementation, all of which drift from what the operator saw. The
+  browser's own Print → Save as PDF has none of those questions, works with no network,
+  and produces by construction the same document that was on the screen.
+
+  Printed on white with black text regardless of the control-room palette: the district
+  prints on ordinary office paper, and a dark background would empty a toner cartridge
+  per report while reading worse than the screen it came from.
+*/
+@media print {
+  @page { margin: 18mm 15mm; }
+
+  /*
+    Everything that is not the report. A printed page has no navigation.
+
+    This used to name each view, and the list had drifted both ways — replaced 2026-08-14.
+    It still hid `#mineView` and `#inboxView`, neither of which exists any more, and it
+    never mentioned `#helpView`, which does.
+
+    Say plainly what that was and was not. It was NOT a live bug. The app marks inactive
+    views `hidden`, `[hidden]` already means `display: none !important`, and only one view
+    is ever on screen — so the missing `#helpView` could not have printed. The new rule was
+    checked against the old one and both produce exactly the same page; the test in
+    `search.e2e.test.ts` passes on either. Nothing was broken and nothing is now fixed.
+
+    It is replaced because the shape is wrong, not because it failed. A list of everything
+    to exclude has to be edited by whoever adds a screen, gives no sign when it is not, and
+    is load-bearing only on the day some other assumption — one view at a time, `hidden`
+    always set — stops holding. Paper, in front of the DC, is where that would surface, and
+    paper is the one surface in this product with no undo.
+
+    Inverted: hide every child of `<main>` except the report. A screen added tomorrow is
+    excluded by construction and nobody has to remember this file exists.
+  */
+  header, #nav, #status, #ticker, .noPrint,
+  main > *:not(#piReportView) {
+    display: none !important;
+  }
+  /* `<main>` would otherwise pass its own layout through to the page. */
+  main { display: block !important; padding: 0 !important; margin: 0 !important; }
+
+  body, #piReportView, #piReportBody {
+    background: #fff !important; color: #000 !important;
+    max-width: none !important; padding: 0 !important; margin: 0 !important;
+  }
+
+  #piReportBody h2 { font-size: 16pt; margin: 0 0 0.2rem; }
+  #piReportBody h3 {
+    font-size: 11pt; border-bottom: 1px solid #999; color: #000;
+    /* A heading alone at the foot of a page sends the reader to look for its section. */
+    break-after: avoid; page-break-after: avoid;
+  }
+  #piReportBody, .reportPairs dd, .reportNarrative li, .reportRecipients li { font-size: 10pt; }
+  .reportPairs dt { color: #444; opacity: 1; }
+  .meta, .note { color: #333 !important; }
+  .note { border-left: 2px solid #666; padding-left: 0.5rem; }
+
+  /* An entry split across a page break reads as two half-events. */
+  .reportNarrative li, .reportGaps li, .reportRecipients li {
+    break-inside: avoid; page-break-inside: avoid;
+  }
+
+  /*
+    The letterhead is a `<div>`, not a `<header>` — the rule above hides every `header` on the
+    page, and this one is the one thing on it that must print. Black on white like the rest of
+    the sheet; kept whole, and kept with the title under it.
+  */
+  .reportLetterhead {
+    color: #000 !important; margin: 0 0 8mm;
+    break-inside: avoid; page-break-inside: avoid;
+    break-after: avoid; page-break-after: avoid;
+  }
+  .reportLetterhead__seal { width: 20mm; height: 20mm; }
+  .reportLetterhead__office { font-size: 15pt; }
+  .reportLetterhead__district { font-size: 10pt; }
+  .reportLetterhead__govt, .reportLetterhead__system {
+    font-size: 8pt; opacity: 1; color: #333 !important;
+  }
+  .reportLetterhead__rule { border-color: #000; }
+}
+

@@ -1,0 +1,76 @@
+DISTRICT NERVE CENTER — BAJAUR
+Version 1.0.0
+
+================================================================================
+WHAT IS IN THIS FOLDER
+================================================================================
+
+  DistrictNerveCenter-Setup-1.0.0.exe   The installer. Run this on the office
+                                        machine that will hold the record.
+
+  Install Guide.html                    How to install it, what to do first,
+                                        and what to do when something is wrong.
+                                        Open it in any browser. Start here.
+
+  Putting it on a phone.html            One page to print and pin up. How an
+                                        officer adds the system to a phone's
+                                        home screen. Nothing is installed on
+                                        the phone.
+
+  READ ME FIRST.txt                     This file.
+
+================================================================================
+THE SHORT VERSION
+================================================================================
+
+  1. Run the installer on ONE office machine. Say Yes to Windows.
+  2. It asks for the administrator's name, mobile number and a password.
+     Write the password down before you type it.
+  3. Wait about a minute. It sets up the database and loads the district's
+     79 offices and 81 posts.
+  4. Click the District Nerve Center icon on the desktop. Sign in.
+  5. Everybody else opens it from their own phone or laptop, over the
+     district's network. Nothing to install on their devices.
+
+You do not need to install anything before running the installer. The database
+and everything else are inside it. It does not need the internet.
+
+================================================================================
+TWO THINGS TO KNOW BEFORE THE FIRST DAY
+================================================================================
+
+1. UNTIL YOU SET A ROUTING SIGNAL, EVERY EMERGENCY ARRIVES UNASSIGNED.
+
+   This is on purpose. The system never guesses which department should answer
+   an emergency, so until the district says who answers for what, it shows
+   "with nobody" rather than quietly picking someone. Setting the first signal
+   takes a minute in Administration and it is the single most valuable thing
+   anyone can do on day one.
+
+2. BACKUPS ARE TAKEN NIGHTLY BUT NEVER LEAVE THE BUILDING.
+
+   Every night at 02:00 the system copies the record and verifies the copy.
+   Sending an encrypted copy off-site is built and tested, but switched off
+   until the district provides a cloud storage account. Fire, flood or theft
+   at the office would currently take the record with it. The Backups screen
+   says so plainly instead of showing a green tick.
+
+================================================================================
+IF WINDOWS WARNS YOU ABOUT THE INSTALLER
+================================================================================
+
+A blue box may say "Windows protected your PC". This is because the installer
+has not been submitted to Microsoft for signing — not because anything is
+wrong with it. Click "More info", then "Run anyway".
+
+================================================================================
+INCLUDED SOFTWARE
+================================================================================
+
+This installer contains PostgreSQL 17 (PostgreSQL Licence) and Node.js
+(MIT Licence). Both are free and open source. Their licence texts are placed
+in the installation folder.
+
+================================================================================
+
+District Administration, Bajaur — Khyber Pakhtunkhwa

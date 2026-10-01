@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>District Nerve Center — Putting it on a phone</title>
+    <style>
+      /* Same rules as the install guide: printable, and no network needed to render it. */
+      :root {
+        --ink: #14171e; --slate: #56606f; --line: #d9d5cc; --wash: #f4f2ed;
+        --accent: #0077a3; --warn: #8a6420; --warn-wash: #fdf6e6;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0 auto; padding: 2.5rem 1.5rem 6rem; max-width: 44rem; background: #fff; color: var(--ink);
+        font: 16px/1.6 "Segoe UI", system-ui, -apple-system, "Noto Sans", Arial, sans-serif;
+      }
+      header { border-bottom: 3px solid var(--ink); padding-bottom: 1rem; margin-bottom: 2rem; }
+      .mark {
+        display: inline-grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: 10px;
+        background: linear-gradient(135deg, #00d1ff, #0077a3); color: #04121c;
+        font-weight: 800; font-size: 0.85rem; margin-right: 0.7rem;
+      }
+      h1 { font-size: 1.4rem; margin: 0; display: flex; align-items: center; }
+      .org { color: var(--slate); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.09em; margin-top: 0.5rem; }
+      h2 { font-size: 1.1rem; margin: 2.5rem 0 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
+      code {
+        font-family: Consolas, "Courier New", monospace; font-size: 0.92em;
+        background: var(--wash); padding: 0.12em 0.4em; border-radius: 4px;
+      }
+      .note, .warn {
+        border-left: 4px solid var(--accent); background: var(--wash);
+        padding: 0.85rem 1rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;
+      }
+      .warn { border-left-color: var(--warn); background: var(--warn-wash); }
+      .note strong, .warn strong { display: block; margin-bottom: 0.2rem; }
+      ol { padding-left: 1.3rem; } li { margin: 0.5rem 0; }
+      .phone { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+      .phone > div { flex: 1 1 16rem; }
+      .phone h3 {
+        font-size: 0.95rem; margin: 0 0 0.5rem; padding-bottom: 0.35rem;
+        border-bottom: 2px solid var(--ink); text-transform: uppercase; letter-spacing: 0.06em;
+      }
+      .cut {
+        border: 2px dashed var(--line); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0;
+      }
+      .cut .addr {
+        font-family: Consolas, "Courier New", monospace; font-size: 1.3rem; font-weight: 700;
+        border-bottom: 2px solid var(--ink); padding-bottom: 0.4rem; margin: 0.6rem 0 0;
+      }
+      footer { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--slate); font-size: 0.85rem; }
+      @media print { body { padding: 0; max-width: none; } .phone > div, .cut, .note, .warn { break-inside: avoid; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1><span class="mark">DC</span>Putting it on a phone</h1>
+      <div class="org">District Nerve Center · Bajaur — one page, about fifteen seconds per handset</div>
+    </header>
+
+    <p>
+      There is no app to download and nothing to install. The system is opened in the phone's
+      browser and then <strong>added to the home screen</strong>, after which it opens like any
+      other app — full screen, its own icon, no address bar.
+    </p>
+
+    <div class="note">
+      <strong>This is worth doing on every handset, not just for tidiness.</strong>
+      Once it is on the home screen, the app still <em>opens</em> when the phone has no signal
+      at all, and an emergency can still be reported. The report waits on the handset and
+      delivers itself the moment there is a connection, with nobody having to remember to
+      re-send it. Opened as an ordinary web page instead, that does not work reliably.
+    </div>
+
+    <h2>Before you start</h2>
+    <p>
+      You need the district's own web address — the one that begins <strong>https://</strong>.
+      It was set up when the district pointed its domain at the office machine. Get it from the
+      office machine's Start Menu → <strong>District Nerve Center</strong> →
+      <strong>Check the District Nerve Center</strong>, which prints it.
+    </p>
+
+    <div class="cut">
+      <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--slate)">
+        Write the address here, then pin this page up in the office
+      </div>
+      <p class="addr">https://______________________________</p>
+    </div>
+
+    <div class="warn">
+      <strong>It must be the https:// address, not a number like 192.168.1.40:3000.</strong>
+      <p>
+        This is not a preference. A phone will only keep an app working offline, and only give
+        it the phone's location, when the address is a secure <strong>https://</strong> one. Open
+        it by IP address and it looks like it worked — the screens are all there — but the app
+        will <em>not</em> open when there is no signal, and an emergency reported at a scene with
+        no coverage may be lost. That is the one thing this system exists to prevent.
+      </p>
+      <p>
+        The address still points at the machine in this office. Nothing about the district's
+        record leaves the building; the district's own internet line going down does not stop the
+        control room working.
+      </p>
+    </div>
+
+    <h2>Do this on the phone</h2>
+
+    <div class="phone">
+      <div>
+        <h3>Android — Chrome</h3>
+        <ol>
+          <li>Open <strong>Chrome</strong>.</li>
+          <li>Type the address above and go to it.</li>
+          <li>Tap the <strong>⋮</strong> menu, top right.</li>
+          <li>Tap <strong>Add to Home screen</strong> (it may say <strong>Install app</strong>).</li>
+          <li>Tap <strong>Install</strong> or <strong>Add</strong>.</li>
+        </ol>
+        <p>The icon appears on the home screen. Open it from there from now on — not from Chrome.</p>
+      </div>
+
+      <div>
+        <h3>iPhone — Safari</h3>
+        <ol>
+          <li>Open <strong>Safari</strong>. It must be Safari; Chrome on iPhone cannot do this.</li>
+          <li>Type the address above and go to it.</li>
+          <li>Tap the <strong>Share</strong> button — the square with an arrow, at the bottom.</li>
+          <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
+          <li>Tap <strong>Add</strong>, top right.</li>
+        </ol>
+        <p>The icon appears on the home screen. Open it from there from now on — not from Safari.</p>
+      </div>
+    </div>
+
+    <h2>Signing in</h2>
+    <p>
+      Each officer signs in with <strong>their own mobile number</strong> and the password the
+      administrator gave them. Everything they can see and do comes from the post they hold, not
+      from the handset — so a shared phone is fine, and a handover takes effect immediately.
+    </p>
+
+    <div class="warn">
+      <strong>Sign out at the end of a shift on a shared handset.</strong>
+      Whoever is signed in is who the record says filed the report. Leaving the previous
+      officer signed in does not just look untidy — it puts their name against somebody else's
+      work, permanently, in a record that cannot be edited afterwards.
+    </div>
+
+    <h2>Reporting an emergency</h2>
+    <p>
+      Open the app, tap <strong>Report</strong>, choose what kind and how bad, and submit. That
+      is two taps and a button, and it is meant to take under fifteen seconds — if it is slower
+      than making the phone call it replaces, it will lose to the phone call.
+    </p>
+    <p>
+      Where you are is attached automatically if the phone can work it out. Details — the place,
+      a description — are asked for <em>after</em> the report is already safely recorded, never
+      before. Nothing waits on you finishing them.
+    </p>
+
+    <h2>When there is no signal</h2>
+    <p>
+      Report exactly as normal. The app says <strong>No connection</strong> and holds the report
+      on the handset. When a connection returns it delivers itself, with no action from you and
+      nothing to remember. The system records both when the emergency <em>happened</em> and when
+      it <em>arrived</em>, so a report held for six hours is not mistaken for one that came in
+      six hours late.
+    </p>
+    <p>
+      An emergency can be recorded even when nobody is signed in — a duty officer whose session
+      expired overnight in a place with no signal cannot sign in, and losing that report would
+      be worse than not knowing who typed it.
+    </p>
+
+    <footer>District Nerve Center — Bajaur · version 1.0.0</footer>
+  </body>
+</html>

@@ -1,0 +1,21 @@
+#!/bin/sh
+# Isolation rule 4 (CLAUDE.md): this repository may be pushed to ONE place only.
+# Git passes the remote name as $1 and its URL as $2. Anything else is refused.
+# Enabled by: git config core.hooksPath scripts/git-hooks
+# Never bypass with --no-verify.
+
+url="$2"
+case "$url" in
+  https://github.com/dnc-bajaur/dnc-bajaur.git | \
+  https://github.com/dnc-bajaur/dnc-bajaur | \
+  git@github.com:dnc-bajaur/dnc-bajaur.git)
+    exit 0
+    ;;
+esac
+
+echo "" >&2
+echo "  PUSH REFUSED: '$url' is not this project's repository." >&2
+echo "  The only allowed remote is https://github.com/dnc-bajaur/dnc-bajaur.git" >&2
+echo "  (CLAUDE.md, isolation rule 4)." >&2
+echo "" >&2
+exit 1

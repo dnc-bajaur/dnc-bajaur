@@ -1,0 +1,24 @@
+{
+  // Emitting the server, which `tsconfig.json` deliberately does not do — that one is for
+  // checking, and covers tests and the web client too.
+  //
+  // This exists because `npm start` never worked. It ran `node --experimental-strip-types
+  // src/main.ts`, and type stripping does **not** remap a `.js` specifier to the `.ts` file
+  // beside it. Every import in this codebase is written with a `.js` extension, which is
+  // correct for compiled ESM and is exactly what `tsc` resolves — so the fix is to actually
+  // compile, which is also the most boring option available (ADR-0007).
+  //
+  // Nothing caught it because vitest resolves those specifiers itself. Everything was proven
+  // by tests and the deployable had never been started once.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true
+  },
+  // Server only. The web client is bundled separately by `build.mjs`, and tests are not
+  // shipped to a district server.
+  "include": ["src"],
+  "exclude": ["src/**/__tests__/**", "src/testing/**"]
+}

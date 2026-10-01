@@ -1,0 +1,465 @@
+/*
+  The "How to use" screen's styling — an in-product guide, not a separate document.
+
+  Out of index.html and app.js for the same reason search.js and report.js are: the shell is
+  what a field officer downloads at a scene, and nobody at a scene reads a manual. Fetched the
+  first time somebody opens the tab.
+
+  No new tokens. Every colour here is one already defined on :root in index.html — the same
+  deep-navy, one-cyan-accent palette the rest of the application uses, because a guide styled
+  differently from the product it describes would look like it was describing a different one.
+*/
+
+#helpBody {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.4rem var(--pad, 1rem) 4rem;
+}
+
+#helpBody .lede {
+  color: var(--slate);
+  font-size: var(--t5);
+  max-width: 42em;
+  margin: 0 0 1.6rem;
+}
+
+/* -------------------------------------------------------------- jump list */
+
+#helpBody .jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0 0 2.2rem;
+  padding: 0.9rem;
+  background: var(--card2);
+  border-radius: 8px;
+}
+#helpBody .jump li {
+  margin: 0;
+}
+#helpBody .jump a {
+  display: block;
+  font-size: var(--t2);
+  font-weight: var(--w1);
+  color: var(--slate);
+  text-decoration: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.32rem 0.75rem;
+}
+#helpBody .jump a:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* -------------------------------------------------------------- chapters */
+
+#helpBody section.hchapter {
+  padding: 2.4rem 0;
+  border-top: 1px solid var(--line);
+  scroll-margin-top: 4rem;
+}
+#helpBody section.hchapter:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+#helpBody .heyebrow {
+  font-size: var(--t1);
+  font-weight: var(--w2);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--primary);
+  margin: 0 0 0.3rem;
+}
+#helpBody h2 {
+  font-size: var(--t7);
+  margin: 0 0 0.6rem;
+}
+#helpBody h3 {
+  font-size: var(--t5);
+  margin: 1.7rem 0 0.5rem;
+}
+#helpBody p {
+  color: var(--ink);
+  max-width: 40em;
+}
+#helpBody p.dim {
+  color: var(--slate);
+  font-size: var(--t4);
+}
+#helpBody ul,
+#helpBody ol {
+  padding-left: 1.2rem;
+  max-width: 40em;
+}
+#helpBody li {
+  margin: 0.3rem 0;
+  color: var(--ink);
+}
+
+#helpBody kbd.uilabel {
+  font-family: 'Consolas', 'SFMono-Regular', ui-monospace, monospace;
+  font-size: 0.84em;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  color: var(--primary);
+  border-radius: 4px;
+  padding: 0.05em 0.4em;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------- the journey */
+
+#helpBody ol.hjourney {
+  list-style: none;
+  padding: 0;
+  margin: 0.6rem 0 0;
+  counter-reset: hstep;
+}
+#helpBody ol.hjourney li {
+  counter-increment: hstep;
+  position: relative;
+  padding: 0 0 1.3rem 2.6rem;
+  margin: 0;
+  border-left: 1px solid var(--line);
+}
+#helpBody ol.hjourney li:last-child {
+  border-left-color: transparent;
+  padding-bottom: 0;
+}
+#helpBody ol.hjourney li::before {
+  content: counter(hstep);
+  position: absolute;
+  left: -0.95rem;
+  top: -0.1rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  font-weight: var(--w2);
+  font-size: var(--t4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#helpBody ol.hjourney b {
+  display: block;
+  color: var(--ink);
+  font-size: var(--t5);
+}
+#helpBody ol.hjourney p {
+  margin: 0.15rem 0 0;
+  color: var(--slate);
+  font-size: var(--t4);
+}
+
+/* -------------------------------------------------------------- screen mock-ups */
+
+#helpBody .hscreen {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  overflow: hidden;
+  margin: 1rem 0 1.5rem;
+}
+#helpBody .hscreen .hbar {
+  padding: 0.5rem 0.8rem;
+  background: var(--card2);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--t2);
+  font-weight: var(--w2);
+  letter-spacing: var(--ls-flat);
+  color: var(--slate);
+}
+#helpBody .hscreen .hbody {
+  padding: 1rem 1.1rem 1.15rem;
+  overflow-x: auto;
+}
+
+#helpBody .htiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.3rem 0 0.9rem;
+}
+#helpBody .htile {
+  font-size: var(--t3);
+  padding: 0.35rem 0.65rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  color: var(--slate);
+  background: var(--paper-2);
+}
+#helpBody .htile.on {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--card2);
+  font-weight: var(--w1);
+}
+
+/*
+ * These are drawings of the product's buttons, so they take the product's button colours —
+ * `--critical-fill`/`--primary-fill`, not `--critical`/`--primary`. See the block beside
+ * `--primary-fill` in `index.html`: under white text the unfilled tokens measure 3.76:1 and
+ * 4.35:1, both under AA's 4.5:1.
+ *
+ * This file was missed when those tokens were introduced, because the sweep that introduced
+ * them read `index.html` and this is a different stylesheet (2026-08-12). The screen that
+ * teaches an officer what a button means was drawing it at the contrast the product had just
+ * stopped using.
+ */
+#helpBody .hbtn {
+  display: inline-block;
+  font-size: var(--t3);
+  font-weight: var(--w2);
+  padding: 0.42rem 0.95rem;
+  border-radius: 3px;
+  background: var(--critical-fill);
+  color: var(--on-accent);
+}
+#helpBody .hbtn.primary {
+  background: var(--primary-fill);
+}
+
+#helpBody .hcounters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 0.5rem;
+}
+#helpBody .hcounter {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  background: var(--paper-2);
+}
+#helpBody .hcounter b {
+  display: block;
+  font-size: var(--t6);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+#helpBody .hcounter span {
+  font-size: var(--t1);
+  color: var(--muted);
+}
+#helpBody .hcounter.bad b {
+  color: var(--critical);
+}
+
+#helpBody .hpanels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+#helpBody .hpanel {
+  border: 1px dashed var(--line);
+  border-radius: 5px;
+  padding: 0.4rem 0.55rem;
+  font-size: var(--t1);
+  color: var(--muted);
+}
+#helpBody .hpanel b {
+  display: block;
+  color: var(--slate);
+  font-size: var(--t2);
+}
+#helpBody .hpanel.wide {
+  grid-column: span 2;
+}
+@media (max-width: 480px) {
+  #helpBody .hpanels {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+#helpBody .htabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.7rem;
+}
+#helpBody .htab {
+  font-size: var(--t2);
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--slate);
+}
+#helpBody .htab.on {
+  background: var(--primary-fill);
+  border-color: var(--primary-fill);
+  color: var(--on-accent);
+}
+
+#helpBody .hrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.42rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--t4);
+}
+#helpBody .hrow:last-child {
+  border-bottom: none;
+}
+#helpBody .hrow .why {
+  font-size: var(--t2);
+  color: var(--muted);
+}
+#helpBody .hpill {
+  font-size: var(--t1);
+  font-weight: var(--w2);
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+#helpBody .hpill.ok {
+  background: var(--ok-wash);
+  color: var(--ok);
+}
+#helpBody .hpill.bad {
+  background: var(--critical-wash);
+  color: var(--critical);
+}
+#helpBody .hpill.wait {
+  background: var(--unknown-wash);
+  color: var(--unknown);
+}
+
+/* -------------------------------------------------------------- WhatsApp before/after */
+
+#helpBody .hcompare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+  margin: 1.2rem 0;
+}
+@media (max-width: 620px) {
+  #helpBody .hcompare {
+    grid-template-columns: 1fr;
+  }
+}
+#helpBody .hcol {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.95rem 1.05rem 1.1rem;
+  background: var(--card);
+}
+#helpBody .hcol.now {
+  border-top: 3px solid var(--slate);
+}
+#helpBody .hcol.later {
+  border-top: 3px solid var(--primary);
+}
+#helpBody .hcol h4 {
+  font-size: var(--t1);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.7rem;
+}
+#helpBody .hcol.later h4 {
+  color: var(--primary);
+}
+#helpBody .hcol ul {
+  padding-left: 1.05rem;
+  margin: 0;
+}
+#helpBody .hcol li {
+  font-size: var(--t4);
+  color: var(--slate);
+  margin: 0.5rem 0;
+}
+#helpBody .hcol li b {
+  color: var(--ink);
+}
+
+#helpBody .htemplate {
+  background: var(--ok-wash);
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 10px 2px;
+  padding: 0.75rem 0.95rem;
+  font-size: var(--t4);
+  color: var(--ink);
+  max-width: 27em;
+  margin: 0.7rem 0;
+}
+#helpBody .htemplate .hackbtn {
+  margin-top: 0.55rem;
+  padding-top: 0.5rem;
+  /* Was white-on-white after M9-41 — invisible. A border is non-text contrast (3:1), and a
+     token is better than a literal here anyway. */
+  border-top: 1px solid var(--line);
+  text-align: center;
+  font-weight: var(--w2);
+  color: var(--ok);
+  font-size: var(--t3);
+}
+
+/* -------------------------------------------------------------- notes + glossary */
+
+#helpBody .note.warn {
+  border-left-color: var(--pending);
+  background: var(--pending-wash);
+  color: var(--ink);
+  padding: 0.75rem 0.95rem;
+}
+#helpBody .note b {
+  color: var(--ink);
+}
+
+#helpBody dl.hglossary {
+  border-top: 1px solid var(--line);
+  margin: 0.8rem 0 0;
+}
+#helpBody .hglossrow {
+  display: grid;
+  grid-template-columns: 11em 1fr;
+  gap: 0.9rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--line);
+}
+@media (max-width: 560px) {
+  #helpBody .hglossrow {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}
+#helpBody .hglossrow dt {
+  font-weight: var(--w2);
+  color: var(--ink);
+  font-size: var(--t4);
+}
+#helpBody .hglossrow dd {
+  margin: 0;
+  color: var(--slate);
+  font-size: var(--t4);
+}
+
+#helpBody .htwrap {
+  overflow-x: auto;
+  margin: 0.8rem 0;
+}
+#helpBody table.htable {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--t4);
+}
+#helpBody table.htable th,
+#helpBody table.htable td {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+#helpBody table.htable th {
+  font-size: var(--t1);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--muted);
+}

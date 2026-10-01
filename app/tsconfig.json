@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    // DOM is here for the browser-side outbox adapter (IndexedDB) only. Server code must
+    // not reach for `document` or `window`; nothing enforces that yet beyond review.
+    "lib": ["ES2023", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "noEmit": true
+  },
+  // `web` is here deliberately, and was missing for a long time.
+  //
+  // The PWA is built by esbuild, which **strips** types without checking them — so the
+  // service worker, the offline logic and the whole intake path had no type safety at all,
+  // and nothing said so. It was found the way these things are: a reference to a field the
+  // client's own `Identity` did not declare compiled fine and would have been `undefined`
+  // on a screen.
+  //
+  // This is the operator-facing half of the system. It gets the same checking as the server.
+  "include": ["src", "web/src", "build.mjs"]
+}

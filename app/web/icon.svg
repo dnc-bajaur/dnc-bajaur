@@ -1,0 +1,49 @@
+<!--
+  The district's mark — one drawing, every place the product needs an icon.
+
+  It has to survive two sizes that have nothing in common: 16 pixels in a Windows taskbar and
+  on a browser tab, and a home-screen tile on a handset held at arm's length. Anything with
+  fine detail, a word, or a thin outline disappears at the first and looks empty at the second,
+  so this is three shapes: a bright tile, one heavy pulse line, and a single live dot.
+
+  It is drawn from the palette in `web/index.html`, which is the prototype's and is what the
+  product actually looks like — not the older paper-ground palette still sitting in
+  `theme.css`. The tile is the same cyan gradient as the header's "DC" mark, the pulse is
+  `on-accent`, and the dot is the critical red. An icon in colours the app does not use reads
+  as a different piece of software.
+
+  The tile is light on purpose. A dark icon vanishes into a dark Windows taskbar, which is
+  where the district will look for it every morning.
+
+  Note for anyone editing this header: a double hyphen cannot appear inside an XML comment, so
+  the CSS variables cannot be named here the way they are everywhere else in this repository.
+  Writing one silently makes the whole file unparseable, and the renderer's only symptom is a
+  blank icon. That has already happened once.
+
+  `scripts/make-icons.mjs` renders this to the PNG sizes and the Windows .ico. Edit this file,
+  run that script — never hand-edit the output.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"
+     role="img" aria-label="District Nerve Center">
+  <title>District Nerve Center — Bajaur</title>
+
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00d1ff"/>
+      <stop offset="1" stop-color="#0077a3"/>
+    </linearGradient>
+  </defs>
+
+  <!-- The tile. Radius is a squircle-ish 22%, which reads as a rounded app icon on Windows and
+       is harmless under the circular mask Android applies to the maskable variant. -->
+  <rect width="512" height="512" rx="112" ry="112" fill="url(#tile)"/>
+
+  <!-- The pulse. Round caps and joins on purpose: mitred corners on a 36px stroke turn into
+       spikes that alias badly at 16px. -->
+  <path d="M 82 268 H 164 L 204 172 L 268 356 L 306 244 H 350"
+        fill="none" stroke="#04121c" stroke-width="36"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Live. The one red thing on the icon, and the only reason it is red. -->
+  <circle cx="414" cy="244" r="32" fill="#ff3d57"/>
+</svg>

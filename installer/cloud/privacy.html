@@ -1,0 +1,200 @@
+<!doctype html>
+<!--
+  The district's privacy notice, served at https://dnc.example.com/privacy
+
+  It exists because Meta requires a Privacy Policy URL before a developer app can be published,
+  and an unpublished app receives no production webhooks — no delivery state, no replies, no
+  acknowledgements. So this page is load-bearing for INV-03, not paperwork.
+
+  DEPLOYED BY COPYING. This file is the source; Caddy serves /var/www/dnc-legal/privacy.html on
+  the server. It is deliberately NOT part of the application: adding a route would mean a build,
+  a shell-version bump and a deploy for a document that changes about once a year, and the
+  service worker would then cache it.
+
+      scp installer/cloud/privacy.html root@HOST:/var/www/dnc-legal/privacy.html
+
+  Every factual claim below is checked against what the software actually does. Where the
+  district has not decided something — retention, in particular (R-11) — this says what is true
+  today rather than inventing a policy the district never agreed to.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Notice — District Nerve Center, Bajaur</title>
+    <style>
+      :root {
+        --paper: #ffffff;
+        --ink: #16181d;
+        --muted: #5c6270;
+        --line: #e3e5ea;
+        --primary: #5b3fd6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #08090c;
+          --ink: #f4f4f7;
+          --muted: #9aa0ae;
+          --line: #23262e;
+          --primary: #a894ff;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+        padding: 3rem 1.25rem 5rem;
+      }
+      h1 {
+        font-size: 1.8rem;
+        line-height: 1.2;
+        margin: 0 0 0.35rem;
+        letter-spacing: -0.02em;
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin: 2.4rem 0 0.6rem;
+        letter-spacing: -0.01em;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 2rem;
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 2.5rem 0 0;
+      }
+      ul {
+        padding-left: 1.2rem;
+      }
+      li {
+        margin: 0.35rem 0;
+      }
+      a {
+        color: var(--primary);
+      }
+      footer {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 2rem;
+      }
+      code {
+        background: var(--line);
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Privacy Notice</h1>
+      <p class="sub">
+        District Nerve Center — Office of the Deputy Commissioner, Bajaur, Khyber Pakhtunkhwa,
+        Pakistan
+      </p>
+
+      <p>
+        The District Nerve Center is the software the district administration of Bajaur uses to
+        record emergencies, route them to the department responsible, and track whether they were
+        acted on. This notice describes what it holds, why, and who can see it.
+      </p>
+
+      <h2>Who is responsible</h2>
+      <p>
+        The Office of the Deputy Commissioner, Bajaur. The system belongs to the office, not to
+        any individual officer, and responsibility for it stays with the office when postings
+        change.
+      </p>
+
+      <h2>What is recorded</h2>
+      <ul>
+        <li>
+          <strong>Emergency reports</strong> — what was reported, its category and assessed
+          severity, when it happened and when it was recorded, and where, including a location
+          captured from the reporting device where the person allowed it.
+        </li>
+        <li>
+          <strong>Contact details given by a reporter</strong>, where they choose to give them, so
+          that the responding department can call back.
+        </li>
+        <li>
+          <strong>The district's own officers</strong> — name, post, department and official
+          contact number, taken from the district's directory, so that an emergency can be routed
+          to whoever holds a post today.
+        </li>
+        <li>
+          <strong>What was done</strong> — who was told, when, whether they acknowledged, what
+          action was logged, and how the incident was closed. Photographs and files attached to an
+          incident by responders are held with it.
+        </li>
+        <li>
+          <strong>Message delivery state</strong> — for WhatsApp notifications, whether a message
+          was accepted, delivered or failed, and any reply sent back to the district's number.
+        </li>
+      </ul>
+
+      <h2>Why</h2>
+      <p>
+        To coordinate emergency response across the district and to keep an accountable record of
+        it. The district administration is empowered to record, hold, act on and respond to
+        emergencies within the district. Nothing here is collected for advertising, and none of it
+        is sold, rented, or shared for marketing.
+      </p>
+
+      <h2>WhatsApp</h2>
+      <p>
+        The district notifies its officers over WhatsApp, from one number the district controls,
+        using Meta's WhatsApp Business Platform. Meta processes those messages in order to deliver
+        them and reports back their delivery state. Only what is necessary to send a notification
+        travels this way — the recipient's number and the message itself. Read receipts are not
+        used to decide whether anybody acted; only a deliberate acknowledgement counts.
+      </p>
+
+      <h2>Who can see it</h2>
+      <p>
+        The district's control room, and officers of the district administration acting in their
+        posts. Access follows the post a person holds, not the person, and it ends when they stop
+        holding it. Every consequential action is attributable to the seat that performed it.
+      </p>
+
+      <h2>How long it is kept</h2>
+      <p>
+        Emergency records are retained indefinitely at present. The district has not yet set a
+        retention period, and this notice will be updated to state one when it does, rather than
+        implying a limit that is not in force.
+      </p>
+
+      <h2>Where it is held</h2>
+      <p>
+        On a server operated for the district, reachable only over an encrypted connection. A
+        nightly backup is encrypted before it leaves that machine.
+      </p>
+
+      <h2>Requesting deletion, or asking a question</h2>
+      <p>
+        Write to <a href="mailto:dc-office@example.com">dc-office@example.com</a>, or to the Office of the
+        Deputy Commissioner, Bajaur. Include enough detail to identify the record. Requests are
+        answered by the office; note that records forming part of the district's account of an
+        emergency response may be retained where there is a legal reason to keep them.
+      </p>
+
+      <hr />
+      <footer>
+        <p>
+          Last updated 12 August 2026. Served at
+          <code>https://dnc.example.com/privacy</code>.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

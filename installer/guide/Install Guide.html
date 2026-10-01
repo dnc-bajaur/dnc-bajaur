@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>District Nerve Center — Installation and Daily Use</title>
+    <style>
+      /*
+       * Deliberately printable and deliberately offline.
+       *
+       * This is read on the machine being set up, which by definition has nothing installed
+       * on it yet and may have no working internet at that moment. No web font, no CDN, no
+       * script — the same rule the application itself follows, for the same reason: a page
+       * that needs the network to render is a page that is blank exactly when it is needed.
+       */
+      :root {
+        --ink: #14171e;
+        --paper: #ffffff;
+        --slate: #56606f;
+        --line: #d9d5cc;
+        --wash: #f4f2ed;
+        --accent: #0077a3;
+        --warn: #8a6420;
+        --warn-wash: #fdf6e6;
+        --stop: #8c2f22;
+        --stop-wash: #fbecea;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0 auto; padding: 2.5rem 1.5rem 6rem; max-width: 46rem;
+        background: var(--paper); color: var(--ink);
+        font: 16px/1.6 "Segoe UI", system-ui, -apple-system, "Noto Sans", Arial, sans-serif;
+      }
+      header { border-bottom: 3px solid var(--ink); padding-bottom: 1rem; margin-bottom: 2rem; }
+      .mark {
+        display: inline-grid; place-items: center;
+        width: 2.6rem; height: 2.6rem; border-radius: 10px;
+        background: linear-gradient(135deg, #00d1ff, #0077a3);
+        color: #04121c; font-weight: 800; font-size: 0.85rem; vertical-align: middle;
+        margin-right: 0.7rem;
+      }
+      h1 { font-size: 1.5rem; margin: 0; display: flex; align-items: center; letter-spacing: 0.01em; }
+      .org { color: var(--slate); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.09em; margin-top: 0.5rem; }
+      h2 {
+        font-size: 1.15rem; margin: 2.75rem 0 0.75rem; padding-top: 0.75rem;
+        border-top: 1px solid var(--line);
+      }
+      h3 { font-size: 1rem; margin: 1.75rem 0 0.4rem; }
+      p, li { color: var(--ink); }
+      ol, ul { padding-left: 1.3rem; }
+      li { margin: 0.4rem 0; }
+      code, kbd {
+        font-family: Consolas, "Courier New", monospace; font-size: 0.92em;
+        background: var(--wash); padding: 0.12em 0.4em; border-radius: 4px;
+      }
+      .note, .warn, .stop {
+        border-left: 4px solid var(--accent); background: var(--wash);
+        padding: 0.85rem 1rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;
+      }
+      .warn { border-left-color: var(--warn); background: var(--warn-wash); }
+      .stop { border-left-color: var(--stop); background: var(--stop-wash); }
+      .note strong, .warn strong, .stop strong { display: block; margin-bottom: 0.2rem; }
+      table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.95rem; }
+      th, td { text-align: left; padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { background: var(--wash); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--slate); }
+      .step { display: flex; gap: 0.9rem; margin: 1.4rem 0; }
+      .step .n {
+        flex: 0 0 auto; width: 1.9rem; height: 1.9rem; border-radius: 50%;
+        background: var(--ink); color: #fff; display: grid; place-items: center;
+        font-weight: 700; font-size: 0.9rem;
+      }
+      .step .body { flex: 1 1 auto; }
+      .step .body p:first-child { margin-top: 0.25rem; font-weight: 600; }
+      footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--slate); font-size: 0.85rem; }
+      @media print {
+        body { padding: 0; max-width: none; }
+        h2 { break-after: avoid; }
+        .step, .note, .warn, .stop, table { break-inside: avoid; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1><span class="mark">DC</span>District Nerve Center</h1>
+      <div class="org">Bajaur · Khyber Pakhtunkhwa — installation and daily use</div>
+    </header>
+
+    <p>
+      This system records every emergency reported anywhere in Bajaur, sends it to the
+      department responsible, and keeps a permanent account of what was done about it. It is
+      the district's record — not a summary of one kept somewhere else.
+    </p>
+
+    <p>
+      There are two things to set up, and they are different jobs. <strong>One office machine
+      runs the system.</strong> Everybody else — duty officers, department staff, the control
+      room — opens it from that machine over the district's own network, on a phone or a
+      laptop. Nothing is installed on their devices.
+    </p>
+
+    <h2>Part 1 — The office machine</h2>
+
+    <p>Do this once, on the computer that will hold the district's record.</p>
+
+    <table>
+      <tr><th>What it needs</th><th>Why</th></tr>
+      <tr>
+        <td>Windows 10 or 11, 64-bit</td>
+        <td>The installer is a Windows program.</td>
+      </tr>
+      <tr>
+        <td>An administrator account</td>
+        <td>So the system can start itself after a power cut, without anybody signing in.</td>
+      </tr>
+      <tr>
+        <td>About 1 GB of free disk space</td>
+        <td>500 MB for the program, and room for the record to grow.</td>
+      </tr>
+      <tr>
+        <td>A machine that stays on</td>
+        <td>
+          Reports arriving from the field are accepted whenever this machine is running. While
+          it is off, handsets hold their reports and deliver them when it comes back — nothing
+          is lost, but nobody in the control room sees them until then.
+        </td>
+      </tr>
+    </table>
+
+    <div class="note">
+      <strong>Nothing else has to be installed first.</strong>
+      The database and everything else the system needs are inside the installer. It does not
+      download anything and it does not need the internet to install.
+    </div>
+
+    <div class="step">
+      <div class="n">1</div>
+      <div class="body">
+        <p>Run <code>DistrictNerveCenter-Setup-1.0.0.exe</code></p>
+        <p>
+          Windows will ask <em>"Do you want to allow this app to make changes?"</em> — choose
+          <strong>Yes</strong>. It may first show a blue <em>"Windows protected your PC"</em>
+          box, because this installer has not been submitted to Microsoft for signing. Click
+          <strong>More info</strong>, then <strong>Run anyway</strong>.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">2</div>
+      <div class="body">
+        <p>Fill in the administrator account</p>
+        <p>
+          Setup asks for the name, mobile number and a password of the person who will set the
+          system up for the district. This is the only account that exists at first, and it is
+          the one that adds departments, sets routing, and gives everybody else their login.
+        </p>
+        <ul>
+          <li>Use the <strong>mobile number the district already knows</strong> for that person. It is how they sign in and how the system reaches them.</li>
+          <li>The password must be at least 12 characters. Write it down somewhere safe before you type it.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">3</div>
+      <div class="body">
+        <p>Wait for it to finish</p>
+        <p>
+          After the files are copied, Setup spends about a minute preparing the district's
+          record — creating the database, and loading the 79 offices and 81 posts from the
+          district's own contact list. It will say so on screen.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">4</div>
+      <div class="body">
+        <p>Open it</p>
+        <p>
+          There is now a <strong>District Nerve Center</strong> icon on the desktop, and an
+          entry in the Start Menu. Click it and the system opens in the browser. Sign in with
+          the number and password from step 2.
+        </p>
+        <p>
+          To keep it on the taskbar: find it in the Start Menu, right-click,
+          <strong>Pin to taskbar</strong>.
+        </p>
+      </div>
+    </div>
+
+    <h3>What happens from then on</h3>
+    <p>
+      The system starts by itself whenever the machine starts, including after a power cut and
+      before anybody signs in. The desktop icon does not start it — it just opens it. If for
+      any reason it is not running when you click the icon, the icon starts it and then opens
+      it, so clicking it is always the right thing to do.
+    </p>
+
+    <h2>Part 2 — Phones and other computers</h2>
+
+    <p>
+      Everybody else reaches the system over the district's network. There is nothing to
+      install and no app store involved.
+    </p>
+
+    <div class="step">
+      <div class="n">1</div>
+      <div class="body">
+        <p>Find the address</p>
+        <p>
+          On the office machine, open the Start Menu → <strong>District Nerve Center</strong>
+          → <strong>Check the District Nerve Center</strong>. It prints a line like:
+        </p>
+        <p><code>On the network at  http://192.168.1.40:3000</code><br />
+           <code>On the district's domain  https://dnc.bajaur.gkp.pk</code></p>
+        <p>
+          <strong>Give people the https:// address, not the number.</strong> Both reach the same
+          machine in this office, and only the https:// one lets a phone keep the app working
+          with no signal or use the phone's location. Opened by number it looks like it worked,
+          and then does not work at the scene — which is the one thing this system exists to
+          prevent. The number is for checking the machine from the office, nothing else.
+        </p>
+        <p>
+          If the second line is missing, the district's domain has not been pointed at this
+          machine yet — see <em>Putting it on a phone</em>, and R-21 in the district's list.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">2</div>
+      <div class="body">
+        <p>Give each officer a login</p>
+        <p>
+          Sign in as the administrator, go to <strong>Administration</strong> → the department's
+          roster, and grant an account to the people who need one. Everybody in the district's
+          contact list is already there and can already be reached — being contactable and
+          being able to sign in are separate things, on purpose.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">3</div>
+      <div class="body">
+        <p>Add it to a phone's home screen</p>
+        <p>
+          See the separate sheet, <strong>Putting it on a phone</strong>. It takes about
+          fifteen seconds per handset and it is worth doing on every one: added to the home
+          screen, it opens like an app, fills the screen, and — importantly — still opens and
+          still accepts an emergency report when the phone has no signal at all.
+        </p>
+      </div>
+    </div>
+
+    <h2>The first thing to do inside the system</h2>
+
+    <div class="warn">
+      <strong>Until you set a routing signal, every emergency arrives unassigned.</strong>
+      This is deliberate and it is loud: the system never guesses which department should
+      answer. It shows "with nobody" on the dashboard until the district says who answers for
+      what.
+    </div>
+
+    <p>
+      Sign in as the administrator, open <strong>Administration</strong>, choose a department,
+      and give it a signal — a category such as <em>fire</em>, or a keyword. From that moment,
+      emergencies matching it go to that department's duty officer with a clock running against
+      an acknowledgement deadline. More than one department matching the same emergency is a
+      correct answer, not a conflict.
+    </p>
+
+    <p>Two more worth doing in the first week:</p>
+    <ul>
+      <li><strong>Check the acknowledgement deadlines.</strong> The ones in the system now are placeholders until the district sets its own.</li>
+      <li><strong>Fill in the missing numbers.</strong> 38 posts in the contact list have nobody in them, and the Rescue 1122 number is a visible stand-in. Anything that is a placeholder says so on screen.</li>
+    </ul>
+
+    <h2>Backups</h2>
+
+    <p>
+      Every night at 02:00 the system takes a copy of the district's record, checks the copy is
+      complete, and writes down whether it worked. You can see this under
+      <strong>Administration → Backups</strong>, and take one on demand from the same screen.
+    </p>
+
+    <div class="stop">
+      <strong>Those copies never leave the building yet.</strong>
+      Fire, flood or theft at the office would take the record with it. Sending an encrypted
+      copy off-site is built and tested but switched off, because it needs a cloud storage
+      account the district has not yet provided. The Backups screen says this plainly rather
+      than showing a green tick.
+    </div>
+
+    <h2>If something is wrong</h2>
+
+    <table>
+      <tr><th>What you see</th><th>What to do</th></tr>
+      <tr>
+        <td>Clicking the icon does nothing, or the browser says it cannot connect</td>
+        <td>
+          Open Start Menu → <strong>Check the District Nerve Center</strong>. It says whether
+          the database and the server are running. If either says stopped, click the desktop
+          icon again — it starts them.
+        </td>
+      </tr>
+      <tr>
+        <td>The board says <strong>NOT LIVE — do not act on this without checking</strong></td>
+        <td>
+          This is the system being honest, not broken: that screen has not reached the server
+          for 30 seconds, so what is on it may be out of date. Do not decide anything from it
+          until it clears. Check the network between this machine and the office one.
+        </td>
+      </tr>
+      <tr>
+        <td>Phones on the district network cannot reach it</td>
+        <td>
+          They are probably on a different network, or Windows Firewall blocked the rule during
+          installation. Confirm the address from <strong>Check the District Nerve Center</strong>,
+          and confirm the phone is on the same network.
+        </td>
+      </tr>
+      <tr>
+        <td>An emergency shows as <strong>with nobody</strong></td>
+        <td>
+          No department has a routing signal that matches it. That is the system telling the
+          truth. Add the signal in Administration.
+        </td>
+      </tr>
+    </table>
+
+    <h2>Removing it</h2>
+
+    <p>
+      Settings → Apps → <strong>District Nerve Center</strong> → Uninstall, in the ordinary way.
+    </p>
+
+    <div class="stop">
+      <strong>The record is not deleted when you uninstall.</strong>
+      It stays in <code>C:\ProgramData\District Nerve Center</code>, which holds every emergency
+      ever recorded on this machine. Installing again picks it up where it left off. Deleting
+      that folder destroys the record permanently, and no backup taken by this system lives
+      anywhere else yet.
+    </div>
+
+    <footer>
+      District Nerve Center — Bajaur · version 1.0.0<br />
+      Includes PostgreSQL 17 (PostgreSQL Licence) and Node.js (MIT Licence). Licence texts are
+      in the installation folder.
+    </footer>
+  </body>
+</html>

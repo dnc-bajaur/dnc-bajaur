@@ -1,0 +1,1077 @@
+/*
+ * The office screens' styling — the administration console, the roster, the Status screen.
+ *
+ * ## Why this file exists
+ *
+ * `office.js` has been fetched on first use since 2026-08-04, for a reason `office.ts` states
+ * plainly: none of these three screens is of any use at a scene, and all three are useless
+ * without a connection. **Their CSS never followed them.** It stayed in `index.html`, which is
+ * the shell, which is what a field officer in Mamund downloads over one bar of signal — so the
+ * bytes that draw a backup history and a department's card were being sent to a
+ * handset that will never open either.
+ *
+ * Found by an audit that asked of every rule in the shell *which bundle could ever produce
+ * this selector*, and got "office" for 14 KB of them. The same audit found two blocks whose
+ * answer was "none at all" — the inbox (ADR-0018) and the alert ladder (ADR-0012's
+ * supersession) — and those were deleted rather than moved.
+ *
+ * ## The precedent, and the rule it carries
+ *
+ * `report.css`, `search.css` and `help.css` already do exactly this, and `loadScreen(name,
+ * withCss)` in `main.ts` already knows how to fetch a stylesheet beside its bundle. This file
+ * changes no rule and no selector — every declaration below is the one that was in the shell,
+ * moved. **A move that also tidies is a move nobody can review.**
+ *
+ * ## The one thing to know before editing
+ *
+ * This is fetched, not precached, so it is stored under `sw.ts`'s generic handler with the
+ * `CACHE` string — exactly like `help.css`, whose own note in this repository says the same
+ * thing three times over. **Changing this file needs a `CACHE` bump**, or a browser that has
+ * already opened the app keeps the old office styling for ever. `shellDigest()` reads
+ * everything the build emits, so the guard sees this file by having been built.
+ */
+
+/* ------------------------------------------------------------------ the status screen */
+/*
+ * ⚠️ **`.sreport`, not `.srow` — 2026-08-23, and the rename is the fix.**
+ *
+ * The Status screen owned `.srow` from 2026-08-14. On 2026-08-22 the "still running" panel took
+ * the same name for its own rows, in `index.html`'s inline `<style>`, with
+ * `grid-template-columns: 5.2rem 1fr auto`. Two panels built by people who did not know about
+ * each other, one class name.
+ *
+ * **The cascade did not save this, and the reason is worth keeping.** `office.css` is injected as
+ * a `<link>` when the office screens load, so it comes AFTER the inline block and wins every
+ * property it declares — but a later rule cannot reset a property it never mentions, and this
+ * one never mentioned `grid-template-columns`. So the Status screen's three children (the head,
+ * the note, the buttons) were dealt into the other panel's three columns: the service name
+ * squeezed into 5.2rem and wrapping mid-word, the note reduced to a stub too small to type in,
+ * and the age pushed below the buttons. It was reported from a phone, which is where it showed
+ * worst.
+ *
+ * A distinct class ends it rather than patching it. Declaring the missing property would have
+ * fixed today's symptom and left the next property they add to leak the same way.
+ */
+.sreport {
+  display: grid;
+  /* Stated, not left to the default. See the note above: an unstated property is inheritable
+     from anybody else's rule that happens to share the selector. */
+  grid-template-columns: 1fr;
+  gap: 0.4rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.sreport:last-child { border-bottom: none; }
+.shead {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 0.6rem; flex-wrap: wrap;
+}
+.shead .sname { font-weight: var(--w2); }
+/* The officer who holds the post, beside the designation — ADR-0033. */
+.shead .sofficer { font-weight: var(--w1); color: var(--slate); font-size: var(--t4); }
+.sreport input.snote {
+  width: 100%; padding: 0.45rem 0.6rem; font: inherit; font-size: var(--t4);
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+/*
+ * The buttons are one row on a phone and stay one row everywhere.
+ *
+ * ADR-0033: two answers (Available / Unavailable), so two columns. A single choice, and a
+ * wrapped option reads as a different kind of thing. Minimum height is a thumb, not a cursor.
+ */
+.sbuttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; }
+.sbtn {
+  min-height: 44px; font: inherit; font-weight: var(--w2); font-size: var(--t4);
+  background: var(--card2); color: var(--slate);
+  border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+.sbtn:hover { color: var(--ink); }
+/* The current state is stated by the pressed button, so nobody has to remember it. */
+.sbtn[aria-pressed="true"] { color: var(--on-accent); }
+.sbtn.normal[aria-pressed="true"],
+.sbtn.available[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); }
+.sbtn.degraded[aria-pressed="true"] { background: var(--pending); border-color: var(--pending); }
+/*
+ * The `color: var(--ink)` this line used to carry is gone deliberately, so it falls back
+ * to `--on-accent` above. `--ink` is #f4f4f7 — near-white, but not white, and on
+ * `--critical-fill` that difference is the difference between 4.11:1 and 4.51:1, i.e.
+ * between failing AA and passing it. A fill darkened to exactly clear the bar under
+ * *white* does not clear it under anything less. (2026-08-12)
+ */
+.sbtn.down[aria-pressed="true"],
+.sbtn.unavailable[aria-pressed="true"] { background: var(--critical-fill); border-color: var(--critical-fill); }
+
+/*
+ * Add / Remove / Rename, on the card — the district, 2026-09-08.
+ *
+ * Its own row under the status buttons rather than beside the name, and the reason is what
+ * this screen is for: the two or three status buttons above are what somebody opens it to
+ * press, forty times a week. Configuration is pressed twice a year. Putting them on one line
+ * makes the frequent thing narrower to serve the rare one, and puts **Remove** a thumb's width
+ * from **Down** on a phone.
+ *
+ * `.swall`'s checkbox used to sit here and is gone — same route, said as two words a control
+ * room uses (`officerAdmin` in `web/src/status.ts`).
+ */
+.sadmin { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+/*
+ * A neutral small button, for a small button that is not destructive.
+ *
+ * `button.plain.small` goes red on hover, which is right for Withdraw and Remove and wrong for
+ * Rename — and outright misleading on **Add to dashboard**, where red would promise the
+ * opposite of what the button does.
+ *
+ * It sits ABOVE `button.plain.small` in this file and still wins: (0,4,1) against (0,3,1), so
+ * the extra class does the work and moving either block cannot break it.
+ */
+button.plain.small.calm:hover { color: var(--ink); border-color: var(--slate); }
+/* The pick is a state, so the button says which one it is in without being pressed. */
+button.plain.small.calm[aria-pressed="true"] { color: var(--ink); border-color: var(--slate); }
+
+.sform { display: grid; gap: 0.5rem; margin-bottom: 0.8rem; }
+/*
+ * Adding a service is one short field and one verb, so it is one line — unlike the advisory
+ * form above it, which asks four things and stacks. It sits at the FOOT of its panel: the
+ * cards are what the screen is for, and a control room scanning for "Electricity" should not
+ * read past a form to reach it.
+ */
+.sadd {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  margin: 0.8rem 0 0;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+.sadd .plain.go { width: auto; padding: 0 1.1rem; }
+@media (max-width: 30rem) {
+  .sadd { grid-template-columns: 1fr; }
+  .sadd .plain.go { width: 100%; }
+}
+.sform select, .sform input {
+  width: 100%; padding: 0.5rem 0.6rem; font: inherit; font-size: var(--t4);
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.sform .plain { width: 100%; min-height: 44px; }
+button.plain.go { background: var(--primary-fill); color: var(--on-accent); }
+/*
+ * A quiet button for a routine action.
+ *
+ * `button.plain` is the critical-red block used to report an emergency, and it is that
+ * loud on purpose. Withdrawing an advisory that has been superseded is not that: giving
+ * it the same weight makes the emergency button mean less, which is the only thing on
+ * the phone that must never lose weight. Declared after `.plain` so order is not doing
+ * the work — the extra class already wins on specificity.
+ *
+ * `.plain` itself stays in the shell: the emergency report button is the shell's own.
+ */
+button.plain.small {
+  width: auto;
+  min-height: 34px;
+  margin-top: 0.2rem;
+  padding: 0 0.9rem;
+  font-size: var(--t2);
+  color: var(--slate);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+button.plain.small:hover { color: var(--critical); border-color: var(--critical); }
+
+/* ------------------------------------------------ administration console */
+
+
+/*
+  The navigation rail — grouped by decision type with sticky positioning on desktop
+  and responsive wrap on mobile.
+*/
+#adminView {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  width: 100%;
+}
+@media (max-width: 60rem) {
+  #adminView {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
+
+#adminTabs {
+  width: 270px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1.1rem 0.85rem;
+  position: sticky;
+  top: 1rem;
+}
+@media (max-width: 60rem) {
+  #adminTabs {
+    width: 100%;
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+  }
+}
+
+.tabgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+}
+@media (max-width: 60rem) {
+  .tabgroup {
+    width: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+.tabgroupname {
+  font-size: var(--t1);
+  font-weight: var(--w3);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caps);
+  color: var(--slate);
+  padding: 0.35rem 0.5rem 0.15rem;
+}
+#adminTabs button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.75rem;
+  min-height: 38px;
+  font: inherit;
+  font-size: var(--t3);
+  font-weight: var(--w2);
+  color: var(--slate);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+#adminTabs button:hover {
+  color: var(--ink);
+  background: var(--card);
+}
+#adminTabs button[aria-current="page"] {
+  background: var(--primary-wash);
+  color: var(--primary);
+  font-weight: var(--w3);
+  border-left: 3px solid var(--primary);
+  border-radius: 4px 8px 8px 4px;
+}
+#adminError {
+  margin: 0 0 0.9rem; padding: 0.6rem 0.8rem;
+  background: var(--critical-wash); color: var(--critical);
+  font-size: var(--t4); font-weight: var(--w1);
+  border-radius: 8px;
+}
+#adminBody {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+.badge-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--slate);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+#adminTabs button[aria-current="page"] .badge-count {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* Card grids and cards (Direction 3: Hybrid Deck + Drawer) */
+.grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+  margin-top: 0.8rem;
+}
+
+.g-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1.15rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  display: flex;
+  flex-direction: column;
+}
+.g-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: var(--lift);
+}
+.g-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.4rem;
+}
+.g-title {
+  font-size: var(--t4);
+  font-weight: var(--w3);
+  color: var(--ink);
+}
+.g-tag {
+  font-size: var(--t1);
+  font-weight: var(--w3);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caps);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.g-tag.ok { background: var(--ok-wash); color: var(--ok); }
+.g-tag.crit { background: var(--critical-wash); color: var(--critical); }
+.g-tag.pri { background: var(--primary-wash); color: var(--primary); }
+.g-desc {
+  font-size: var(--t3);
+  color: var(--slate);
+  margin-bottom: 1rem;
+  flex: 1;
+}
+.g-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--t2);
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+  color: var(--slate);
+}
+.g-link {
+  color: var(--primary);
+  font-weight: var(--w2);
+  text-decoration: none;
+}
+
+/* Avatar stacks */
+.avatars { display: flex; align-items: center; }
+.avatar-sm {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--primary-wash);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  margin-right: -6px;
+  border: 2px solid var(--card);
+}
+.avatar-sm.more {
+  background: var(--surface);
+  color: var(--slate);
+  border-color: var(--line);
+}
+/* A group's own photo (2026-09-01) — one round face where the initials stack would be. */
+img.avatar-sm.avatar-pic {
+  object-fit: cover;
+  background: var(--card2);
+  margin-right: 0;
+}
+/* The picture control in the group drawer. */
+.pic-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.pic-preview {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pic-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pic-preview.empty {
+  font-size: var(--t1);
+  color: var(--muted);
+  text-align: center;
+  padding: 0 4px;
+}
+.pic-row .d-btn {
+  flex: none;
+  width: auto;
+}
+
+/* Slide-out Drawer (Direction 3: Hybrid Deck + Drawer) */
+.backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.drawer {
+  width: 480px;
+  max-width: 92vw;
+  background: var(--card);
+  color: var(--ink);
+  height: 100%;
+  box-shadow: -8px 0 36px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-left: 1px solid var(--line);
+  position: relative;
+  z-index: 1001;
+}
+.backdrop.open .drawer {
+  transform: translateX(0);
+}
+.drawer-head {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.drawer-head h3 {
+  font-size: var(--t6);
+  font-weight: var(--w3);
+  color: var(--ink);
+  margin: 0 0 4px 0;
+}
+.drawer-sub {
+  color: var(--slate);
+  font-size: var(--t3);
+}
+.drawer-close {
+  background: none;
+  border: none;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--slate);
+  padding: 0 4px;
+}
+.drawer-close:hover {
+  color: var(--ink);
+}
+/* A failed drawer action reports here, between the head and the scrolling body. The drawer is
+   a fixed-position panel, so showing this shifts nothing on the page behind it. */
+.drawer-error {
+  flex: none;
+  margin: 0;
+  padding: 12px 24px;
+  background: var(--critical-wash);
+  color: var(--critical);
+  font-size: var(--t3);
+  font-weight: var(--w1);
+  border-bottom: 1px solid var(--line);
+}
+.drawer-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+  background: var(--card);
+}
+.drawer-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 1.25rem;
+}
+.d-btn {
+  flex: 1;
+  padding: 9px 14px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 6px;
+  font: inherit;
+  font-size: var(--t3);
+  font-weight: var(--w2);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+.d-btn:hover {
+  border-color: var(--primary);
+  background: var(--paper);
+}
+.d-btn.primary {
+  background: var(--primary-fill);
+  color: var(--on-accent);
+  border-color: var(--primary-fill);
+}
+.d-btn.primary:hover {
+  filter: brightness(1.08);
+}
+.d-btn.danger {
+  background: var(--critical-wash);
+  color: var(--critical);
+  border-color: var(--critical);
+}
+.d-btn.danger:hover {
+  background: var(--critical);
+  color: #ffffff;
+}
+.d-field {
+  margin-bottom: 1.15rem;
+}
+.d-label {
+  font-size: var(--t1);
+  font-weight: var(--w3);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caps);
+  color: var(--slate);
+  margin-bottom: 5px;
+  display: block;
+}
+.d-input {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 6px;
+  font: inherit;
+  font-size: var(--t4);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.d-input:focus {
+  border-color: var(--primary);
+}
+.member-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.member-item h5 {
+  margin: 0;
+  font-size: var(--t4);
+  font-weight: var(--w2);
+  color: var(--ink);
+}
+.member-item p {
+  margin: 2px 0 0 0;
+  font-size: var(--t2);
+  color: var(--slate);
+}
+.member-remove-btn {
+  background: var(--critical-wash);
+  border: 1px solid transparent;
+  color: var(--critical);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: var(--t2);
+  font-weight: var(--w2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.member-remove-btn:hover {
+  background: var(--critical);
+  color: #ffffff;
+}
+.picker-results {
+  margin-top: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.picker-results .member-item {
+  margin-bottom: 6px;
+  gap: 10px;
+  justify-content: flex-start;
+  cursor: pointer;
+}
+.picker-results .member-item.is-enrolled {
+  background: var(--card2);
+  cursor: default;
+}
+.picker-check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary-fill);
+  cursor: pointer;
+}
+.picker-check:disabled {
+  cursor: default;
+}
+.picker-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.picker-tag {
+  flex: none;
+  font-size: var(--t2);
+  font-weight: var(--w2);
+  color: var(--slate);
+  white-space: nowrap;
+}
+
+#adminBody .note { margin-top: 0; }
+
+/*
+  The Overview — the console's landing.
+
+  One line per question, and the *sentence* is the widest thing on the row: this screen is read
+  by somebody deciding whether anything here needs them today, and a wall of bare figures makes
+  that decision slower rather than faster. The heading is small and quiet on the left; what it
+  means is the thing at reading weight.
+
+  Colour repeats the words and never carries them alone (INV-04) — every row says in text what
+  is wrong before any edge or hue says it.
+*/
+.orow {
+  display: grid; grid-template-columns: 9rem minmax(0, 1fr) auto;
+  gap: 0.35rem 0.8rem; align-items: baseline;
+  padding: 0.65rem 0; border-bottom: 1px solid var(--line);
+}
+.orow .oname {
+  font-size: var(--t1); text-transform: uppercase; letter-spacing: var(--ls-caps); color: var(--slate);
+}
+.orow .owhat { font-size: var(--t5); font-weight: var(--w1); font-variant-numeric: tabular-nums; }
+.orow[data-worst='blocking'] .owhat { color: var(--critical); }
+.orow[data-worst='serious'] .owhat { color: var(--pending); }
+.orow[data-ok='false'] .owhat { color: var(--critical); }
+@media (max-width: 46rem) {
+  /* The heading takes its own line rather than squeezing the sentence into a column. */
+  .orow { grid-template-columns: minmax(0, 1fr) auto; }
+  .orow .oname { grid-column: 1 / -1; }
+}
+.sectionhead {
+  font-size: var(--t1); text-transform: uppercase; letter-spacing: var(--ls-caps);
+  color: var(--slate); margin: 1.2rem 0 0.5rem;
+}
+
+/* The configuration sweep (W-01). Consequence before count, always. */
+#integrity { margin-bottom: 1rem; }
+#integrity .clear { font-size: var(--t4); color: var(--ok); font-weight: var(--w1); margin: 0; }
+.finding {
+  border-left: 4px solid var(--line);
+  background: var(--card);
+  padding: 0.4rem 0.7rem;
+  margin-bottom: 0.35rem;
+  font-size: var(--t4);
+}
+.finding[data-severity="blocking"] { border-left-color: var(--critical); }
+.finding[data-severity="serious"]  { border-left-color: var(--pending); }
+.finding summary { cursor: pointer; display: flex; gap: 0.6rem; align-items: baseline; }
+.finding .sev {
+  font-size: var(--t1); font-weight: var(--w3); text-transform: uppercase; letter-spacing: var(--ls-caps);
+  color: var(--slate); min-width: 4.5rem;
+}
+.finding[data-severity="blocking"] .sev { color: var(--critical); }
+.finding[data-severity="serious"]  .sev { color: var(--pending); }
+.finding .what { font-weight: var(--w1); flex: 1; }
+.finding .count { font-weight: var(--w3); font-variant-numeric: tabular-nums; }
+.finding .consequence { margin: 0.35rem 0 0.2rem; color: var(--slate); font-size: var(--t3); }
+.finding ul { margin: 0.2rem 0 0.2rem 1.1rem; padding: 0; font-size: var(--t3); }
+.finding .more { color: var(--slate); font-style: italic; }
+
+#addDepartment {
+  display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: stretch;
+  margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line);
+}
+#addDepartment input { flex: 1 1 12rem; min-width: 0; margin: 0; padding: 0.5rem; font: inherit; }
+#addDepartment button {
+  margin: 0; padding: 0.5rem 1rem; font: inherit; font-weight: var(--w2);
+  background: var(--primary-fill); color: var(--on-accent); border: none; border-radius: 6px; cursor: pointer;
+}
+
+/*
+ * The console's department cards, same shape again.
+ *
+ * No card is tinted for a configuration gap any more. The rule below explains why that
+ * stopped being a good idea; ADR-0022 then removed the configuration itself.
+ */
+.dept {
+  background: var(--card); border: 1px solid var(--line);
+  border-left: 5px solid var(--line); border-radius: 12px;
+  padding: 0.7rem 0.85rem; margin-bottom: 0.6rem;
+}
+/*
+  Deliberately NOT tinted. This once painted the amber edge on any department with no
+  routing signal, which was eighty of eighty — the entire console amber for something that
+  is not a fault, leaving the one card that IS a fault (no post at all) nothing to stand
+  out against. The signals are gone with ADR-0022 and the lesson is not: an edge colour is
+  spent on the row somebody can act on tonight, or it is spent on nothing.
+*/
+.dept[data-administration="true"] { border-left-color: var(--primary); }
+
+@media (min-width: 90rem) {
+  #adminDepartments {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.8rem; align-items: start;
+  }
+  /*
+   * Only the cards column. Everything else in this panel — the integrity sweep, the
+   * add-department form, the "79 live" line — spans the width.
+   *
+   * Written as "anything that is not a card" rather than by naming each one, because
+   * the next thing added to this screen would otherwise silently become a column and
+   * nobody would think to look here.
+   */
+  #adminDepartments > :not(.dept) { grid-column: 1 / -1; }
+}
+.dept[data-retired="true"] { opacity: 0.6; background: none; }
+.dept header { display: flex; align-items: baseline; gap: 0.5rem; padding: 0; border: none; }
+.dept .name { margin: 0; font-size: var(--t5); }
+.dept .tag {
+  font-size: var(--t1); font-weight: var(--w3); text-transform: uppercase; letter-spacing: var(--ls-caps);
+  padding: 0.1rem 0.35rem; border: 1px solid var(--line); border-radius: 6px; color: var(--slate);
+}
+.dept .tag.admin { border-color: var(--primary); color: var(--primary); }
+.dept .desc { margin: 0.3rem 0 0; font-size: var(--t4); }
+.dept .meta { margin: 0.25rem 0 0; font-size: var(--t2); color: var(--slate); }
+
+.dept .actions { display: flex; gap: 0.8rem; margin-top: 0.6rem; }
+button.link {
+  margin: 0; padding: 0; width: auto; font: inherit; font-size: var(--t2);
+  background: none; border: none; color: var(--slate);
+  text-decoration: underline; cursor: pointer;
+}
+button.link.danger { color: var(--critical); }
+
+.deadlines {
+  display: grid; grid-template-columns: 1fr repeat(5, 5rem);
+  gap: 0.4rem; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid var(--line);
+}
+.deadlines.district { grid-template-columns: repeat(5, 1fr); border: none; }
+.deadlines.district .cell { display: flex; flex-direction: column; gap: 0.2rem; }
+.deadlines .label { font-size: var(--t1); text-transform: uppercase; letter-spacing: var(--ls-caps); color: var(--slate); }
+.deadlines .deptname { font-size: var(--t4); }
+.deadlines.headings { border-bottom: 1px solid var(--ink); padding-bottom: 0.2rem; }
+input.ack { margin: 0; padding: 0.35rem; width: 100%; font: inherit; font-size: var(--t4); }
+
+/*
+  An inherited value and a chosen one must not be the same rectangle with the same
+  number in it. They diverge the moment the district value changes, and this screen
+  exists so somebody can see what has actually been decided.
+*/
+input.ack[data-set="false"] { border-style: dashed; }
+input.ack[data-set="false"]::placeholder { color: var(--slate); opacity: 0.7; font-style: italic; }
+input.ack[data-set="true"] { border: 1px solid var(--ink); font-weight: var(--w2); }
+@media (max-width: 46rem) {
+  .deadlines { grid-template-columns: 1fr; }
+  .deadlines.district { grid-template-columns: repeat(2, 1fr); }
+}
+
+/*
+  The console’s performance table is gone (2026-08-19) — the Record draws the same figures from
+  the same fold, so its rules went with it rather than shipping to every handset that fetches
+  this file. Two blocks in this project once outlived what drew them by more than a week.
+*/
+.change {
+  display: grid; grid-template-columns: 9rem 1fr 12rem;
+  gap: 0.3rem 0.8rem; padding: 0.45rem 0.2rem;
+  border-bottom: 1px solid var(--line); font-size: var(--t3);
+}
+.change .when { color: var(--slate); font-variant-numeric: tabular-nums; }
+.change .what { font-weight: var(--w1); }
+.change .who { color: var(--slate); font-size: var(--t2); }
+.change .why { grid-column: 1 / -1; color: var(--slate); font-size: var(--t2); font-style: italic; }
+.change[data-action="retired"] .what { color: var(--critical); }
+@media (max-width: 46rem) { .change { grid-template-columns: 1fr; } }
+
+/*
+  The same period, as a file — moved onto History from the Record's Download view (2026-09-05).
+  Styling carried over from `#boardReports`, which drew these same four links there; unlike
+  that block this one is not read at four metres, so nothing here is dashboard-scale.
+*/
+#historyReports {
+  margin: 0 0 var(--s6);
+  padding-bottom: var(--s5);
+  border-bottom: 1px solid var(--line);
+}
+#historyReports h3 {
+  margin: 0 0 var(--s3);
+  font-size: var(--t1);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--slate);
+}
+#historyReportRange { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0 0 var(--s3); }
+#historyReportRange input[type='date'] { max-width: 12rem; }
+/* `fit-content`, not `block` — an underline running the full width of the panel hides which
+   words are the link (the same fix `#boardReports a` needed there). */
+#historyReports a { display: block; width: fit-content; margin-top: var(--s3); font-size: var(--t3); font-weight: var(--w1); }
+#historyReports .meta { display: block; margin-top: var(--s4); max-width: 46rem; font-size: var(--t3); color: var(--slate); }
+
+
+/* ------------------------------------------------------------- the roster */
+
+
+#mineError {
+  margin: 0 0 0.9rem; padding: 0.6rem 0.8rem;
+  background: var(--critical-wash); color: var(--critical);
+  font-size: var(--t4); font-weight: var(--w1);
+}
+#rosterPicker { width: 100%; margin: 0 0 1rem; padding: 0.5rem; font: inherit; }
+.rostername { margin: 0 0 0.2rem; font-size: var(--t6); }
+
+/* A post nothing can reach. Loud, above everything, and in words (INV-04). */
+.unreachable {
+  margin: 0 0 0.9rem; padding: 0.6rem 0.8rem;
+  background: var(--critical-wash); color: var(--critical);
+  border-left: 4px solid var(--critical);
+  font-size: var(--t4); font-weight: var(--w2);
+}
+
+/*
+ * Roster cards, in the same language as the board's and the shift screen's.
+ *
+ * A post with nobody in it gets the amber edge, because that is what it is: a gap the
+ * district can close, not an error. Colour repeats the words already on the card
+ * (INV-04) — "nobody holds this post" is written there too.
+ */
+.post, .rosterperson {
+  background: var(--card); border: 1px solid var(--line);
+  border-left: 5px solid var(--line); border-radius: 12px;
+  padding: 0.7rem 0.85rem; margin-bottom: 0.6rem;
+}
+.post:has(.nobody) { border-left-color: var(--pending); }
+.rosterperson { border-left-color: var(--primary); }
+
+/* Cards flow into columns once the screen has room, exactly like the board's. */
+@media (min-width: 56rem) {
+  .rosterposts, .rosterpeople {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.7rem; align-items: start;
+  }
+}
+@media (min-width: 90rem) {
+  .rosterposts, .rosterpeople { grid-template-columns: repeat(3, 1fr); }
+}
+.post[data-retired="true"] { opacity: 0.6; background: none; }
+.post header { display: flex; align-items: baseline; gap: 0.5rem; padding: 0; border: none; }
+.post .title { margin: 0; font-size: var(--t4); }
+.post .nobody, .nobody {
+  margin: 0.3rem 0 0; font-size: var(--t3); font-weight: var(--w2); color: var(--critical);
+}
+
+.holder { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; margin-top: 0.3rem; }
+.holder .pname { font-weight: var(--w1); font-size: var(--t4); }
+.holder .pphone { font-size: var(--t3); color: var(--slate); font-variant-numeric: tabular-nums; }
+.holder[data-placeholder="true"] .pphone { text-decoration: line-through; }
+.holder .warn { color: var(--critical); font-size: var(--t2); }
+.holder .tag {
+  font-size: var(--t1); font-weight: var(--w3); text-transform: uppercase; letter-spacing: var(--ls-caps);
+  padding: 0.1rem 0.35rem; border: 1px solid var(--line); border-radius: 12px; color: var(--slate);
+}
+
+.post .actions, .rosterperson .actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem; margin-top: 0.5rem;
+}
+select.assign { margin: 0; padding: 0.25rem; font: inherit; font-size: var(--t3); }
+
+.addpost, .addperson {
+  display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.7rem;
+}
+.addpost input, .addperson input[type="text"], .addperson select {
+  flex: 1 1 9rem; min-width: 0; margin: 0; padding: 0.45rem; font: inherit; font-size: var(--t4);
+}
+.addperson .ph {
+  display: flex; align-items: center; gap: 0.3rem;
+  font-size: var(--t2); color: var(--slate); white-space: nowrap;
+}
+.addperson .ph input { width: auto; margin: 0; }
+.addpost button, .addperson button {
+  margin: 0; padding: 0.45rem 0.9rem; font: inherit; font-size: var(--t4); font-weight: var(--w2);
+  background: var(--primary-fill); color: var(--on-accent); border: none; border-radius: 6px; cursor: pointer;
+}
+
+/* ------------------------------------------------------------- backups */
+#backups .state {
+  margin: 0 0 0.7rem; padding: 0.6rem 0.8rem;
+  border-left: 4px solid var(--ok); background: var(--ok-wash); color: var(--ok);
+  font-size: var(--t4); font-weight: var(--w2);
+}
+#backups .state[data-ok="false"] {
+  border-left-color: var(--critical); background: var(--critical-wash); color: var(--critical);
+}
+#backups .run {
+  display: grid; grid-template-columns: 11rem 5rem 1fr;
+  gap: 0.3rem 0.8rem; padding: 0.45rem 0.2rem;
+  border-bottom: 1px solid var(--line); font-size: var(--t3);
+}
+#backups .run .when { color: var(--slate); font-variant-numeric: tabular-nums; }
+#backups .run[data-status="failed"] .status { color: var(--critical); font-weight: var(--w2); }
+#backups .run .offsite { font-size: var(--t2); }
+#backups .run[data-offsite="false"] .offsite { color: var(--pending); }
+#backups .run[data-offsite="true"] .offsite { color: var(--ok); }
+@media (max-width: 46rem) { #backups .run { grid-template-columns: 1fr; } }
+
+/* The duplicate warning on the roster's add form — M10-35. Amber, never red: it is advice about
+   something the operator may intend, and this screen can only see its own department. The rule is
+   duplicated from `dispatch.css` because the two forms live in two lazily-fetched bundles and
+   neither loads the other's stylesheet; the sentence itself comes from one place (`duplicates.ts`). */
+.addperson .dupe {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--t2);
+  color: var(--pending);
+  border-left: 3px solid var(--pending);
+  background: var(--pending-wash);
+  padding: 0.4rem 0.55rem;
+  border-radius: 0 4px 4px 0;
+}
+
+/* ------------------------------------------- the console's own dialog (P2)
+
+  Replaces five `prompt()` calls. `<dialog>` + `showModal()`, so the browser supplies the focus
+  trap, the inertness of the page behind it and Esc — three things this file would otherwise
+  have had to write and get right, for no dependency (ADR-0007).
+
+  No new colour: the confirm is the same `--primary-fill` every confirming button in the product
+  uses, and a destructive one is the same `--critical-fill` as every other destructive action.
+  The backdrop is a scrim rather than a palette entry.
+*/
+dialog.ask {
+  width: min(30rem, calc(100vw - 2rem));
+  padding: 0;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 12px;
+}
+dialog.ask::backdrop { background: rgba(0, 0, 0, 0.35); }
+.askform { display: grid; gap: 0.6rem; padding: 1rem 1.1rem 0.9rem; }
+.asktitle { margin: 0; font-size: var(--t5); }
+/* The consequence. Quieter than the question and never smaller than the field's own label. */
+.askbody { margin: 0; font-size: var(--t4); color: var(--slate); }
+.askfield { display: grid; gap: 0.25rem; }
+.asklabel {
+  font-size: var(--t1); text-transform: uppercase; letter-spacing: var(--ls-caps); color: var(--slate);
+}
+.askinput {
+  width: 100%; padding: 0.5rem 0.6rem; font: inherit; font-size: var(--t4);
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.askactions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.2rem; }
+.askno, .askyes {
+  min-height: 40px; padding: 0 0.9rem; font: inherit; font-size: var(--t4); font-weight: var(--w2);
+  border-radius: 8px; cursor: pointer;
+}
+.askno { background: none; border: 1px solid var(--line); color: var(--slate); }
+.askno:hover { color: var(--ink); }
+.askyes {
+  background: var(--primary-fill); border: 1px solid var(--primary-fill); color: var(--on-accent);
+}
+dialog.ask[data-danger='true'] .askyes {
+  background: var(--critical-fill); border-color: var(--critical-fill);
+}
+/* Disabled until the reason exists — a disabled button, never a refused submit (M9-08). */
+.askyes:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ------------------------------------------ narrowing the departments (P4)
+
+  Search and chips. They sit OUTSIDE the list they narrow and the narrowing hides cards in
+  place — `renderDepartments` replaces the whole body, so filtering by re-rendering would take
+  the search box out from under the cursor on every keystroke.
+
+  The chips borrow the tab's own pressed state rather than inventing a third one: this console
+  already says "chosen" with `--primary-fill` and `--on-accent`, and a second vocabulary for the
+  same idea is how two controls on one screen come to look like two different kinds of thing.
+*/
+#deptControls { display: grid; gap: 0.5rem; margin: 0.7rem 0 0.5rem; }
+#deptSearch {
+  width: 100%; padding: 0.5rem 0.65rem; font: inherit; font-size: var(--t4);
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.deptchips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.deptchip {
+  min-height: 32px; padding: 0.3rem 0.7rem;
+  font: inherit; font-size: var(--t2); font-weight: var(--w2);
+  background: none; color: var(--slate);
+  border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+}
+.deptchip:hover { color: var(--ink); }
+.deptchip[aria-pressed='true'] {
+  background: var(--primary-fill); border-color: var(--primary-fill); color: var(--on-accent);
+}
+
+/* ------------------------------- what a photograph at 1920×1080 showed (P4)
+
+  🔴 **`.meta` has no rule of its own anywhere in this product** — it is only ever scoped
+  (`.dept .meta`, `#adminPerformance .meta`), which this repository already has a standing note
+  about. So the Overview's `As of 08:19 UTC` and the departments' `1 live, 0 retired` both
+  rendered at full paragraph size and read as **headings** over the things they annotate.
+  Nothing errored, no assertion could see it, and the contrast pass was perfectly happy.
+
+  The other two are the same lesson in geometry: at 1920 the Overview's doors sat about 1700px
+  from the sentence they belong to, and the search box was a metre of empty rectangle. A console
+  is read at a desk, not from four metres.
+*/
+/*
+  ⚠️ **Third time.** `.meta` has no rule of its own anywhere in this product — it is only ever
+  scoped — so every new place that reaches for it renders at full paragraph size and reads as a
+  heading. The Overview’s as-of line, the departments’ count and now the deadlines’ count have
+  each been caught by a photograph. A base rule for `.meta` would fix the class of bug, and it
+  is deliberately NOT written here: `.dept .meta` and `#adminPerformance .meta` already carry
+  their own sizes, and an id-scoped base rule would outrank both. That is a sweep of its own.
+*/
+#adminOverview .meta,
+#deadlineCount,
+#deptCount {
+  margin: 0.2rem 0 0.7rem;
+  font-size: var(--t2);
+  color: var(--slate);
+}
+#adminOverview { max-width: 72rem; }
+#deptSearch { max-width: 34rem; }
+
+/*
+  Each chip carries its own count — see `narrowDepartments`. Quiet, tabular, and never louder
+  than the label it follows: the number is there to say whether the chip is worth clicking, not
+  to be read across the room.
+*/
+.deptchip .deptchipn { margin-left: 0.45rem; font-variant-numeric: tabular-nums; color: var(--slate); }
+.deptchip[aria-pressed='true'] .deptchipn { color: inherit; opacity: 0.8; }
+
+/*
+  A deadline is minutes, and at 1920 each of the five stretched to about 360px of empty box.
+  Capped so the row reads as five small figures rather than five text fields — and the cap is
+  on the CELL, so the label above each one keeps its own width.
+*/
+.deadlines.district .cell { max-width: 11rem; }

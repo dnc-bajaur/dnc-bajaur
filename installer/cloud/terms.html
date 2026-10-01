@@ -1,0 +1,148 @@
+<!doctype html>
+<!--
+  Terms of use, served at https://dnc.example.com/terms
+
+  Same reason and same mechanism as privacy.html: Meta's app settings ask for a Terms of Service
+  URL beside the privacy one, and the app cannot be published without the pair filled in. Served
+  by Caddy from a file, never by the application — see the header of privacy.html for why.
+
+      scp installer/cloud/terms.html root@HOST:/var/www/dnc-legal/terms.html
+
+  This is deliberately short. It describes a closed, internal system that only the district's own
+  control room signs in to (ADR-0018); inventing consumer-facing terms for an audience that does
+  not exist would be worse than saying plainly who may use it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Terms of Use — District Nerve Center, Bajaur</title>
+    <style>
+      :root {
+        --paper: #ffffff;
+        --ink: #16181d;
+        --muted: #5c6270;
+        --line: #e3e5ea;
+        --primary: #5b3fd6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #08090c;
+          --ink: #f4f4f7;
+          --muted: #9aa0ae;
+          --line: #23262e;
+          --primary: #a894ff;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+        padding: 3rem 1.25rem 5rem;
+      }
+      h1 {
+        font-size: 1.8rem;
+        line-height: 1.2;
+        margin: 0 0 0.35rem;
+        letter-spacing: -0.02em;
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin: 2.4rem 0 0.6rem;
+        letter-spacing: -0.01em;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 2rem;
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 2.5rem 0 0;
+      }
+      a {
+        color: var(--primary);
+      }
+      footer {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 2rem;
+      }
+      code {
+        background: var(--line);
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Terms of Use</h1>
+      <p class="sub">
+        District Nerve Center — Office of the Deputy Commissioner, Bajaur, Khyber Pakhtunkhwa,
+        Pakistan
+      </p>
+
+      <h2>What this system is</h2>
+      <p>
+        The District Nerve Center is internal software of the district administration of Bajaur.
+        It records emergencies, routes them to the department responsible, and keeps an
+        accountable record of what was done. It is not a public service and does not accept
+        reports from the general public.
+      </p>
+
+      <h2>Who may use it</h2>
+      <p>
+        Only the district's control room and officers authorised by the Office of the Deputy
+        Commissioner. Access follows the post a person holds, not the person, and it ends when
+        they stop holding it. Accounts are issued and revoked by the district administration.
+      </p>
+
+      <h2>How it must be used</h2>
+      <p>
+        Records entered here form the district's account of an emergency response. Entries must
+        be accurate and made in good faith. Credentials are not to be shared, and the system is
+        not to be used for any purpose other than district operations. Every consequential action
+        is attributable to the seat that performed it and is retained in an append-only log.
+      </p>
+
+      <h2>Notifications</h2>
+      <p>
+        The system notifies officers over WhatsApp from a number the district controls, and
+        records whether each message was delivered and whether it was acknowledged. Officers are
+        expected to acknowledge notifications they receive. An acknowledgement is a deliberate
+        act; a message being read is not treated as one.
+      </p>
+
+      <h2>Availability</h2>
+      <p>
+        The district administration operates this system for its own use and makes no warranty of
+        uninterrupted availability. It is provided to authorised users as-is, for official
+        purposes.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Office of the Deputy Commissioner, Bajaur —
+        <a href="mailto:dc-office@example.com">dc-office@example.com</a>. Privacy is covered separately in
+        the <a href="/privacy">Privacy Notice</a>.
+      </p>
+
+      <hr />
+      <footer>
+        <p>
+          Last updated 12 August 2026. Served at <code>https://dnc.example.com/terms</code>.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>
