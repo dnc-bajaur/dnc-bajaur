@@ -128,8 +128,9 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
 - **Built (ADR-0039) C2:** migration 0051; hourly housekeeping `jobs/activitiesRetention.ts`
   (30-day expiry → bucket deletes → encrypted copy to `ACTIVITIES_S3_BUCKET`); DC warning +
   ZIP (`/activities/expiring[.zip]`, `ops/zip.ts`). No media bucket exists yet.
-- **Next:** A — "Install this app" banner (`PLAN.md` §4 order). The two open bugs in §4 are
-  small and can go first.
+- **Fixed:** installer `first-run.mjs` / cloud `grant-login.mjs` no longer use the dropped
+  `department` table; first account = `owner` + administration tick. Admin cards escape names.
+- **Next:** A — "Install this app" banner (`PLAN.md` §4 order).
 
 ## 6. Repository map
 

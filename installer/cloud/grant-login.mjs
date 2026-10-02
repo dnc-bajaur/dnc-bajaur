@@ -23,12 +23,16 @@
  * is deliberate, because ~80 credentials nobody is watching is worse than none. This script is
  * the second act, performed one person at a time, on purpose.
  *
- * It prints what the account will actually be able to see, because that is decided by the seat's
- * **tier** and not by anything typed here. A number belonging to an officer whose post sits in
- * an ordinary department produces an account that administers *that department only* — it works,
- * it looks right, and it becomes "the dashboard is wrong" weeks later with nothing on any screen
- * explaining why. `first-run.mjs` learned this on a real installation; it is printed rather than
- * guessed at.
+ * It prints the post, its tier and the account's **role**, because those decide what the account
+ * can do and not anything typed here. Account authority is `person.role` (ADR-0032); the column
+ * defaults to `operator`, which is the full control room — so this script sets it on purpose:
+ *
+ *   * **The first login on a district with no owner becomes the `owner`**, and its post gets the
+ *     administration tick (district tier — what an override needs). Only an owner can make
+ *     another owner, so without this a fresh cloud installation has nobody who can administer it.
+ *   * **Every later login is a `member`** (ADR-0038: Activities only), the same default as
+ *     "Give login" in the app. A wider role is given in Settings, by an administrator, recorded.
+ *     `--reset` keeps whatever role the account already has.
  *
  * The password is generated here and shown **once**. It is not derived from anything about the
  * person: this district's numbers are semi-public, the roster says who holds which post, and a
@@ -100,18 +104,17 @@ try {
   const wanted = normalisePhone(phone);
 
   /**
-   * Every seat this person holds, with the office and the tier. `resolveIdentity` selects a seat
+   * Every seat this person holds, with its tier and tick. `resolveIdentity` selects a seat
    * with no ORDER BY, so a person holding two posts gets whichever row the database returns —
    * a known gap (§5). Listing them here means nobody grants a login into that ambiguity without
    * seeing it first.
    */
   const found = await pool.query(
     `SELECT p.person_id, p.full_name, p.password_hash IS NOT NULL AS has_login,
-            s.title, s.tier, d.name AS department, d.is_administration
+            p.role, s.seat_id, s.title, s.tier, s.is_administration
        FROM person p
-       LEFT JOIN duty_assignment da ON da.person_id = p.person_id
+       LEFT JOIN duty_assignment da ON da.person_id = p.person_id AND da.to_at IS NULL
        LEFT JOIN seat s ON s.seat_id = da.seat_id
-       LEFT JOIN department d ON d.department_id = s.department_id
       WHERE p.phone = $1`,
     [wanted],
   );
@@ -135,16 +138,10 @@ try {
     );
   }
   for (const post of posts) {
-    say(`  holds ${post.title} · ${post.department} · ${post.tier} tier`);
+    say(`  holds ${post.title} · ${post.tier} tier`);
   }
   if (posts.length > 1) {
     say('  NOTE: more than one post. Which one authority resolves to is not currently ordered.');
-  }
-
-  if (posts.some((p) => p.is_administration)) {
-    say('  this account will see the whole district, and the administration console');
-  } else {
-    say('  this account will see ONLY this department — not the district. Read that twice.');
   }
 
   if (who.has_login && !reset) {
@@ -155,10 +152,38 @@ try {
     );
   }
 
-  await pool.query('UPDATE person SET password_hash = $1 WHERE person_id = $2', [
+  const owner = await pool.query(
+    `SELECT 1 FROM person
+      WHERE role = 'owner' AND password_hash IS NOT NULL AND removed_at IS NULL
+        AND person_id <> $1
+      LIMIT 1`,
+    [who.person_id],
+  );
+  const firstLogin = owner.rows.length === 0;
+  const role = who.has_login ? who.role : firstLogin ? 'owner' : 'member';
+
+  await pool.query('UPDATE person SET password_hash = $1, role = $2 WHERE person_id = $3', [
     await hashPassword(password),
+    role,
     who.person_id,
   ]);
+
+  // The owner's post carries the administration tick, so it is district tier and can override
+  // on incidents. Naming `tier` in the SET is what fires the trigger (migration 0042).
+  if (role === 'owner') {
+    const ticked = await pool.query(
+      `UPDATE seat SET is_administration = true, tier = tier
+        WHERE seat_id = ANY($1::uuid[]) AND NOT is_administration
+        RETURNING title`,
+      [posts.map((p) => p.seat_id)],
+    );
+    for (const row of ticked.rows) say(`  ${row.title} is now marked as the administration`);
+  }
+
+  say(`  role: ${role}`);
+  if (role === 'member') {
+    say('  a member signs in for Activities only. Give a wider role in Settings if needed.');
+  }
 
   console.log('');
   console.log(`  Sign in at   ${process.env['PUBLIC_ORIGIN'] ?? 'the district address'}`);

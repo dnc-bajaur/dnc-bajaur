@@ -103,12 +103,15 @@ Rules that hold until these ship:
   portfolio — never on any other district's.
 
 Known inherited bugs (found 2026-10-02):
-- [ ] `installer/runtime/first-run.mjs` still inserts into the dropped `department` table — the
-      Windows installer cannot create the first account. Fix before any Windows install.
+- [x] `installer/runtime/first-run.mjs` and `installer/cloud/grant-login.mjs` used the dropped
+      `department` table — fixed 2026-10-02. Both now make the first account the **owner** (role,
+      ADR-0032) and tick its post as the administration (district tier); grant-login gives every
+      later login `member` (ADR-0038). Checked against scratch databases; no automated test.
 - [x] `npm run dev:account` and `npm run demo` used the dropped `department` table — fixed.
-- [ ] `web/src/admin.ts` contact cards are built with `innerHTML` from the contact's name,
-      post and number, unescaped. Only the administration enters those, but a name containing
-      markup would run in every admin's console. Fix (build with `textContent`) before go-live.
+- [x] `web/src/admin.ts` contact **and group** cards were built with unescaped `innerHTML` —
+      fixed 2026-10-02 (built with `textContent`; pinned by `admin.e2e.test.ts` 4f).
+- [ ] The administration tick (`seat.is_administration`) has an API route
+      (`POST /roster/contacts/:id/administration`) but no control in the app.
 
 ## 5. To verify (open points)
 

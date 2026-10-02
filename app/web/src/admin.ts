@@ -1158,17 +1158,13 @@ export function mountAdmin(): AdminConsole {
         card.className = 'g-card';
         card.dataset['contact'] = c.id;
 
-        card.innerHTML = `
-          <div class="g-head">
-            <span class="g-title">${c.name}</span>
-            <span class="g-tag ${c.tagClass}">${c.tag}</span>
-          </div>
-          <div class="g-desc">${c.role}</div>
-          <div class="g-foot">
-            <span>${c.phone}</span>
-            <span class="g-link">${editable ? 'Edit in Drawer →' : ''}</span>
-          </div>
-        `;
+        // Built with `textContent`, never `innerHTML`: the name, post and number are typed by the
+        // administration, and markup in one of them would otherwise run in every admin's console.
+        const head = text('div', 'g-head', '');
+        head.append(text('span', 'g-title', c.name), text('span', `g-tag ${c.tagClass}`, c.tag));
+        const foot = text('div', 'g-foot', '');
+        foot.append(text('span', '', c.phone), text('span', 'g-link', editable ? 'Edit in Drawer →' : ''));
+        card.append(head, text('div', 'g-desc', c.role), foot);
 
         if (editable) {
           card.addEventListener('click', () => {
@@ -1875,31 +1871,33 @@ export function mountAdmin(): AdminConsole {
       });
       const moreCount = group.members.length - initials.length;
 
-      let avatarsHtml: string;
+      // Built as nodes, not markup: the group name, member labels and photo are stored data.
+      const avatars = text('div', 'avatars', '');
       if (typeof group.picture === 'string' && group.picture.startsWith('data:image/')) {
         // The group's own photo replaces the initials stack — one round face, like a phone's contact list.
-        avatarsHtml = `<img class="avatar-sm avatar-pic" src="${group.picture}" alt="">`;
+        const img = document.createElement('img');
+        img.className = 'avatar-sm avatar-pic';
+        img.src = group.picture;
+        img.alt = '';
+        avatars.append(img);
       } else {
-        avatarsHtml = initials.map((ini) => `<div class="avatar-sm">${ini}</div>`).join('');
-        if (moreCount > 0) {
-          avatarsHtml += `<div class="avatar-sm more">+${String(moreCount)}</div>`;
-        }
+        for (const ini of initials) avatars.append(text('div', 'avatar-sm', ini));
+        if (moreCount > 0) avatars.append(text('div', 'avatar-sm more', `+${String(moreCount)}`));
       }
 
-      card.innerHTML = `
-        <div class="g-head">
-          <span class="g-title">${group.name}</span>
-          <span class="g-tag ok">${String(group.members.length)} MEMBERS</span>
-        </div>
-        <div class="g-desc">${group.members
+      const head = text('div', 'g-head', '');
+      head.append(
+        text('span', 'g-title', group.name),
+        text('span', 'g-tag ok', `${String(group.members.length)} MEMBERS`),
+      );
+      const names =
+        group.members
           .slice(0, 3)
           .map((m) => m.label)
-          .join(', ')}${group.members.length > 3 ? '...' : ''}</div>
-        <div class="g-foot">
-          <div class="avatars">${avatarsHtml}</div>
-          <span class="g-link">Edit in Drawer →</span>
-        </div>
-      `;
+          .join(', ') + (group.members.length > 3 ? '...' : '');
+      const foot = text('div', 'g-foot', '');
+      foot.append(avatars, text('span', 'g-link', 'Edit in Drawer →'));
+      card.append(head, text('div', 'g-desc', names), foot);
 
       card.addEventListener('click', () => {
         openGroupDrawer(mine, group, directory.recipients, phoneMap);

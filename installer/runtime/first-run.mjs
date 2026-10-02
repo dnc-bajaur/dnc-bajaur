@@ -452,10 +452,8 @@ try {
     const seed = JSON.parse(readFileSync(seedFile, 'utf8'));
     const outcome = await loadDirectory(pool, seed.rows ?? []);
 
-    say(
-      `  ${String(outcome.departments)} offices, ${String(outcome.seats)} posts, ` +
-        `${String(outcome.people)} officers`,
-    );
+    // No office count: `loadDirectory` reports 0 departments since ADR-0030.
+    say(`  ${String(outcome.seats)} posts, ${String(outcome.people)} officers`);
 
     // Reported, never swallowed. A loader whose refusals are only visible in a log is the
     // same mistake as a notification with no delivery state (INV-03).
@@ -463,70 +461,6 @@ try {
 
     state.directoryLoaded = true;
   }
-
-  /**
-   * Mark the two administrative offices.
-   *
-   * Migration 0007 already contains this statement and on a fresh installation it matches
-   * **nothing**: migrations run against an empty database, so the departments it names are
-   * created minutes later by the directory load above. Every office therefore came out as an
-   * ordinary department, no seat was district tier, and nobody could see the district — on a
-   * machine where every test in the repository passes, because the tests build their
-   * departments before asserting rather than in this order.
-   *
-   * ADR-0010 decides which two these are. It is not a guess and it is not the installer's to
-   * choose; what the installer owns is making sure the decision survives the ordering.
-   */
-  const administration = await pool.query(
-    `UPDATE department SET is_administration = true
-      WHERE code IN ('deputy-commissioner-office', 'assistant-commissioner-bajaur')
-        AND NOT is_administration
-      RETURNING code`,
-  );
-  for (const row of administration.rows) say(`  ${row.code} is an administrative office`);
-
-  const administrationCount = await pool.query(
-    'SELECT count(*)::int AS n FROM department WHERE is_administration',
-  );
-  if (administrationCount.rows[0].n === 0) {
-    fail(
-      'No administrative office exists in this installation, so nobody would be able to see ' +
-        'the district as a whole.\nThis means the district directory did not load. Please ' +
-        'run Setup again and report this if it happens twice.',
-    );
-  }
-
-  /**
-   * Re-derive every seat's tier, now that the offices above are marked.
-   *
-   * Migration 0010 makes a seat district tier if its office is administrative, and enforces it
-   * with a trigger — but the trigger fires when the **seat** is written, and every seat here
-   * was written by the directory load a moment ago, while `is_administration` was still false
-   * on every department. So the Deputy Commissioner's own post came out `department` tier.
-   *
-   * That is not cosmetic. `viewerFor` keys on tier — deliberately, because it is the one value
-   * a caller cannot assert and the M5 security review moved the decision there. A DC signing in
-   * would have been scoped to the DC Office alone and shown none of the district, which is the
-   * opposite of the authority the post carries. **Found by installing this and signing in as
-   * the real Deputy Commissioner**; every test in the repository creates its departments before
-   * its seats, so the order that produces it does not occur anywhere else.
-   *
-   * `SET tier = tier` is not a no-op: naming the column in SET is what `UPDATE OF tier` means,
-   * so the trigger runs and recomputes the value from the department. The trigger stays the
-   * only thing that decides a tier, which is the point of it.
-   */
-  const retiered = await pool.query(
-    `UPDATE seat SET tier = tier
-      WHERE department_id IS NOT NULL
-      RETURNING seat_id`,
-  );
-  const districtSeats = await pool.query(
-    "SELECT count(*)::int AS n FROM seat WHERE tier = 'district'",
-  );
-  say(
-    `  ${String(retiered.rowCount)} posts re-checked — ` +
-      `${String(districtSeats.rows[0].n)} carry district authority`,
-  );
 
   //----------------------------------------------------------------------------------------
   // The one account that can sign in
@@ -555,12 +489,10 @@ try {
      */
     const existing = await pool.query(
       `SELECT p.person_id, p.full_name,
-              s.seat_id, s.title AS seat_title, s.tier,
-              d.name AS department_name
+              s.seat_id, s.title AS seat_title, s.tier
          FROM person p
          LEFT JOIN duty_assignment a ON a.person_id = p.person_id AND a.to_at IS NULL
          LEFT JOIN seat s ON s.seat_id = a.seat_id
-         LEFT JOIN department d ON d.department_id = s.department_id
         WHERE p.phone = $1
         ORDER BY (s.seat_id IS NOT NULL) DESC, p.created_at
         LIMIT 1`,
@@ -590,6 +522,27 @@ try {
           ).rows[0].person_id;
 
     /**
+     * The first account is the district's **owner** (ADR-0032).
+     *
+     * Account authority is `person.role`, never the post (`sessions.ts`), and the column
+     * defaults to `operator` — which cannot create accounts or reach Settings. Only an owner can
+     * make another owner, so an installation whose first account is not one has nobody who can
+     * ever administer it. If an owner already exists (Setup run again with a different number),
+     * that owner stays and this account is an `admin`; handover is done in Settings, not here.
+     */
+    const owner = await pool.query(
+      `SELECT person_id FROM person
+        WHERE role = 'owner' AND password_hash IS NOT NULL AND removed_at IS NULL
+          AND person_id <> $1
+        LIMIT 1`,
+      [personId],
+    );
+    await pool.query('UPDATE person SET role = $2 WHERE person_id = $1', [
+      personId,
+      owner.rows.length === 0 ? 'owner' : 'admin',
+    ]);
+
+    /**
      * If they already hold a post, that post is their authority. Full stop.
      *
      * The first version of this always created a `System Administrator` seat and assigned the
@@ -601,20 +554,12 @@ try {
      * other.
      *
      * Authority attaches to the post (ADR-0004), and the district decided who holds which post
-     * before this installer ran. An installer's job is to let somebody in, not to quietly
-     * promote them.
+     * before this installer ran. An installer's job is to let somebody in, not to move them to
+     * a post they do not hold.
      */
     let seatId = known?.seat_id ?? null;
 
     if (seatId === null) {
-      const office = await pool.query(
-        `SELECT department_id FROM department
-          WHERE code = 'deputy-commissioner-office' OR is_administration
-          ORDER BY (code = 'deputy-commissioner-office') DESC
-          LIMIT 1`,
-      );
-      const departmentId = office.rows[0].department_id;
-
       /**
        * A post of its own, for somebody the district's list does not have.
        *
@@ -627,14 +572,15 @@ try {
        * post needs (ADR-0003). Break-glass is the system's highest authority, and an installer
        * must not mint it silently for whoever happened to run Setup — that is a decision for
        * the two offices, made deliberately and recorded.
+       *
+       * It carries the administration tick, so the trigger (migration 0042) makes it district
+       * tier — the authority an override needs (`domain/authority.ts`).
        */
       const created = await pool.query(
-        `INSERT INTO seat (title, department_id, can_break_glass)
-         SELECT 'System Administrator', $1, false
-          WHERE NOT EXISTS (
-                SELECT 1 FROM seat WHERE title = 'System Administrator' AND department_id = $1)
+        `INSERT INTO seat (title, is_administration, can_break_glass)
+         SELECT 'System Administrator', true, false
+          WHERE NOT EXISTS (SELECT 1 FROM seat WHERE title = 'System Administrator')
          RETURNING seat_id`,
-        [departmentId],
       );
 
       seatId =
@@ -642,9 +588,7 @@ try {
           ? created.rows[0].seat_id
           : (
               await pool.query(
-                `SELECT seat_id FROM seat
-                  WHERE title = 'System Administrator' AND department_id = $1`,
-                [departmentId],
+                "SELECT seat_id FROM seat WHERE title = 'System Administrator'",
               )
             ).rows[0].seat_id;
 
@@ -661,6 +605,23 @@ try {
     }
 
     /**
+     * The administrator's post carries the administration tick.
+     *
+     * Tier is derived from that tick alone (migration 0042), and tier is what lets a post
+     * override on incidents (`domain/authority.ts`). A directory post the district had not
+     * ticked would leave its own administrator unable to act — and the app has no screen for
+     * the tick, only an API route. The district chose this number in Setup as the one that
+     * runs the system, so its post is ticked here, **and printed**, never silently.
+     */
+    const ticked = await pool.query(
+      `UPDATE seat SET is_administration = true, tier = tier
+        WHERE seat_id = $1 AND NOT is_administration
+        RETURNING title`,
+      [seatId],
+    );
+    for (const row of ticked.rows) say(`  ${row.title} is now marked as the administration`);
+
+    /**
      * Say what the account actually is, including when that is not what was asked for.
      *
      * If the number belonged to somebody already in the district's list, the name typed into
@@ -670,33 +631,17 @@ try {
      * small lie about the one account the district is about to depend on.
      */
     const final = await pool.query(
-      `SELECT p.full_name, s.title AS seat_title, s.tier, d.name AS department_name
+      `SELECT p.full_name, p.role, s.title AS seat_title, s.tier
          FROM person p
          LEFT JOIN duty_assignment a ON a.person_id = p.person_id AND a.to_at IS NULL
          LEFT JOIN seat s ON s.seat_id = a.seat_id
-         LEFT JOIN department d ON d.department_id = s.department_id
         WHERE p.person_id = $1`,
       [personId],
     );
     const who = final.rows[0];
 
     say(`  ${who.full_name} can sign in with ${phone}`);
-    say(`  Post: ${who.seat_title} — ${who.department_name}`);
-
-    if (who.tier !== 'district') {
-      /**
-       * Not a failure, and not hidden either.
-       *
-       * The account works and can run its own department. It cannot see the district, because
-       * its post does not carry that authority — and silently widening it here would be the
-       * exact inversion the M5 security review closed. What the district needs is to know,
-       * now, rather than at the moment somebody asks why the dashboard looks small.
-       */
-      say('');
-      say(`  NOTE: this post administers ${who.department_name} only, not the whole district.`);
-      say('  To administer the district, give this person a post in the DC Office or the');
-      say('  AC Headquarter Office from the roster screen.');
-    }
+    say(`  Post: ${who.seat_title} · role: ${who.role}`);
 
     state.administratorPhone = phone;
   }

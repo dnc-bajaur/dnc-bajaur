@@ -462,6 +462,47 @@ describe.skipIf(dbUrl === undefined)('M1a: the administration console', () => {
   });
 
   /**
+   * The Directory and Groups cards were built with `innerHTML` from the contact's name, post and
+   * number and the group's name — unescaped. Markup typed into one of them ran in every admin's
+   * console. Entered here through the real drawers, and read back as text with nothing run.
+   */
+  it('4f. a name containing markup is shown as text on the cards, never run', async () => {
+    const payload = `<img src=x onerror="window.__xss=1"> e2e ${RUN}`;
+    const drawer = page.locator('#adminDrawerBackdrop');
+
+    await page.click('#navAdmin');
+    await page.click('#adminTabs button[data-tab="departments"]');
+    await page.waitForSelector('#adminDepartments');
+    await page.click('#adminDepartments button:has-text("+ Add New Contact")');
+    await drawer.waitFor({ state: 'visible' });
+    const fields = drawer.locator('.d-input');
+    await fields.nth(0).fill(payload);
+    await fields.nth(1).fill(`<b>Post</b> e2e ${RUN}`);
+    await fields.nth(2).fill('0300-7654322');
+    await drawer.getByRole('button', { name: 'Create Contact' }).click();
+
+    const contact = page.locator('#adminDepartments .g-card', { hasText: payload });
+    await contact.waitFor();
+    expect(await contact.locator('.g-title').textContent()).toBe(payload);
+    expect(await contact.locator('.g-desc').textContent()).toBe(`<b>Post</b> e2e ${RUN}`);
+    expect(await contact.locator('img, b').count()).toBe(0);
+
+    await page.click('#adminTabs button[data-tab="groups"]');
+    await page.waitForSelector('#adminGroups');
+    await page.click('#adminGroups button:has-text("+ Create New Group")');
+    await drawer.waitFor({ state: 'visible' });
+    await drawer.locator('.d-input').first().fill(payload);
+    await drawer.getByRole('button', { name: 'Create Group' }).click();
+
+    const group = page.locator('#adminGroups .g-card', { hasText: payload });
+    await group.waitFor();
+    expect(await group.locator('.g-title').textContent()).toBe(payload);
+    expect(await group.locator('img').count()).toBe(0);
+
+    expect(await page.evaluate(() => (window as { __xss?: number }).__xss)).toBeUndefined();
+  });
+
+  /**
    * The owner's report: a rejected contact form threw its error into `#adminError`, above
    * `#adminBody`, which shoved the whole tab down while they were looking at the drawer. A
    * drawer action reports inside the drawer now, and the page behind it does not move.
