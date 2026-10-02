@@ -1035,6 +1035,29 @@ export function mountAdmin(): AdminConsole {
       role.append(opt);
     }
 
+    // Their Activities department (ADR-0041 §8) — optional; filled once the list arrives.
+    const unit = document.createElement('select');
+    unit.className = 'd-input';
+    unit.setAttribute('aria-label', 'Activities department');
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = 'Activities department — none';
+    unit.append(none);
+    void api<readonly { unitId: string; name: string; retired: boolean }[]>(
+      'GET',
+      '/activities/units',
+      undefined,
+      drawer.sink,
+    ).then((units) => {
+      for (const u of units ?? []) {
+        if (u.retired) continue;
+        const opt = document.createElement('option');
+        opt.value = u.unitId;
+        opt.textContent = `Activities department — ${u.name}`;
+        unit.append(opt);
+      }
+    });
+
     const password = document.createElement('input');
     password.type = 'password';
     password.className = 'd-input';
@@ -1052,7 +1075,7 @@ export function mountAdmin(): AdminConsole {
         const done = await api(
           'POST',
           `/settings/accounts/${contact.personId}/grant`,
-          { role: role.value, password: password.value },
+          { role: role.value, password: password.value, activityUnitId: unit.value },
           drawer.sink,
         );
         give.disabled = false;
@@ -1060,7 +1083,7 @@ export function mountAdmin(): AdminConsole {
       })();
     });
 
-    section.append(role, password, give);
+    section.append(role, unit, password, give);
     return section;
   }
 
@@ -1163,7 +1186,10 @@ export function mountAdmin(): AdminConsole {
         const head = text('div', 'g-head', '');
         head.append(text('span', 'g-title', c.name), text('span', `g-tag ${c.tagClass}`, c.tag));
         const foot = text('div', 'g-foot', '');
-        foot.append(text('span', '', c.phone), text('span', 'g-link', editable ? 'Edit in Drawer →' : ''));
+        foot.append(
+          text('span', '', c.phone),
+          text('span', 'g-link', editable ? 'Edit in Drawer →' : ''),
+        );
         card.append(head, text('div', 'g-desc', c.role), foot);
 
         if (editable) {

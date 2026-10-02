@@ -8,8 +8,9 @@
  *   * posting is refused until a forced password change is done, and a date in the future is
  *     refused;
  *   * photos are checked by their bytes, ten per post at most, added by the author only;
- *   * a member sees only their own posts — in the list and when fetching a photo; an operator
- *     sees everyone's; the filters narrow by department, person and date;
+ *   * every account sees everyone's posts (ADR-0041 §7), and a `deny` of `activities.read_all`
+ *     narrows one account to its own — in the list and when fetching a photo; the filters narrow
+ *     by department, person and date;
  *   * the author hard-deletes their own post — rows and files gone, one log line left; a deny
  *     override takes that away; a moderator hides, restores and hard-deletes anybody's;
  *   * a photo is served inline with its sniffed type, `nosniff` and a sandbox, and revalidates
@@ -280,8 +281,8 @@ maybe('Activities (ADR-0039, phase C1)', () => {
 
     it('are added only by the author, ten at most', async () => {
       const { postId } = await post(memberA.token);
-      // Somebody else's post is not even visible to another member.
-      expect((await photo(memberB.token, postId)).status).toBe(404);
+      // Another member sees somebody else's post (ADR-0041 §7) and still may not add to it.
+      expect((await photo(memberB.token, postId)).status).toBe(403);
       // An operator can see it, and still may not add to it.
       expect((await photo(operator, postId)).status).toBe(403);
 
@@ -311,29 +312,43 @@ maybe('Activities (ADR-0039, phase C1)', () => {
       });
       expect(again.status).toBe(304);
 
-      // Another member cannot fetch it; an operator can.
-      expect((await call(memberB.token, `/activities/media/${mediaId}`)).status).toBe(404);
+      // Another member can fetch it (ADR-0041 §7) — unless the DC narrowed them to their own.
+      expect((await call(memberB.token, `/activities/media/${mediaId}`)).status).toBe(200);
+      const narrowed = await account('member');
+      await pool.query(
+        `INSERT INTO person_permission (person_id, permission, effect)
+         VALUES ($1, 'activities.read_all', 'deny')`,
+        [narrowed.personId],
+      );
+      expect((await call(narrowed.token, `/activities/media/${mediaId}`)).status).toBe(404);
       expect((await call(operator, `/activities/media/${mediaId}`)).status).toBe(200);
     });
   });
 
   describe('who sees what', () => {
-    it('shows a member only their own posts, and an operator everyone’s', async () => {
+    it('shows every account everyone’s posts, and a narrowed one only its own', async () => {
       const a = await post(memberA.token);
       const b = await post(memberB.token, { unitId: otherUnitId });
 
-      const seenByA = await feed(memberA.token);
-      expect(seenByA).toContain(a.postId);
-      expect(seenByA).not.toContain(b.postId);
-      // Asking for somebody else's posts does not widen a member's view.
-      expect(await feed(memberA.token, `?person=${memberB.personId}`)).not.toContain(b.postId);
+      // ADR-0041 §7: a member sees everyone's, as an operator does.
+      expect(await feed(memberA.token)).toEqual(expect.arrayContaining([a.postId, b.postId]));
+      expect(await feed(operator)).toEqual(expect.arrayContaining([a.postId, b.postId]));
+      expect((await call(memberA.token, '/activities/people')).status).toBe(200);
 
-      const seenByOp = await feed(operator);
-      expect(seenByOp).toEqual(expect.arrayContaining([a.postId, b.postId]));
-
-      // The people list is for those who may see everyone.
-      expect((await call(memberA.token, '/activities/people')).status).toBe(403);
-      expect((await call(operator, '/activities/people')).status).toBe(200);
+      // The DC takes it away from one account with a deny: its own posts only.
+      const narrowed = await account('member');
+      await pool.query(
+        `INSERT INTO person_permission (person_id, permission, effect)
+         VALUES ($1, 'activities.read_all', 'deny')`,
+        [narrowed.personId],
+      );
+      const own = await post(narrowed.token);
+      const seen = await feed(narrowed.token);
+      expect(seen).toContain(own.postId);
+      expect(seen).not.toContain(b.postId);
+      // Asking for somebody else's posts does not widen a narrowed view.
+      expect(await feed(narrowed.token, `?person=${memberB.personId}`)).not.toContain(b.postId);
+      expect((await call(narrowed.token, '/activities/people')).status).toBe(403);
     });
 
     it('filters by department, person and date', async () => {
@@ -362,8 +377,8 @@ maybe('Activities (ADR-0039, phase C1)', () => {
       expect((await photo(memberA.token, postId, jpeg(), jpeg(20))).status).toBe(201);
       expect(readdirSync(join(root, postId))).toHaveLength(2);
 
-      // Another member cannot see it, so cannot delete it.
-      expect((await call(memberB.token, `/activities/posts/${postId}`, 'DELETE')).status).toBe(404);
+      // Another member can see it (ADR-0041 §7), and still may not delete it.
+      expect((await call(memberB.token, `/activities/posts/${postId}`, 'DELETE')).status).toBe(403);
 
       expect((await call(memberA.token, `/activities/posts/${postId}`, 'DELETE')).status).toBe(200);
       expect(existsSync(join(root, postId))).toBe(false);

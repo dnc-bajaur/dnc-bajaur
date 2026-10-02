@@ -170,7 +170,9 @@ maybe('a member is refused everywhere outside Activities (ADR-0038)', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { permissions: string[] };
     expect(body.permissions).toContain('activities.upload');
-    expect(body.permissions).not.toContain('activities.read_all');
+    // ADR-0041 §7: a member sees everyone's posts; it still may not moderate.
+    expect(body.permissions).toContain('activities.read_all');
+    expect(body.permissions).not.toContain('activities.moderate');
   });
 
   it('does not affect an operator', async () => {

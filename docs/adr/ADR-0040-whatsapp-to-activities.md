@@ -1,6 +1,8 @@
 # ADR-0040 — Pictures sent to the district's WhatsApp number become Activities
 
-**Status:** Accepted · 2026-10-01
+**Status:** Accepted · 2026-10-01 · **amended by [ADR-0041](ADR-0041-directory-contacts-post-activities.md)**
+(any Directory contact is a known sender; no answer in an hour → the emergency, not the Pending
+list; voice notes; an unknown number's words are kept)
 **Decided by:** the owner, for the Deputy Commissioner Bajaur.
 **Rests on:** [ADR-0039](ADR-0039-activities.md) (Activities), [ADR-0014](ADR-0014-the-software-sends-again.md)
 (one number the district owns).

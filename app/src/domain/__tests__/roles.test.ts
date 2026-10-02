@@ -52,7 +52,10 @@ describe('base role sets', () => {
     }
   });
 
-  /** ADR-0038 §3, row for row. A change here is an access decision for the DC, not a refactor. */
+  /**
+   * ADR-0038 §3 as amended by ADR-0041 §7, row for row. A change here is an access decision for
+   * the DC, not a refactor.
+   */
   it('sets the Activities defaults the ADR states', () => {
     const activities = (role: Role): string[] =>
       [...resolvePermissions(role, [])].filter(isActivitiesPermission).sort();
@@ -60,24 +63,26 @@ describe('base role sets', () => {
 
     expect(activities('owner')).toEqual(everything);
     expect(activities('admin')).toEqual(everything);
-    for (const role of ['operator', 'viewer'] as const) {
+    // Every account sees every post and manages its own (ADR-0041 §7).
+    for (const role of ['operator', 'viewer', 'member'] as const) {
       expect(activities(role), role).toEqual([
         'activities.delete_own',
         'activities.read_all',
         'activities.upload',
       ]);
     }
-    expect(activities('member')).toEqual(['activities.delete_own', 'activities.upload']);
   });
 
   it('lets the DC widen or narrow one account', () => {
-    expect(can('member', [], 'activities.read_all')).toBe(false);
+    // Narrow: the DC takes "see everyone's posts" away from one account.
+    expect(can('member', [], 'activities.read_all')).toBe(true);
     expect(
-      can(
-        'member',
-        [{ permission: 'activities.read_all', effect: 'allow' }],
-        'activities.read_all',
-      ),
+      can('member', [{ permission: 'activities.read_all', effect: 'deny' }], 'activities.read_all'),
+    ).toBe(false);
+    // Widen: one member may clear the Pending list.
+    expect(can('member', [], 'activities.pending')).toBe(false);
+    expect(
+      can('member', [{ permission: 'activities.pending', effect: 'allow' }], 'activities.pending'),
     ).toBe(true);
     expect(
       can('operator', [{ permission: 'activities.upload', effect: 'deny' }], 'activities.upload'),

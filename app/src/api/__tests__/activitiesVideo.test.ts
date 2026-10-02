@@ -320,7 +320,7 @@ maybe('Activities videos (ADR-0039, phase C3)', () => {
       const postId = await newPost();
       expect(
         (await start(postId, { bytes: 10, contentType: 'video/mp4' }, other.token)).status,
-      ).toBe(404);
+      ).toBe(403);
       const res = await start(postId, { bytes: 10, contentType: 'video/mp4' });
       const { mediaId } = (await res.json()) as State;
       expect((await chunk(mediaId, 0, mp4(10), other.token)).status).toBe(404);
@@ -397,7 +397,8 @@ maybe('Activities videos (ADR-0039, phase C3)', () => {
       });
       expect(again.status).toBe(304);
 
-      expect((await call(other.token, `/activities/media/${mediaId}`)).status).toBe(404);
+      // Every account sees every post (ADR-0041 §7) — so the converted video plays for them too.
+      expect((await call(other.token, `/activities/media/${mediaId}`)).status).toBe(200);
     });
 
     it('fails one that is too long — the reason kept, logged, its place given back', async () => {

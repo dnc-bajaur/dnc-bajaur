@@ -171,6 +171,7 @@ import {
   type ActivitiesResult,
 } from './activities.js';
 import {
+  addToDirectory,
   approvePending,
   listPending,
   rejectPending,
@@ -1185,7 +1186,7 @@ async function handleActivities(
     return;
   }
 
-  const pending = /^\/activities\/pending\/([^/]+)\/(approve|reject)$/.exec(pathname);
+  const pending = /^\/activities\/pending\/([^/]+)\/(approve|reject|add-contact)$/.exec(pathname);
   if (pending !== null) {
     if (req.method !== 'POST') return notAllowed();
     if (!UUID_RE.test(pending[1]!)) {
@@ -1195,6 +1196,12 @@ async function handleActivities(
       return send(await rejectPending(pool, root, identity, pending[1]!));
     const input = await bodyOf(req);
     if (input === null) return bad();
+    if (pending[2] === 'add-contact') {
+      return send(
+        await addToDirectory(pool, fromWhatsApp, identity, pending[1]!, input, tellSender),
+        201,
+      );
+    }
     return send(await approvePending(pool, fromWhatsApp, identity, pending[1]!, input, tellSender));
   }
 

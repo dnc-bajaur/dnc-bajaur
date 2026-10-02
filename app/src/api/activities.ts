@@ -88,6 +88,12 @@ export const WARNING_DAYS = 3;
 /** Up to three videos on one post (ADR-0039 §3). A failed one does not take a place. */
 export const MAX_VIDEOS_PER_POST = 3;
 
+/** Up to ten voice notes on one post (ADR-0041). */
+export const MAX_AUDIO_PER_POST = 10;
+
+/** The largest voice note kept. WhatsApp's own limit is 16 MB. */
+export const MAX_AUDIO_BYTES = 16 * 1024 * 1024;
+
 /** The largest original accepted (ADR-0039 §4). Three minutes from a phone fits easily. */
 export const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
 
@@ -106,11 +112,19 @@ export const ABANDONED_UPLOAD_HOURS = 24;
 export const PHOTO_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png', 'image/webp']);
 /** What a phone's camera writes: MP4 (Android) and QuickTime (iPhone). Both by their bytes. */
 export const VIDEO_TYPES: ReadonlySet<string> = new Set(['video/mp4', 'video/quicktime']);
+/**
+ * Voice notes, sent by WhatsApp only (ADR-0041): Ogg/Opus from a handset's microphone button, and
+ * MP3 / M4A when an officer forwards a recording. Each checked by its bytes.
+ */
+export const AUDIO_TYPES: ReadonlySet<string> = new Set(['audio/ogg', 'audio/mpeg', 'audio/mp4']);
 export const EXT: Readonly<Record<string, string>> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
   'video/mp4': 'mp4',
+  'audio/ogg': 'ogg',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
 };
 
 /** Where Activities files live unless told otherwise — beside evidence, never in the web root. */
@@ -382,6 +396,14 @@ export async function setDefaultUnit(
 // People — for the "by person" view
 //------------------------------------------------------------------------------
 
+/**
+ * `p` holds a live post — a Directory contact (ADR-0029: a post and its one holder). Shared with
+ * WhatsApp → Activities, which treats every Directory contact as a known sender (ADR-0041).
+ */
+export const IS_CONTACT_SQL = `EXISTS (SELECT 1 FROM duty_assignment d
+                 JOIN seat s ON s.seat_id = d.seat_id
+                WHERE d.person_id = p.person_id AND d.to_at IS NULL AND s.retired_at IS NULL)`;
+
 export interface PersonView {
   readonly personId: string;
   readonly fullName: string;
@@ -389,7 +411,10 @@ export interface PersonView {
   readonly defaultUnitId: string | null;
 }
 
-/** Everyone who can sign in. Only for a caller who may see everyone's posts. */
+/**
+ * Everyone who can post: accounts, and Directory contacts (who post by WhatsApp with no login —
+ * ADR-0041). Only for a caller who may see everyone's posts.
+ */
 export async function listPeople(
   pool: Pool,
   identity: Identity,
@@ -404,10 +429,11 @@ export async function listPeople(
     designation: string | null;
     activity_unit_id: string | null;
   }>(
-    `SELECT person_id, full_name, designation, activity_unit_id
-       FROM person
-      WHERE password_hash IS NOT NULL AND removed_at IS NULL
-      ORDER BY lower(full_name)`,
+    `SELECT p.person_id, p.full_name, p.designation, p.activity_unit_id
+       FROM person p
+      WHERE p.removed_at IS NULL
+        AND (p.password_hash IS NOT NULL OR ${IS_CONTACT_SQL})
+      ORDER BY lower(p.full_name)`,
   );
   return {
     ok: true,
@@ -442,6 +468,8 @@ export interface PostView {
   readonly expiresAt: string;
   readonly photos: readonly { readonly mediaId: string; readonly hasThumb: boolean }[];
   readonly videos: readonly VideoView[];
+  /** Voice notes, sent by WhatsApp (ADR-0041). */
+  readonly audios: readonly { readonly mediaId: string }[];
   /** What the caller may do with it — drawn by the page, enforced again by each action. */
   readonly mayDelete: boolean;
   readonly mayModerate: boolean;
@@ -479,6 +507,7 @@ interface PostRow {
   expires_at: string;
   photos: { mediaId: string; hasThumb: boolean }[] | null;
   videos: VideoView[] | null;
+  audios: { mediaId: string }[] | null;
 }
 
 const POST_SELECT = `
@@ -496,7 +525,10 @@ const POST_SELECT = `
                                             'failure', m.failure,
                                             'hasPoster', m.thumb_path IS NOT NULL)
                           ORDER BY m.created_at, m.media_id)
-            FROM activity_media m WHERE m.post_id = p.post_id AND m.kind = 'video') AS videos
+            FROM activity_media m WHERE m.post_id = p.post_id AND m.kind = 'video') AS videos,
+         (SELECT json_agg(json_build_object('mediaId', m.media_id)
+                          ORDER BY m.created_at, m.media_id)
+            FROM activity_media m WHERE m.post_id = p.post_id AND m.kind = 'audio') AS audios
     FROM activity_post p
     JOIN activity_unit u ON u.unit_id = p.unit_id
     JOIN person a        ON a.person_id = p.author_person_id`;
@@ -523,6 +555,7 @@ function toView(c: Caller, r: PostRow): PostView {
     expiresAt: r.expires_at,
     photos,
     videos,
+    audios: r.audios ?? [],
     mayDelete: c.can.has('activities.moderate') || (own && c.can.has('activities.delete_own')),
     mayModerate: c.can.has('activities.moderate'),
     mayAddPhotos: mayPost && photos.length < MAX_PHOTOS_PER_POST,
@@ -1364,7 +1397,7 @@ export async function serveMedia(
     [mediaId],
   );
   const row = found.rows[0];
-  const noun = row?.kind === 'video' ? 'video' : 'photo';
+  const noun = row?.kind === 'video' ? 'video' : row?.kind === 'audio' ? 'voice note' : 'photo';
   if (row === undefined || !maySee(c, row.author_person_id, row.hidden_at)) {
     return refuse(404, `no such ${noun}`);
   }
@@ -1387,7 +1420,8 @@ export async function serveMedia(
   }
 
   const path = inside(root, useThumb ? row.thumb_path! : row.stored_path);
-  if (row.kind === 'video' && !useThumb) return streamVideo(req, res, path, headers);
+  // Videos and voice notes are streamed with byte ranges, so a player can seek.
+  if (row.kind !== 'photo' && !useThumb) return streamVideo(req, res, path, headers);
 
   let bytes: Buffer;
   try {
@@ -1769,7 +1803,7 @@ export async function downloadExpiring(
         `${r.activity_date} ${r.unit_name} - ${r.author_name ?? ''} - ${r.post_id.slice(0, 8)}`,
       );
       let n = 0;
-      const numbered = { photo: 0, video: 0 };
+      const numbered = { photo: 0, video: 0, audio: 0 };
       for (const m of r.media ?? []) {
         let data: Buffer;
         try {
@@ -1780,7 +1814,7 @@ export async function downloadExpiring(
           continue;
         }
         n += 1;
-        const kind = m.kind === 'video' ? 'video' : 'photo';
+        const kind = m.kind === 'video' ? 'video' : m.kind === 'audio' ? 'audio' : 'photo';
         numbered[kind] += 1;
         await writeOut(
           res,

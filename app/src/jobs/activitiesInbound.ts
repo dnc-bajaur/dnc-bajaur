@@ -2,8 +2,9 @@
  * WhatsApp → Activities: the minute-by-minute sweep (ADR-0040, Bajaur — phase D).
  *
  * An officer with an open emergency who sends a picture is asked *emergency report or daily
- * activity?*. If they have not tapped within the hour, this moves the picture to the DC's Pending
- * list; a tap interrupted mid-way goes there too. Anything held past the 30-day rule is deleted.
+ * activity?*. If they have not tapped within the hour, this sends the picture to that emergency,
+ * exactly as *Emergency report* would (ADR-0041 §3); a tap interrupted mid-way goes to the DC's
+ * Pending list. Anything held past the 30-day rule is deleted.
  * The work is `sweepInbound` in `api/whatsappActivities.ts`; this only runs it on a timer.
  *
  * **Who restarts it, and how do they know?** It is a timer inside the server process, like the
@@ -13,7 +14,11 @@
  */
 
 import type { Pool } from '../db/pool.js';
-import { sweepInbound, type InboundSweep } from '../api/whatsappActivities.js';
+import {
+  sweepInbound,
+  type EmergencyPathFor,
+  type InboundSweep,
+} from '../api/whatsappActivities.js';
 import { log } from '../obs/log.js';
 
 const CHECK_INTERVAL_MS = 60_000;
@@ -28,6 +33,11 @@ export interface InboundSweeper {
 export function createInboundSweeper(options: {
   readonly pool: Pool;
   readonly root: string;
+  /**
+   * Today's evidence path, for a picture whose officer did not answer within the hour (ADR-0041
+   * §3). Absent when the district has no WhatsApp account — then nothing was ever asked.
+   */
+  readonly emergencyFor?: EmergencyPathFor;
   readonly intervalMs?: number;
 }): InboundSweeper {
   const intervalMs = options.intervalMs ?? CHECK_INTERVAL_MS;
@@ -38,7 +48,7 @@ export function createInboundSweeper(options: {
     if (running) return null;
     running = true;
     try {
-      const o = await sweepInbound(options.pool, options.root);
+      const o = await sweepInbound(options.pool, options.root, options.emergencyFor);
       if (o.unanswered > 0 || o.expired > 0) log('info', 'WhatsApp activities sweep', { ...o });
       return o;
     } catch (err) {

@@ -105,9 +105,9 @@ export function isPermission(value: string): value is Permission {
 }
 
 /**
- * Activities defaults, ADR-0038 §3. Every role may upload and delete its own posts; only the DC
- * (`owner`) and DNC (`admin`) moderate, keep the Department list and clear the Pending list.
- * A `member` sees only their own posts. Any of these is changed per account by an override.
+ * Activities defaults, ADR-0038 §3 as amended by ADR-0041 §7. Every role may upload, delete its
+ * own posts and see everyone's; only the DC (`owner`) and DNC (`admin`) moderate, keep the
+ * Department list and clear the Pending list. Any of these is changed per account by an override.
  */
 const ACTIVITIES_OWN: readonly Permission[] = ['activities.upload', 'activities.delete_own'];
 const ACTIVITIES_ALL: readonly Permission[] = [...ACTIVITIES_OWN, 'activities.read_all'];
@@ -132,7 +132,8 @@ const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   admin: PERMISSIONS,
   operator: ACTIVITIES_ALL,
   viewer: ACTIVITIES_ALL,
-  member: ACTIVITIES_OWN,
+  // ADR-0041 §7: every account sees every post; the DC can deny `read_all` to one account.
+  member: ACTIVITIES_ALL,
 };
 
 /** True for an Activities permission (ADR-0039), false for an account-management one. */

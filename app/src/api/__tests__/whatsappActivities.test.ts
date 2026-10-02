@@ -32,9 +32,11 @@ import {
   ACTIVITY_BUTTON,
   ADDED_REPLY,
   EMERGENCY_BUTTON,
+  MESSAGE_REPLY,
   PENDING_REPLY,
   sweepInbound,
 } from '../whatsappActivities.js';
+import { emergencyPathFor } from '../webhooks.js';
 
 const dbUrl = process.env['TEST_DATABASE_URL'];
 const here = dirname(fileURLToPath(import.meta.url));
@@ -68,6 +70,15 @@ const mp4 = (): Buffer =>
     Buffer.from([0x00, 0x00, 0x00, 0x00]),
     Buffer.from('mp42isom', 'latin1'),
     Buffer.from('video bytes'.repeat(20), 'latin1'),
+  ]);
+
+/** A real Ogg/Opus header: `OggS`, then `OpusHead` at byte 28, as a handset records. */
+const ogg = (): Buffer =>
+  Buffer.concat([
+    Buffer.from('OggS', 'latin1'),
+    Buffer.alloc(24),
+    Buffer.from('OpusHead', 'latin1'),
+    Buffer.from('voice bytes'.repeat(20), 'latin1'),
   ]);
 
 /** A number no account in any suite holds: digits only, and per run. */
@@ -228,15 +239,17 @@ describe.skipIf(dbUrl === undefined)('WhatsApp → Activities (integration)', ()
   /** A photo (or video) from `from`, held by the stubbed Meta under a fresh media id. */
   function picture(
     from: string,
-    options: { caption?: string; video?: boolean; id?: string } = {},
+    options: { caption?: string; video?: boolean; voice?: boolean; id?: string } = {},
   ): { message: unknown; bytes: Buffer; id: string } {
     n += 1;
     const mediaId = `wa-media-${RUN}-${n}`;
-    const bytes = options.video === true ? mp4() : jpeg(`picture ${RUN} ${n}`);
-    const type = options.video === true ? 'video/mp4' : 'image/jpeg';
+    const bytes =
+      options.video === true ? mp4() : options.voice === true ? ogg() : jpeg(`picture ${RUN} ${n}`);
+    const type =
+      options.video === true ? 'video/mp4' : options.voice === true ? 'audio/ogg' : 'image/jpeg';
     files.set(mediaId, { bytes, type });
     const id = options.id ?? `wamid.in.${RUN}.${n}`;
-    const kind = options.video === true ? 'video' : 'image';
+    const kind = options.video === true ? 'video' : options.voice === true ? 'audio' : 'image';
     return {
       id,
       bytes,
@@ -250,10 +263,30 @@ describe.skipIf(dbUrl === undefined)('WhatsApp → Activities (integration)', ()
           mime_type: type,
           sha256: createHash('sha256').update(bytes).digest('hex'),
           ...(options.caption === undefined ? {} : { caption: options.caption }),
+          ...(options.voice === true ? { voice: true } : {}),
         },
       },
     };
   }
+
+  /** Words from `from`, with no file. */
+  const words = (from: string, text: string): unknown => {
+    n += 1;
+    return {
+      from,
+      id: `wamid.in.${RUN}.${n}`,
+      timestamp: String(Math.floor(Date.now() / 1000)),
+      type: 'text',
+      text: { body: text },
+    };
+  };
+
+  /** A fresh number nobody holds, per call. */
+  let strangers = 0;
+  const stranger = (): string => {
+    strangers += 1;
+    return `${unknownPhone.slice(0, -2)}${String(10 + strangers).slice(-2)}`;
+  };
 
   const tap = (from: string, id: string, title: string): unknown => ({
     from,
@@ -300,6 +333,7 @@ describe.skipIf(dbUrl === undefined)('WhatsApp → Activities (integration)', ()
       activity_date: string;
       photos: number;
       videos: number;
+      audios: number;
     }[]
   > {
     const { rows } = await pool.query<{
@@ -310,15 +344,22 @@ describe.skipIf(dbUrl === undefined)('WhatsApp → Activities (integration)', ()
       activity_date: string;
       photos: string;
       videos: string;
+      audios: string;
     }>(
       `SELECT p.post_id, p.caption, p.source, p.unit_id,
               to_char(p.activity_date, 'YYYY-MM-DD') AS activity_date,
               (SELECT count(*) FROM activity_media m WHERE m.post_id = p.post_id AND m.kind = 'photo') AS photos,
-              (SELECT count(*) FROM activity_media m WHERE m.post_id = p.post_id AND m.kind = 'video') AS videos
+              (SELECT count(*) FROM activity_media m WHERE m.post_id = p.post_id AND m.kind = 'video') AS videos,
+              (SELECT count(*) FROM activity_media m WHERE m.post_id = p.post_id AND m.kind = 'audio') AS audios
          FROM activity_post p WHERE p.author_person_id = $1 ORDER BY p.created_at`,
       [personId],
     );
-    return rows.map((r) => ({ ...r, photos: Number(r.photos), videos: Number(r.videos) }));
+    return rows.map((r) => ({
+      ...r,
+      photos: Number(r.photos),
+      videos: Number(r.videos),
+      audios: Number(r.audios),
+    }));
   }
 
   async function clearPosts(personId: string): Promise<void> {
@@ -548,29 +589,170 @@ describe.skipIf(dbUrl === undefined)('WhatsApp → Activities (integration)', ()
     expect(logged.rowCount).toBe(1);
   });
 
-  it('sends a known account with no department to the Pending list', async () => {
+  it('posts a known person with no department under "General" (ADR-0041 §2)', async () => {
     await pool.query('UPDATE person SET activity_unit_id = NULL WHERE person_id = $1', [
       officer.personId,
     ]);
     try {
       await clearPosts(officer.personId);
       expect(await inbound(picture(officer.phone).message)).toBe(200);
-      expect(await postsBy(officer.personId)).toHaveLength(0);
-      const held = await pool.query<{ reason: string; person_id: string }>(
-        `SELECT reason, person_id FROM activity_inbound
-          WHERE from_phone = $1 AND state = 'pending' ORDER BY created_at DESC LIMIT 1`,
-        [toE164(officer.phone)],
+      const posts = await postsBy(officer.personId);
+      expect(posts).toHaveLength(1);
+      const unit = await pool.query<{ name: string }>(
+        'SELECT name FROM activity_unit WHERE unit_id = $1',
+        [posts[0]!.unit_id],
       );
-      expect(held.rows[0]).toEqual({ reason: 'no_department', person_id: officer.personId });
-      await pool.query('DELETE FROM activity_inbound WHERE from_phone = $1', [
-        toE164(officer.phone),
-      ]);
+      expect(unit.rows[0]!.name.toLowerCase()).toBe('general');
     } finally {
       await pool.query('UPDATE person SET activity_unit_id = $2 WHERE person_id = $1', [
         officer.personId,
         unitId,
       ]);
     }
+  });
+
+  it('posts a Directory contact’s picture with no login at all (ADR-0041 §1)', async () => {
+    const number = `0399${String(parseInt(RUN.slice(2, 8), 16))
+      .padStart(7, '0')
+      .slice(-7)}`;
+    const made = await fetch(`${base}/roster/contacts`, {
+      method: 'POST',
+      headers: authHeaders(controlToken),
+      body: JSON.stringify({
+        fullName: `Contact ${RUN}`,
+        designation: `Field Officer ${RUN}`,
+        phone: number,
+      }),
+    });
+    expect(made.status).toBe(201);
+    const contact = (await made.json()) as { personId: string };
+    const login = await pool.query<{ has: boolean }>(
+      'SELECT password_hash IS NOT NULL AS has FROM person WHERE person_id = $1',
+      [contact.personId],
+    );
+    expect(login.rows[0]!.has).toBe(false);
+
+    const before = sent.length;
+    expect(await inbound(picture(number, { caption: 'Plantation drive' }).message)).toBe(200);
+    expect(await postsBy(contact.personId)).toEqual([
+      expect.objectContaining({ caption: 'Plantation drive', photos: 1, source: 'whatsapp' }),
+    ]);
+    expect(textsTo(number, before)).toEqual([ADDED_REPLY]);
+  });
+
+  it('posts a voice note like a picture (ADR-0041 §4)', async () => {
+    await clearPosts(officer.personId);
+    const v = picture(officer.phone, { voice: true });
+    expect(await inbound(v.message)).toBe(200);
+    expect(await inbound(picture(officer.phone).message)).toBe(200);
+    const posts = await postsBy(officer.personId);
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({ audios: 1, photos: 1 });
+
+    // It plays back for anyone who can see the post.
+    const media = await pool.query<{ media_id: string }>(
+      `SELECT media_id FROM activity_media WHERE post_id = $1 AND kind = 'audio'`,
+      [posts[0]!.post_id],
+    );
+    const played = await fetch(`${base}/activities/media/${media.rows[0]!.media_id}`, {
+      headers: authHeaders(memberToken),
+    });
+    expect(played.status).toBe(200);
+    expect(played.headers.get('content-type')).toBe('audio/ogg');
+    expect(Buffer.from(await played.arrayBuffer()).equals(v.bytes)).toBe(true);
+  });
+
+  it('keeps an unknown number’s words on the Pending list, and adds it to the Directory', async () => {
+    const number = stranger();
+    const before = sent.length;
+    expect(await inbound(words(number, 'Salam, I am the new tehsildar'))).toBe(200);
+    expect(textsTo(number, before)).toEqual([MESSAGE_REPLY]);
+
+    const list = (await (
+      await fetch(`${base}/activities/pending`, { headers: authHeaders(controlToken) })
+    ).json()) as { inboundId: string; fromPhone: string; messages: string[]; media: unknown[] }[];
+    const mine = list.find((g) => g.fromPhone === number)!;
+    expect(mine.messages).toEqual(['Salam, I am the new tehsildar']);
+    expect(mine.media).toEqual([]);
+
+    // Nothing to post: approving words alone is refused.
+    const approve = await fetch(`${base}/activities/pending/${mine.inboundId}/approve`, {
+      method: 'POST',
+      headers: authHeaders(controlToken),
+      body: JSON.stringify({ personId: officer.personId, unitId }),
+    });
+    expect(approve.status).toBe(409);
+
+    // Add to Directory: the number becomes a contact, and the group is cleared.
+    const added = await fetch(`${base}/activities/pending/${mine.inboundId}/add-contact`, {
+      method: 'POST',
+      headers: authHeaders(controlToken),
+      body: JSON.stringify({
+        fullName: `Tehsildar ${RUN}`,
+        designation: `Tehsildar ${RUN}`,
+        unitId,
+      }),
+    });
+    expect(added.status).toBe(201);
+    const { personId } = (await added.json()) as { personId: string };
+    expect(
+      (await pool.query('SELECT 1 FROM activity_inbound WHERE inbound_id = $1', [mine.inboundId]))
+        .rowCount,
+    ).toBe(0);
+    const logged = await pool.query(
+      `SELECT 1 FROM activity_log WHERE type = 'contact_added' AND detail->>'personId' = $1`,
+      [personId],
+    );
+    expect(logged.rowCount).toBe(1);
+
+    // From now on their pictures post themselves, in the department the DC chose.
+    expect(await inbound(picture(number).message)).toBe(200);
+    expect(await postsBy(personId)).toEqual([expect.objectContaining({ unit_id: unitId })]);
+  });
+
+  it('adds an unknown number with pictures to the Directory and posts them under it', async () => {
+    const number = stranger();
+    expect(await inbound(picture(number, { caption: 'Desilting the canal' }).message)).toBe(200);
+    expect(await inbound(words(number, 'Work done today'))).toBe(200);
+    const group = await pool.query<{ inbound_id: string }>(
+      `SELECT inbound_id FROM activity_inbound WHERE from_phone = $1 AND state = 'pending'`,
+      [number],
+    );
+    expect(group.rows).toHaveLength(1);
+
+    const added = await fetch(
+      `${base}/activities/pending/${group.rows[0]!.inbound_id}/add-contact`,
+      {
+        method: 'POST',
+        headers: authHeaders(controlToken),
+        body: JSON.stringify({ fullName: `Engineer ${RUN}`, designation: `SDO Irrigation ${RUN}` }),
+      },
+    );
+    expect(added.status).toBe(201);
+    const { personId, postIds } = (await added.json()) as {
+      personId: string;
+      postIds: string[];
+    };
+    expect(postIds).toHaveLength(1);
+    const posts = await postsBy(personId);
+    // The words sent alongside became the caption; no department chosen → General.
+    expect(posts[0]).toMatchObject({ photos: 1, caption: 'Desilting the canal\nWork done today' });
+
+    // Only the administration adds to the Directory.
+    expect(await inbound(picture(stranger()).message)).toBe(200);
+    const other = await pool.query<{ inbound_id: string }>(
+      `SELECT inbound_id FROM activity_inbound
+        WHERE state = 'pending' AND reason = 'unknown_sender' ORDER BY created_at DESC LIMIT 1`,
+    );
+    const refused = await fetch(
+      `${base}/activities/pending/${other.rows[0]!.inbound_id}/add-contact`,
+      {
+        method: 'POST',
+        headers: authHeaders(memberToken),
+        body: JSON.stringify({ fullName: 'x', designation: 'y' }),
+      },
+    );
+    expect(refused.status).toBe(403);
   });
 
   //----------------------------------------------------------------------------
@@ -664,39 +846,48 @@ describe.skipIf(dbUrl === undefined)('WhatsApp → Activities (integration)', ()
     await close(incidentId);
   });
 
-  it('moves an unanswered question to the Pending list after an hour; a late tap still works', async () => {
+  it('sends an unanswered picture to its emergency after an hour, never to Activities', async () => {
     await clearPosts(officer.personId);
     const incidentId = await raise('fire in the bazaar');
     expect(await inbound(picture(officer.phone).message)).toBe(200);
     const q = lastQuestionTo(officer.phone)!;
+    const toEmergency = emergencyPathFor(pool, config, evidenceRoot, stubFetch);
 
     // Fifty-nine minutes: still waiting.
     await pool.query(
       `UPDATE activity_inbound SET state_at = now() - interval '59 minutes' WHERE incident_id = $1`,
       [incidentId],
     );
-    await sweepInbound(pool, activitiesRoot);
-    const waiting = await pool.query<{ state: string }>(
-      'SELECT state FROM activity_inbound WHERE incident_id = $1',
-      [incidentId],
-    );
-    expect(waiting.rows[0]!.state).toBe('asking');
+    await sweepInbound(pool, activitiesRoot, toEmergency);
+    expect(await listFor(pool, incidentId)).toHaveLength(0);
 
     await pool.query(
       `UPDATE activity_inbound SET state_at = now() - interval '61 minutes' WHERE incident_id = $1`,
       [incidentId],
     );
-    await sweepInbound(pool, activitiesRoot);
+    await sweepInbound(pool, activitiesRoot, toEmergency);
 
-    const list = (await (
-      await fetch(`${base}/activities/pending`, { headers: authHeaders(dcToken) })
-    ).json()) as { reason: string; incidentReference: string | null; personId: string | null }[];
-    const mine = list.find((g) => g.reason === 'no_answer' && g.personId === officer.personId);
-    expect(mine?.incidentReference).toMatch(/^DNC-BAJAUR-\d+$/);
-
-    // The officer answers late, before the DC has decided: their answer still counts.
-    expect(await inbound(tap(officer.phone, q.buttons[0]!.id, EMERGENCY_BUTTON))).toBe(200);
+    // Today's evidence, today's settlement — and the note says they did not answer.
     expect(await listFor(pool, incidentId)).toHaveLength(1);
+    const events = await loadIncident(pool, incidentId);
+    const note = events
+      .filter((e) => e.type === 'action_logged')
+      .map((e) => (e.payload as { note: string }).note)
+      .join('\n');
+    expect(note).toContain('did not answer within the hour');
+    expect(note).not.toContain('they chose this incident');
+    expect(foldIncident(incidentId, events).acknowledgedAt).not.toBeNull();
+    expect(await postsBy(officer.personId)).toHaveLength(0);
+    expect(
+      (await pool.query('SELECT 1 FROM activity_inbound WHERE incident_id = $1', [incidentId]))
+        .rowCount,
+    ).toBe(0);
+
+    // A tap after that finds nothing left to decide.
+    const before = sent.length;
+    expect(await inbound(tap(officer.phone, q.buttons[1]!.id, ACTIVITY_BUTTON))).toBe(200);
+    expect(textsTo(officer.phone, before)).toEqual(['This has already been dealt with.']);
+    expect(await postsBy(officer.personId)).toHaveLength(0);
 
     await close(incidentId);
   });
@@ -732,13 +923,13 @@ describe.skipIf(dbUrl === undefined)('WhatsApp → Activities (integration)', ()
     });
     expect(future.status).toBe(400);
 
-    // Somebody else's post is not theirs to change.
+    // Somebody else's post is theirs to see (ADR-0041 §7), not to change.
     const notYours = await fetch(`${base}/activities/posts/${post.post_id}/date`, {
       method: 'PUT',
       headers: authHeaders(memberToken),
       body: JSON.stringify({ activityDate: yesterday }),
     });
-    expect(notYours.status).toBe(404);
+    expect(notYours.status).toBe(403);
 
     const logged = await pool.query(
       `SELECT 1 FROM activity_log WHERE type = 'date_changed' AND post_id = $1`,

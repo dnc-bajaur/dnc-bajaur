@@ -1,33 +1,37 @@
 /**
- * WhatsApp → Activities (ADR-0040, Bajaur — phase D).
+ * WhatsApp → Activities (ADR-0040, amended by ADR-0041 — Bajaur phases D and E1).
  *
- * Officers already send their activity pictures over WhatsApp, so a photo or video sent to the
- * district's number becomes an Activities post. The same number carries emergency alerts, and an
- * officer's photo in reply to one has been evidence on that emergency since 2026-08-21 — the two
- * must not be confused, so this decides **before** today's path runs:
+ * Officers already send their activity pictures over WhatsApp, so a photo, video or voice note
+ * sent to the district's number becomes an Activities post. The same number carries emergency
+ * alerts, and an officer's photo in reply to one has been evidence on that emergency since
+ * 2026-08-21 — the two must not be confused, so this decides **before** today's path runs:
  *
  *   * **The sender has an open emergency** (the incident today's path would attach it to is not
  *     resolved or closed) → the media is held and the officer is asked, with two buttons:
  *     *Emergency report* / *Daily activity*. *Emergency report* runs **exactly today's path**
  *     (`recordReply` in `webhooks.ts`) with the bytes already fetched; *Daily activity* posts it.
- *     No tap within an hour → the DC's Pending list.
- *   * **No open emergency, and the number matches one account** that may post and has a default
- *     department → straight onto a post under that account.
- *   * **Otherwise** (unknown number, no department, an account that may not post) → Pending list,
- *     where the DC approves (choosing account and department) or rejects (hard delete).
+ *     **No tap within an hour → today's path as well** (ADR-0041 §3): only the officer's own
+ *     *Daily activity* tap ever puts it in Activities, so no report lands there by default.
+ *   * **No open emergency, and the number belongs to one person** — a Directory contact or an
+ *     account, no login needed (ADR-0041 §1) → straight onto a post under that person, in their
+ *     default department, or in "General" if they have none (§2).
+ *   * **Otherwise** (an unknown number, or a person who may not post) → the DC's Pending list,
+ *     where the DC approves, adds the number to the Directory, or rejects (hard delete).
+ *
+ * An unknown number that has had no alert from us is not dropped either (ADR-0041 §5): its words,
+ * files and places go to the Pending list as **messages**, so nothing sent to the number is lost.
  *
  * Media from one sender within five minutes is one post (an album). It is downloaded from Meta on
  * arrival, because Meta's links expire, and kept under the Activities root like every other
- * Activities file. Only photos and videos are taken: a voice note, a document, a sticker, words,
- * a pin and a tap all go down today's path untouched.
+ * Activities file.
  *
  * ## What this never does
  *
  * It never writes to the incident log or `evidence` itself — the emergency branch hands the media
  * to `recordReply`, which is the one writer of that record. And it never loses an emergency's
- * photo: a file that cannot be fetched or is not a photo/video Activities accepts, from a sender
- * with an open emergency, goes down today's path at once (which names the failure on the
- * incident); a question that cannot be sent does the same.
+ * picture: a file that cannot be fetched or is not one Activities accepts, from a sender with an
+ * open emergency, goes down today's path at once (which names the failure on the incident); a
+ * question that cannot be sent, or is not answered, does the same.
  */
 
 import { createHash, randomUUID } from 'node:crypto';
@@ -51,12 +55,17 @@ import {
   downloadMedia,
   sendSession,
   toE164,
+  type InboundLocation,
   type InboundMedia,
   type WhatsAppConfig,
 } from '../ops/whatsapp.js';
 import { log } from '../obs/log.js';
 import {
+  AUDIO_TYPES,
   EXT,
+  IS_CONTACT_SQL,
+  MAX_AUDIO_BYTES,
+  MAX_AUDIO_PER_POST,
   MAX_PHOTOS_PER_POST,
   MAX_PHOTO_BYTES,
   MAX_VIDEOS_PER_POST,
@@ -69,12 +78,13 @@ import {
   writeLog,
   type ActivitiesResult,
 } from './activities.js';
+import { addContact } from './roster.js';
 import { loadOverrides, permissionsOf } from './settings.js';
 
 /** Media from one sender within this many minutes of the last is one post (ADR-0040 §4). */
 export const ALBUM_MINUTES = 5;
 
-/** How long the officer has to tap before the media goes to the Pending list (ADR-0040 §2). */
+/** How long the officer has to tap before the media goes to the emergency (ADR-0041 §3). */
 export const ANSWER_MINUTES = 60;
 
 /** A tap being applied for longer than this was interrupted; the DC decides instead. */
@@ -83,11 +93,17 @@ const STUCK_MINUTES = 10;
 /** The caption of a post whose media came with no words. `activity_post.caption` is required. */
 export const NO_CAPTION = 'Sent on WhatsApp';
 
+/** The department a known sender with none of their own posts under (ADR-0041 §2). */
+export const GENERAL_UNIT = 'General';
+
 /** ADR-0040 §6, verbatim. */
 export const ADDED_REPLY = 'Received — added to Activities.';
 
 /** Said once when media goes to the Pending list, so the sender is not left wondering. */
 export const PENDING_REPLY = 'Received — the DC office will add it to Activities.';
+
+/** Said once when an unknown number's words reach the Pending list (ADR-0041 §5). */
+export const MESSAGE_REPLY = 'Received — the DC office will see your message.';
 
 /** The two buttons' ids start with this. Never one of `webhooks.ts`'s own prefixes. */
 export const CHOICE_PREFIX = 'wact';
@@ -96,7 +112,13 @@ export const CHOICE_PREFIX = 'wact';
 export const EMERGENCY_BUTTON = 'Emergency report';
 export const ACTIVITY_BUTTON = 'Daily activity';
 
+/**
+ * Why something waits for the DC. `no_department` and `no_answer` are no longer produced (ADR-0041
+ * §2–§3) but rows written before it still carry them.
+ */
 export type PendingReason = 'unknown_sender' | 'no_department' | 'not_allowed' | 'no_answer';
+
+type FileKind = 'photo' | 'video' | 'audio';
 
 /** What the server hands this module. Absent: the feature is switched off (ADR-0040). */
 export interface WhatsAppActivities {
@@ -113,7 +135,10 @@ export interface InboundForActivities {
   readonly messageId: string | null;
   readonly text: string;
   readonly at: string;
+  readonly tapped?: boolean;
   readonly media?: InboundMedia;
+  readonly location?: InboundLocation;
+  readonly reaction?: unknown;
   readonly replyId?: string;
   readonly replyContextId?: string;
 }
@@ -132,7 +157,12 @@ export type EmergencyPath = (input: {
   readonly media: InboundMedia;
   readonly prefetched: Prefetched;
   readonly replyContextId?: string;
+  /** Tapped *Emergency report*, did not answer within the hour, or was never asked. */
+  readonly why: 'tapped' | 'unanswered' | 'unasked';
 }) => Promise<void>;
+
+/** Today's evidence path for one sender — what the sweep needs when an hour runs out. */
+export type EmergencyPathFor = (fromPhone: string) => EmergencyPath;
 
 interface Context {
   readonly pool: Pool;
@@ -144,7 +174,7 @@ interface Context {
 
 /** One file, fetched and checked, not yet anywhere. */
 interface Arrived {
-  readonly kind: 'photo' | 'video';
+  readonly kind: FileKind;
   readonly contentType: string;
   readonly bytes: Buffer;
   readonly sha256: string;
@@ -152,6 +182,42 @@ interface Arrived {
   readonly messageId: string | null;
   readonly replyContextId: string | null;
   readonly at: string;
+}
+
+/** Words (or a file's name, or a place) from an unknown number — no file is kept. */
+interface Message {
+  readonly body: string;
+  readonly messageId: string | null;
+  readonly at: string;
+}
+
+const TYPES: Readonly<Record<FileKind, ReadonlySet<string>>> = {
+  photo: PHOTO_TYPES,
+  video: VIDEO_TYPES,
+  audio: AUDIO_TYPES,
+};
+const MAX_BYTES: Readonly<Record<FileKind, number>> = {
+  photo: MAX_PHOTO_BYTES,
+  video: MAX_VIDEO_BYTES,
+  audio: MAX_AUDIO_BYTES,
+};
+const PER_POST: Readonly<Record<FileKind, number>> = {
+  photo: MAX_PHOTOS_PER_POST,
+  video: MAX_VIDEOS_PER_POST,
+  audio: MAX_AUDIO_PER_POST,
+};
+const NOUN: Readonly<Record<FileKind, string>> = {
+  photo: 'picture',
+  video: 'video',
+  audio: 'voice note',
+};
+
+function fileKindOf(media: InboundMedia | undefined): FileKind | null {
+  if (media === undefined) return null;
+  if (media.kind === 'image') return 'photo';
+  if (media.kind === 'video') return 'video';
+  if (media.kind === 'voice' || media.kind === 'audio') return 'audio';
+  return null;
 }
 
 //------------------------------------------------------------------------------
@@ -176,8 +242,9 @@ export async function takeForActivities(
     return true;
   }
 
-  const media = reply.media;
-  if (media === undefined || (media.kind !== 'image' && media.kind !== 'video')) return false;
+  const kind = fileKindOf(reply.media);
+  if (kind === null) return takeMessage(ctx, phone, reply);
+  const media = reply.media!;
 
   if (reply.messageId !== null && (await alreadyHave(ctx.pool, reply.messageId))) return true;
 
@@ -185,21 +252,16 @@ export async function takeForActivities(
 
   const got = await downloadMedia(ctx.config, media.mediaId, ctx.fetchImpl);
   if (!got.ok) {
-    // An emergency's photo is never lost: today's path fetches again and, if it still cannot,
+    // An emergency's picture is never lost: today's path fetches again and, if it still cannot,
     // names the failure on the incident (INV-03).
     if (open !== null) return false;
     log('warn', 'whatsapp activity media could not be fetched', { failure: got.failure });
-    await tell(ctx, phone, 'Your picture could not be received. Please send it again.');
+    await tell(ctx, phone, `Your ${NOUN[kind]} could not be received. Please send it again.`);
     return true;
   }
 
-  const kind = media.kind === 'image' ? 'photo' : 'video';
-  const verdict = decideType(
-    got.contentType,
-    got.bytes,
-    kind === 'photo' ? PHOTO_TYPES : VIDEO_TYPES,
-  );
-  const tooLarge = got.bytes.length > (kind === 'photo' ? MAX_PHOTO_BYTES : MAX_VIDEO_BYTES);
+  const verdict = decideType(got.contentType, got.bytes, TYPES[kind]);
+  const tooLarge = got.bytes.length > MAX_BYTES[kind];
   if (!verdict.ok || tooLarge) {
     // Evidence accepts more kinds than Activities does; an emergency's file goes there as today.
     if (open !== null) return false;
@@ -212,7 +274,9 @@ export async function takeForActivities(
       phone,
       kind === 'photo'
         ? 'This picture could not be added to Activities. Please send it as a photo (JPEG).'
-        : 'This video could not be added to Activities. Please send it as an MP4 video.',
+        : kind === 'video'
+          ? 'This video could not be added to Activities. Please send it as an MP4 video.'
+          : 'This voice note could not be added to Activities. Please record it again.',
     );
     return true;
   }
@@ -242,6 +306,68 @@ export async function takeForActivities(
     if (fresh) await tell(ctx, phone, PENDING_REPLY);
   }
   return true;
+}
+
+/**
+ * Words, a file or a place from a number that is **nobody's** and has had **no alert from us** —
+ * the one inbound today's path drops (`recordReply`: "no recent message to match it to"). It goes
+ * to the Pending list as a message instead (ADR-0041 §5). Everything else is not ours: a reply to
+ * an alert, a tap, a reaction, and anything from a known person take today's path unchanged.
+ */
+async function takeMessage(
+  ctx: Context,
+  phone: string,
+  reply: InboundForActivities,
+): Promise<boolean> {
+  if (reply.tapped === true || reply.replyId !== undefined || reply.reaction !== undefined) {
+    return false;
+  }
+  const body = messageBody(reply);
+  if (body === null) return false;
+
+  const named =
+    reply.replyContextId === undefined ? null : await messageById(ctx.pool, reply.replyContextId);
+  if (named !== null && named.toPhone === phone) return false;
+  if ((await lastMessageTo(ctx.pool, phone)) !== null) return false;
+  if ((await senderOf(ctx.pool, phone)).personId !== null) return false;
+
+  if (reply.messageId !== null && (await alreadyHave(ctx.pool, reply.messageId))) return true;
+
+  const { fresh } = await forSender(ctx.pool, phone, (client) =>
+    intoInbound(client, ctx.activities.root, pendingGroup(client, phone, 'unknown_sender', null), {
+      body,
+      messageId: reply.messageId,
+      at: reply.at,
+    }),
+  );
+  if (fresh) await tell(ctx, phone, MESSAGE_REPLY);
+  return true;
+}
+
+/** What an unknown number sent, in words a person reads. Null for nothing worth keeping. */
+function messageBody(reply: InboundForActivities): string | null {
+  const parts: string[] = [];
+  if (reply.text.trim() !== '') parts.push(reply.text.trim());
+  if (reply.media !== undefined) {
+    parts.push(
+      reply.media.kind === 'sticker'
+        ? '(sent a sticker)'
+        : `(sent a file${reply.media.filename === null ? '' : `: ${reply.media.filename}`})`,
+    );
+  }
+  if (reply.location !== undefined) {
+    const l = reply.location;
+    parts.push(
+      `(shared a location: ${[
+        l.name,
+        l.address,
+        `${l.latitude.toFixed(6)}, ${l.longitude.toFixed(6)}`,
+      ]
+        .filter((p): p is string => p !== null && p !== '')
+        .join(' — ')})`,
+    );
+  }
+  return parts.length === 0 ? null : parts.join('\n').slice(0, 4000);
 }
 
 /** A message Meta already delivered once — held, posted, or on the Pending list. */
@@ -294,36 +420,69 @@ type Sender =
 const E164_SQL = `(CASE WHEN d LIKE '92%' THEN d WHEN d LIKE '0%' THEN '92' || substr(d, 2) ELSE d END)`;
 
 /**
- * The account this number belongs to, if exactly one does, and whether it may post with a
- * department to post under. Two accounts on one number is not guessed between: the DC chooses.
+ * The person this number belongs to — a Directory contact or an account, no login needed
+ * (ADR-0041 §1) — if exactly one does, and the department they post under. Two people on one
+ * number are not guessed between: the DC chooses.
+ *
+ * May they post? An account by its role and overrides, and not while suspended. A contact with no
+ * login has no role to ask, so it may — unless the DC has denied `activities.upload` to it.
  */
-async function senderOf(pool: Pool, phone: string): Promise<Sender> {
+async function senderOf(pool: Pick<Pool, 'query'>, phone: string): Promise<Sender> {
   const { rows } = await pool.query<{
     person_id: string;
     role: Role;
+    has_login: boolean;
     blocked: boolean;
     unit_id: string | null;
   }>(
-    `SELECT person_id, role, blocked, unit_id
-       FROM (SELECT p.person_id, p.role,
+    `SELECT person_id, role, has_login, blocked, unit_id
+       FROM (SELECT p.person_id, p.role, p.password_hash IS NOT NULL AS has_login,
                     (p.suspended_at IS NOT NULL OR p.disabled_at IS NOT NULL) AS blocked,
                     u.unit_id,
                     regexp_replace(p.phone, '[^0-9]', '', 'g') AS d
                FROM person p
                LEFT JOIN activity_unit u
                       ON u.unit_id = p.activity_unit_id AND u.retired_at IS NULL
-              WHERE p.password_hash IS NOT NULL AND p.removed_at IS NULL) x
-      WHERE ${E164_SQL} = $1`,
+              WHERE p.removed_at IS NULL
+                AND (p.password_hash IS NOT NULL OR ${IS_CONTACT_SQL})) x
+      WHERE d <> '' AND ${E164_SQL} = $1`,
     [phone],
   );
   if (rows.length !== 1) return { ok: false, reason: 'unknown_sender', personId: null };
   const r = rows[0]!;
-  const can = resolvePermissions(r.role, await loadOverrides(pool, r.person_id));
-  if (r.blocked || !can.has('activities.upload')) {
-    return { ok: false, reason: 'not_allowed', personId: r.person_id };
-  }
-  if (r.unit_id === null) return { ok: false, reason: 'no_department', personId: r.person_id };
-  return { ok: true, personId: r.person_id, unitId: r.unit_id };
+  const overrides = await loadOverrides(pool, r.person_id);
+  const may = r.has_login
+    ? resolvePermissions(r.role, overrides).has('activities.upload')
+    : !overrides.some((o) => o.permission === 'activities.upload' && o.effect === 'deny');
+  if (r.blocked || !may) return { ok: false, reason: 'not_allowed', personId: r.person_id };
+  return { ok: true, personId: r.person_id, unitId: r.unit_id ?? (await generalUnit(pool)) };
+}
+
+/**
+ * The "General" department, made the first time a known sender with none needs it (ADR-0041 §2).
+ * Found by name, so a General the DC made (or renamed) themselves is the one used.
+ */
+async function generalUnit(pool: Pick<Pool, 'query'>): Promise<string> {
+  const find = async (): Promise<string | undefined> =>
+    (
+      await pool.query<{ unit_id: string }>(
+        `SELECT unit_id FROM activity_unit
+          WHERE lower(btrim(name)) = lower($1) AND retired_at IS NULL LIMIT 1`,
+        [GENERAL_UNIT],
+      )
+    ).rows[0]?.unit_id;
+  const found = await find();
+  if (found !== undefined) return found;
+  const made = await pool.query<{ unit_id: string }>(
+    `INSERT INTO activity_unit (name) VALUES ($1)
+     ON CONFLICT (lower(btrim(name))) WHERE retired_at IS NULL DO NOTHING
+     RETURNING unit_id`,
+    [GENERAL_UNIT],
+  );
+  const unitId = made.rows[0]?.unit_id;
+  if (unitId === undefined) return (await find())!;
+  await writeLog(pool, { type: 'unit_created', actor: null, unitId, detail: { automatic: true } });
+  return unitId;
 }
 
 //------------------------------------------------------------------------------
@@ -362,22 +521,52 @@ async function writeNew(root: string, relative: string, bytes: Buffer): Promise<
   await writeFile(absolute, bytes, { flag: 'wx' });
 }
 
-function extOf(kind: 'photo' | 'video', contentType: string): string {
-  return kind === 'video' ? 'upload' : EXT[contentType]!;
+/** Where a file of this kind lands on a post. A video is the converter's input, not its output. */
+function postPath(postId: string, mediaId: string, kind: FileKind, contentType: string): string {
+  return join(postId, `${mediaId}.${kind === 'video' ? 'upload' : EXT[contentType]!}`);
 }
 
-/** Hold the media in an inbound group — joining the sender's open album when there is one. */
+interface GroupQuery {
+  readonly sql: string;
+  readonly params: readonly unknown[];
+  readonly create: () => Promise<string>;
+}
+
+/** The sender's open Pending group of the last five minutes, or a new one. */
+function pendingGroup(
+  client: PoolClient,
+  phone: string,
+  reason: PendingReason,
+  personId: string | null,
+): GroupQuery {
+  return {
+    sql: `SELECT inbound_id FROM activity_inbound
+           WHERE from_phone = $1 AND state = 'pending' AND reason <> 'no_answer'
+             AND last_media_at > now() - make_interval(mins => $2)
+           ORDER BY last_media_at DESC LIMIT 1`,
+    params: [phone, ALBUM_MINUTES],
+    create: async () => {
+      const res = await client.query<{ inbound_id: string }>(
+        `INSERT INTO activity_inbound (from_phone, state, reason, person_id)
+         VALUES ($1, 'pending', $2, $3) RETURNING inbound_id`,
+        [phone, reason, personId],
+      );
+      return res.rows[0]!.inbound_id;
+    },
+  };
+}
+
+/** Hold a file or a message in an inbound group — joining the sender's open one when there is. */
 async function intoInbound(
   client: PoolClient,
   root: string,
-  find: { readonly sql: string; readonly params: readonly unknown[] },
-  create: () => Promise<string>,
-  arrived: Arrived,
+  group: GroupQuery,
+  item: Arrived | Message,
 ): Promise<{ readonly inboundId: string; readonly fresh: boolean }> {
-  const found = await client.query<{ inbound_id: string }>(find.sql, [...find.params]);
+  const found = await client.query<{ inbound_id: string }>(group.sql, [...group.params]);
   let inboundId = found.rows[0]?.inbound_id;
   const fresh = inboundId === undefined;
-  if (inboundId === undefined) inboundId = await create();
+  if (inboundId === undefined) inboundId = await group.create();
   else {
     await client.query('UPDATE activity_inbound SET last_media_at = now() WHERE inbound_id = $1', [
       inboundId,
@@ -385,12 +574,18 @@ async function intoInbound(
   }
 
   const mediaId = randomUUID();
-  const storedPath = join(
-    'inbox',
-    inboundId,
-    `${mediaId}.${extOf(arrived.kind, arrived.contentType)}`,
-  );
-  await writeNew(root, storedPath, arrived.bytes);
+  if ('body' in item) {
+    await client.query(
+      `INSERT INTO activity_inbound_media (media_id, inbound_id, wa_message_id, kind, body, received_at)
+       VALUES ($1, $2, $3, 'text', $4, $5)`,
+      [mediaId, inboundId, item.messageId, item.body, item.at],
+    );
+    return { inboundId, fresh };
+  }
+
+  const ext = item.kind === 'video' ? 'upload' : EXT[item.contentType]!;
+  const storedPath = join('inbox', inboundId, `${mediaId}.${ext}`);
+  await writeNew(root, storedPath, item.bytes);
   await client.query(
     `INSERT INTO activity_inbound_media
        (media_id, inbound_id, wa_message_id, kind, content_type, byte_size, sha256, stored_path,
@@ -399,15 +594,15 @@ async function intoInbound(
     [
       mediaId,
       inboundId,
-      arrived.messageId,
-      arrived.kind,
-      arrived.contentType,
-      arrived.bytes.length,
-      arrived.sha256,
+      item.messageId,
+      item.kind,
+      item.contentType,
+      item.bytes.length,
+      item.sha256,
       storedPath,
-      arrived.caption,
-      arrived.replyContextId,
-      arrived.at,
+      item.caption,
+      item.replyContextId,
+      item.at,
     ],
   );
   return { inboundId, fresh };
@@ -426,7 +621,6 @@ async function holdAndAsk(
   open: OpenEmergency,
   arrived: Arrived,
 ): Promise<void> {
-  // Remembered now, so a question nobody answers reaches the DC already naming the account.
   const sender = await senderOf(ctx.pool, phone);
   const { inboundId, fresh } = await forSender(ctx.pool, phone, (client) =>
     intoInbound(
@@ -438,15 +632,15 @@ async function holdAndAsk(
                  AND last_media_at > now() - make_interval(mins => $3)
                ORDER BY last_media_at DESC LIMIT 1`,
         params: [phone, open.incidentId, ALBUM_MINUTES],
-      },
-      async () => {
-        const res = await client.query<{ inbound_id: string }>(
-          `INSERT INTO activity_inbound
-             (from_phone, state, incident_id, matched_message_id, asked_at, person_id)
-           VALUES ($1, 'asking', $2, $3, now(), $4) RETURNING inbound_id`,
-          [phone, open.incidentId, open.providerMessageId, sender.personId],
-        );
-        return res.rows[0]!.inbound_id;
+        create: async () => {
+          const res = await client.query<{ inbound_id: string }>(
+            `INSERT INTO activity_inbound
+               (from_phone, state, incident_id, matched_message_id, asked_at, person_id)
+             VALUES ($1, 'asking', $2, $3, now(), $4) RETURNING inbound_id`,
+            [phone, open.incidentId, open.providerMessageId, sender.personId],
+          );
+          return res.rows[0]!.inbound_id;
+        },
       },
       arrived,
     ),
@@ -455,12 +649,11 @@ async function holdAndAsk(
 
   const seq = await referenceFor(ctx.pool, open.incidentId);
   const which = seq === null ? 'an open emergency' : `an open emergency, ${formatReference(seq)}`;
-  const thing = arrived.kind === 'photo' ? 'picture' : 'video';
   const sent = await sendSession(
     ctx.config,
     {
       toPhone: phone,
-      text: `You have ${which}. Is this ${thing} a report for it, or a daily activity?`,
+      text: `You have ${which}. Is this ${NOUN[arrived.kind]} a report for it, or a daily activity?`,
       buttons: [
         { id: `${CHOICE_PREFIX}:${inboundId}:e`, title: EMERGENCY_BUTTON },
         { id: `${CHOICE_PREFIX}:${inboundId}:a`, title: ACTIVITY_BUTTON },
@@ -474,11 +667,13 @@ async function holdAndAsk(
       failure: sent.failure,
     });
     const claimed = await claim(ctx.pool, inboundId, phone);
-    if (claimed !== null) await asEmergency(ctx, claimed);
+    if (claimed !== null) {
+      await asEmergency(ctx.pool, ctx.activities.root, ctx.emergency, claimed, 'unasked');
+    }
   }
 }
 
-/** Unknown sender, no department, or not allowed to post: the DC's Pending list. */
+/** Unknown sender, or a person who may not post: the DC's Pending list. */
 async function holdPending(
   ctx: Context,
   phone: string,
@@ -490,21 +685,7 @@ async function holdPending(
     intoInbound(
       client,
       ctx.activities.root,
-      {
-        sql: `SELECT inbound_id FROM activity_inbound
-               WHERE from_phone = $1 AND state = 'pending' AND reason <> 'no_answer'
-                 AND last_media_at > now() - make_interval(mins => $2)
-               ORDER BY last_media_at DESC LIMIT 1`,
-        params: [phone, ALBUM_MINUTES],
-      },
-      async () => {
-        const res = await client.query<{ inbound_id: string }>(
-          `INSERT INTO activity_inbound (from_phone, state, reason, person_id)
-           VALUES ($1, 'pending', $2, $3) RETURNING inbound_id`,
-          [phone, reason, personId],
-        );
-        return res.rows[0]!.inbound_id;
-      },
+      pendingGroup(client, phone, reason, personId),
       arrived,
     ),
   );
@@ -541,12 +722,7 @@ async function postDirect(
           AND (SELECT count(*) FROM activity_media m
                 WHERE m.post_id = p.post_id AND m.kind = $3 AND m.status <> 'failed') < $4
         ORDER BY p.created_at DESC LIMIT 1`,
-      [
-        sender.personId,
-        ALBUM_MINUTES,
-        arrived.kind,
-        arrived.kind === 'photo' ? MAX_PHOTOS_PER_POST : MAX_VIDEOS_PER_POST,
-      ],
+      [sender.personId, ALBUM_MINUTES, arrived.kind, PER_POST[arrived.kind]],
     );
     let postId = recent.rows[0]?.post_id;
     if (postId === undefined) {
@@ -593,9 +769,9 @@ async function postDirect(
 }
 
 /**
- * One file onto one post. A photo is ready at once; a video is `processing`, its original where
- * the converter (`jobs/activitiesVideo.ts`) looks for it — exactly as if every chunk had arrived.
- * The file comes either as bytes (direct) or as a held file that is moved (from the inbox).
+ * One file onto one post. A photo or voice note is ready at once; a video is `processing`, its
+ * original where the converter (`jobs/activitiesVideo.ts`) looks for it — exactly as if every
+ * chunk had arrived. The file comes as bytes (direct) or as a held file that is moved (inbox).
  */
 async function addMedia(
   client: PoolClient,
@@ -604,7 +780,7 @@ async function addMedia(
   actor: string | null,
   m: {
     readonly mediaId: string;
-    readonly kind: 'photo' | 'video';
+    readonly kind: FileKind;
     readonly contentType: string;
     readonly sha256: string;
     readonly byteSize: number;
@@ -612,10 +788,7 @@ async function addMedia(
     readonly source: { readonly bytes: Buffer } | { readonly heldPath: string };
   },
 ): Promise<void> {
-  const target =
-    m.kind === 'photo'
-      ? join(postId, `${m.mediaId}.${EXT[m.contentType]!}`)
-      : join(postId, `${m.mediaId}.upload`);
+  const target = postPath(postId, m.mediaId, m.kind, m.contentType);
   if ('bytes' in m.source) await writeNew(root, target, m.source.bytes);
   else {
     const absolute = inside(root, target);
@@ -623,14 +796,7 @@ async function addMedia(
     await rename(inside(root, m.source.heldPath), absolute);
   }
 
-  if (m.kind === 'photo') {
-    await client.query(
-      `INSERT INTO activity_media
-         (media_id, post_id, kind, content_type, byte_size, sha256, stored_path, wa_message_id)
-       VALUES ($1, $2, 'photo', $3, $4, $5, $6, $7)`,
-      [m.mediaId, postId, m.contentType, m.byteSize, m.sha256, target, m.messageId],
-    );
-  } else {
+  if (m.kind === 'video') {
     await client.query(
       `INSERT INTO activity_media
          (media_id, post_id, kind, status, content_type, byte_size, received_bytes,
@@ -646,9 +812,16 @@ async function addMedia(
         m.messageId,
       ],
     );
+  } else {
+    await client.query(
+      `INSERT INTO activity_media
+         (media_id, post_id, kind, content_type, byte_size, sha256, stored_path, wa_message_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [m.mediaId, postId, m.kind, m.contentType, m.byteSize, m.sha256, target, m.messageId],
+    );
   }
   await writeLog(client, {
-    type: m.kind === 'photo' ? 'photo_added' : 'video_added',
+    type: m.kind === 'photo' ? 'photo_added' : m.kind === 'video' ? 'video_added' : 'audio_added',
     actor,
     postId,
     detail: { mediaId: m.mediaId, via: 'whatsapp' },
@@ -672,15 +845,27 @@ interface InboundRow {
 interface HeldMedia {
   media_id: string;
   wa_message_id: string | null;
-  kind: 'photo' | 'video';
+  kind: FileKind | 'text';
+  content_type: string | null;
+  byte_size: string | null;
+  sha256: string | null;
+  stored_path: string | null;
+  caption: string | null;
+  body: string | null;
+  reply_context_id: string | null;
+  received_at: string;
+}
+
+/** A held file — everything but a message. */
+type HeldFile = HeldMedia & {
+  kind: FileKind;
   content_type: string;
   byte_size: string;
   sha256: string;
   stored_path: string;
-  caption: string | null;
-  reply_context_id: string | null;
-  received_at: string;
-}
+};
+
+const isFile = (h: HeldMedia): h is HeldFile => h.kind !== 'text';
 
 /**
  * Take an inbound group for one decision, so a second tap — or the DC approving while the officer
@@ -701,7 +886,7 @@ async function claim(pool: Pool, inboundId: string, phone: string): Promise<Inbo
 async function heldMedia(pool: Pick<Pool, 'query'>, inboundId: string): Promise<HeldMedia[]> {
   const { rows } = await pool.query<HeldMedia>(
     `SELECT media_id, wa_message_id, kind, content_type, byte_size, sha256, stored_path, caption,
-            reply_context_id, received_at
+            body, reply_context_id, received_at
        FROM activity_inbound_media WHERE inbound_id = $1
       ORDER BY received_at, created_at, media_id`,
     [inboundId],
@@ -718,7 +903,7 @@ async function applyChoice(ctx: Context, phone: string, replyId: string): Promis
     return;
   }
   if (m[2] === 'e') {
-    await asEmergency(ctx, claimed);
+    await asEmergency(ctx.pool, ctx.activities.root, ctx.emergency, claimed, 'tapped');
     return;
   }
 
@@ -752,16 +937,22 @@ async function toPending(
 }
 
 /**
- * *Emergency report*: each file goes down today's path, in the order it arrived, exactly as if it
- * had just come in — the same evidence, the same note, the same settled obligation — matched to
- * the incident the officer was asked about. Each held file is removed once today's path has it.
+ * *Emergency report* — or an hour with no answer (ADR-0041 §3): each file goes down today's path,
+ * in the order it arrived, exactly as if it had just come in — the same evidence, the same note,
+ * the same settled obligation — matched to the incident the officer was asked about. Each held
+ * file is removed once today's path has it.
  */
-async function asEmergency(ctx: Context, row: InboundRow): Promise<void> {
-  const root = ctx.activities.root;
-  for (const h of await heldMedia(ctx.pool, row.inbound_id)) {
+async function asEmergency(
+  pool: Pool,
+  root: string,
+  emergency: EmergencyPath,
+  row: InboundRow,
+  why: 'tapped' | 'unanswered' | 'unasked',
+): Promise<void> {
+  for (const h of (await heldMedia(pool, row.inbound_id)).filter(isFile)) {
     const bytes = await readFile(inside(root, h.stored_path));
     const contextId = h.reply_context_id ?? row.matched_message_id;
-    await ctx.emergency({
+    await emergency({
       text: h.caption ?? '',
       at: new Date(h.received_at).toISOString(),
       media: {
@@ -769,15 +960,16 @@ async function asEmergency(ctx: Context, row: InboundRow): Promise<void> {
         mimeType: h.content_type,
         sha256: h.sha256,
         filename: null,
-        kind: h.kind === 'photo' ? 'image' : 'video',
+        kind: h.kind === 'photo' ? 'image' : h.kind === 'video' ? 'video' : 'voice',
       },
       prefetched: { bytes, contentType: h.content_type, sha256: h.sha256 },
+      why,
       ...(contextId === null ? {} : { replyContextId: contextId }),
     });
-    await ctx.pool.query('DELETE FROM activity_inbound_media WHERE media_id = $1', [h.media_id]);
+    await pool.query('DELETE FROM activity_inbound_media WHERE media_id = $1', [h.media_id]);
     await removeFiles(root, [h.stored_path]);
   }
-  await ctx.pool.query('DELETE FROM activity_inbound WHERE inbound_id = $1', [row.inbound_id]);
+  await pool.query('DELETE FROM activity_inbound WHERE inbound_id = $1', [row.inbound_id]);
   await rm(inside(root, join('inbox', row.inbound_id)), { recursive: true, force: true }).catch(
     () => {},
   );
@@ -785,8 +977,9 @@ async function asEmergency(ctx: Context, row: InboundRow): Promise<void> {
 
 /**
  * Turn a held group into posts — one post, or more when it holds more than a post may (ten
- * photos, three videos). The files are moved from the inbox, never copied. The group is gone
- * afterwards. Shared by *Daily activity* and the DC's approval.
+ * photos, three videos, ten voice notes). The files are moved from the inbox, never copied; any
+ * messages in the group become the caption. The group is gone afterwards. Shared by *Daily
+ * activity*, the DC's approval, and *Add to Directory*.
  */
 async function postFromInbound(
   pool: Pool,
@@ -809,15 +1002,24 @@ async function postFromInbound(
   try {
     await client.query('BEGIN');
     const held = await heldMedia(client, inboundId);
-    const photos = held.filter((h) => h.kind === 'photo');
-    const clips = held.filter((h) => h.kind === 'video');
-    while (photos.length > 0 || clips.length > 0) {
+    const words = held.filter((h) => h.kind === 'text').map((h) => h.body!);
+    const queues: Record<FileKind, HeldFile[]> = {
+      photo: held.filter(isFile).filter((h) => h.kind === 'photo'),
+      video: held.filter(isFile).filter((h) => h.kind === 'video'),
+      audio: held.filter(isFile).filter((h) => h.kind === 'audio'),
+    };
+    let first = true;
+    while (queues.photo.length + queues.video.length + queues.audio.length > 0) {
       const batch = [
-        ...photos.splice(0, MAX_PHOTOS_PER_POST),
-        ...clips.splice(0, MAX_VIDEOS_PER_POST),
+        ...queues.photo.splice(0, PER_POST.photo),
+        ...queues.video.splice(0, PER_POST.video),
+        ...queues.audio.splice(0, PER_POST.audio),
       ].sort((a, b) => new Date(a.received_at).getTime() - new Date(b.received_at).getTime());
       let caption: string | null = null;
       for (const h of batch) caption = captionWith(caption, h.caption);
+      // The words sent alongside belong to the first post of the group.
+      if (first) for (const w of words) caption = captionWith(caption, w);
+      first = false;
       const date = to.activityDate ?? districtDate(new Date(batch[0]!.received_at));
       const made = await client.query<{ post_id: string }>(
         `INSERT INTO activity_post (unit_id, author_person_id, activity_date, caption, source)
@@ -845,22 +1047,18 @@ async function postFromInbound(
         });
         moved.push({
           from: h.stored_path,
-          to:
-            h.kind === 'photo'
-              ? join(postId, `${h.media_id}.${EXT[h.content_type]!}`)
-              : join(postId, `${h.media_id}.upload`),
+          to: postPath(postId, h.media_id, h.kind, h.content_type),
         });
         if (h.kind === 'video') videos = true;
       }
     }
     // The held rows go first, so the Meta id is free for the post's own media row.
-    const ids = held.map((h) => h.wa_message_id);
     await client.query('DELETE FROM activity_inbound WHERE inbound_id = $1', [inboundId]);
-    for (const [i, h] of held.entries()) {
-      if (ids[i] === null) continue;
+    for (const h of held.filter(isFile)) {
+      if (h.wa_message_id === null) continue;
       await client.query('UPDATE activity_media SET wa_message_id = $2 WHERE media_id = $1', [
         h.media_id,
-        ids[i],
+        h.wa_message_id,
       ]);
     }
     await client.query('COMMIT');
@@ -892,25 +1090,54 @@ async function tell(ctx: Context, phone: string, text: string): Promise<void> {
 //------------------------------------------------------------------------------
 
 export interface InboundSweep {
-  /** Questions nobody answered within the hour, now on the Pending list. */
+  /** Questions nobody answered within the hour, sent down the emergency path. */
   readonly unanswered: number;
   /** Groups past the 30-day rule, deleted. */
   readonly expired: number;
 }
 
 /**
- * Run by `jobs/activitiesInbound.ts` every minute. A question unanswered for an hour goes to the
- * Pending list; a tap interrupted mid-way (a crash) does too, and the DC decides. Anything held
- * longer than the 30-day rule allows any Activities post is deleted, with one log line each.
+ * Run by `jobs/activitiesInbound.ts` every minute.
+ *
+ * A question unanswered for an hour goes down **today's emergency path** (ADR-0041 §3) — only the
+ * officer's own *Daily activity* tap puts a picture in Activities. Without the emergency path (no
+ * WhatsApp account: nothing was ever asked) such a group falls back to the Pending list. A tap
+ * interrupted mid-way (a crash) goes to the Pending list, and the DC decides. Anything held longer
+ * than the 30-day rule allows any Activities post is deleted, with one log line each.
  */
-export async function sweepInbound(pool: Pool, root: string): Promise<InboundSweep> {
-  const unanswered = await pool.query(
+export async function sweepInbound(
+  pool: Pool,
+  root: string,
+  emergencyFor?: EmergencyPathFor,
+): Promise<InboundSweep> {
+  let unanswered = 0;
+  if (emergencyFor !== undefined) {
+    const due = await pool.query<InboundRow>(
+      `UPDATE activity_inbound SET state = 'choosing', state_at = now()
+        WHERE state = 'asking' AND state_at < now() - make_interval(mins => $1)
+        RETURNING inbound_id, from_phone, state, reason, person_id, incident_id, matched_message_id`,
+      [ANSWER_MINUTES],
+    );
+    for (const row of due.rows) {
+      try {
+        await asEmergency(pool, root, emergencyFor(row.from_phone), row, 'unanswered');
+        unanswered += 1;
+      } catch (err) {
+        log('error', 'an unanswered picture could not be sent to its emergency', {
+          incidentId: row.incident_id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+  const fallback = await pool.query(
     `UPDATE activity_inbound
         SET state = 'pending', reason = 'no_answer', state_at = now()
       WHERE (state = 'asking' AND state_at < now() - make_interval(mins => $1))
          OR (state = 'choosing' AND state_at < now() - make_interval(mins => $2))`,
     [ANSWER_MINUTES, STUCK_MINUTES],
   );
+  unanswered += fallback.rowCount ?? 0;
 
   const old = await pool.query<{ inbound_id: string; from_phone: string; n: string }>(
     `DELETE FROM activity_inbound i
@@ -929,7 +1156,7 @@ export async function sweepInbound(pool: Pool, root: string): Promise<InboundSwe
       () => {},
     );
   }
-  return { unanswered: unanswered.rowCount ?? 0, expired: old.rows.length };
+  return { unanswered, expired: old.rows.length };
 }
 
 //------------------------------------------------------------------------------
@@ -940,10 +1167,10 @@ export interface PendingView {
   readonly inboundId: string;
   readonly fromPhone: string;
   readonly reason: PendingReason;
-  /** The account the number matched, when it matched one. */
+  /** The person the number matched, when it matched one. */
   readonly personId: string | null;
   readonly personName: string | null;
-  /** Its default department — the DC's starting choice. */
+  /** Their default department — the DC's starting choice. */
   readonly suggestedUnitId: string | null;
   /** The emergency the officer was asked about, for a question nobody answered. */
   readonly incidentReference: string | null;
@@ -951,7 +1178,9 @@ export interface PendingView {
   /** The day it would be posted under unless the DC chooses another. */
   readonly activityDate: string;
   readonly captions: readonly string[];
-  readonly media: readonly { readonly mediaId: string; readonly kind: 'photo' | 'video' }[];
+  /** Words, files and places sent with no picture (ADR-0041 §5). */
+  readonly messages: readonly string[];
+  readonly media: readonly { readonly mediaId: string; readonly kind: FileKind }[];
   /** When the 30-day rule deletes it. */
   readonly expiresAt: string;
 }
@@ -984,18 +1213,24 @@ export async function listPending(
     received_at: string;
     expires_at: string;
     captions: string[] | null;
-    media: { mediaId: string; kind: 'photo' | 'video' }[] | null;
+    messages: string[] | null;
+    media: { mediaId: string; kind: FileKind }[] | null;
   }>(
     `SELECT i.inbound_id, i.from_phone, i.reason, i.person_id, p.full_name, u.unit_id,
             r.seq AS incident_seq,
             (SELECT min(m.received_at) FROM activity_inbound_media m
               WHERE m.inbound_id = i.inbound_id) AS received_at,
             i.created_at + make_interval(days => ${RETENTION_DAYS}) AS expires_at,
-            (SELECT json_agg(m.caption ORDER BY m.received_at, m.created_at) FROM activity_inbound_media m
+            (SELECT json_agg(m.caption ORDER BY m.received_at, m.created_at)
+               FROM activity_inbound_media m
               WHERE m.inbound_id = i.inbound_id AND m.caption IS NOT NULL) AS captions,
+            (SELECT json_agg(m.body ORDER BY m.received_at, m.created_at)
+               FROM activity_inbound_media m
+              WHERE m.inbound_id = i.inbound_id AND m.kind = 'text') AS messages,
             (SELECT json_agg(json_build_object('mediaId', m.media_id, 'kind', m.kind)
                              ORDER BY m.received_at, m.created_at, m.media_id)
-               FROM activity_inbound_media m WHERE m.inbound_id = i.inbound_id) AS media
+               FROM activity_inbound_media m
+              WHERE m.inbound_id = i.inbound_id AND m.kind <> 'text') AS media
        FROM activity_inbound i
        LEFT JOIN person p ON p.person_id = i.person_id
        LEFT JOIN activity_unit u ON u.unit_id = p.activity_unit_id AND u.retired_at IS NULL
@@ -1006,7 +1241,7 @@ export async function listPending(
   return {
     ok: true,
     value: rows
-      .filter((r) => r.media !== null)
+      .filter((r) => r.received_at !== null)
       .map((r) => ({
         inboundId: r.inbound_id,
         fromPhone: r.from_phone,
@@ -1018,6 +1253,7 @@ export async function listPending(
         receivedAt: new Date(r.received_at).toISOString(),
         activityDate: districtDate(new Date(r.received_at)),
         captions: r.captions ?? [],
+        messages: r.messages ?? [],
         media: r.media ?? [],
         expiresAt: new Date(r.expires_at).toISOString(),
       })),
@@ -1035,10 +1271,10 @@ export async function servePendingMedia(
   if (!(await mayClear(pool, identity))) {
     return refuse(403, 'you do not have permission to open the Pending list');
   }
-  const { rows } = await pool.query<{ stored_path: string; content_type: string; kind: string }>(
-    `SELECT m.stored_path, m.content_type, m.kind
+  const { rows } = await pool.query<{ stored_path: string; content_type: string }>(
+    `SELECT m.stored_path, m.content_type
        FROM activity_inbound_media m JOIN activity_inbound i ON i.inbound_id = m.inbound_id
-      WHERE m.media_id = $1 AND i.state = 'pending'`,
+      WHERE m.media_id = $1 AND i.state = 'pending' AND m.kind <> 'text'`,
     [mediaId],
   );
   const row = rows[0];
@@ -1062,9 +1298,56 @@ export async function servePendingMedia(
   return null;
 }
 
+function dateFrom(input: Record<string, unknown>): string | ActivitiesResult<never> {
+  const dateIn = typeof input['activityDate'] === 'string' ? input['activityDate'].trim() : '';
+  if (dateIn === '') return '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIn) || !Number.isFinite(Date.parse(dateIn))) {
+    return refuse(400, 'choose the date of the activity');
+  }
+  if (dateIn > districtDate()) return refuse(400, 'the date cannot be in the future');
+  return dateIn;
+}
+
+async function liveUnit(pool: Pool, unitId: string): Promise<boolean> {
+  const unit = await pool.query(
+    'SELECT 1 FROM activity_unit WHERE unit_id = $1 AND retired_at IS NULL',
+    [unitId],
+  );
+  return (unit.rowCount ?? 0) > 0;
+}
+
+/** Claim a Pending group for the DC, with how many files it holds. */
+async function claimPending(
+  pool: Pool,
+  inboundId: string,
+): Promise<{ readonly fromPhone: string; readonly files: number; readonly all: number } | null> {
+  const claimed = await pool.query<{ from_phone: string; files: string; all: string }>(
+    `UPDATE activity_inbound SET state = 'choosing', state_at = now()
+      WHERE inbound_id = $1 AND state = 'pending'
+      RETURNING from_phone,
+                (SELECT count(*) FROM activity_inbound_media m
+                  WHERE m.inbound_id = $1 AND m.kind <> 'text') AS files,
+                (SELECT count(*) FROM activity_inbound_media m WHERE m.inbound_id = $1) AS all`,
+    [inboundId],
+  );
+  const row = claimed.rows[0];
+  return row === undefined
+    ? null
+    : { fromPhone: row.from_phone, files: Number(row.files), all: Number(row.all) };
+}
+
+async function unclaim(pool: Pool, inboundId: string): Promise<void> {
+  await pool.query(
+    `UPDATE activity_inbound SET state = 'pending', state_at = now()
+      WHERE inbound_id = $1 AND state = 'choosing'`,
+    [inboundId],
+  );
+}
+
 /**
- * The DC approves: posted under the account and department they choose, on the day it arrived
- * unless they choose another. The sender is told, if their thread is still open.
+ * The DC approves: posted under the person and department they choose, on the day it arrived
+ * unless they choose another. The sender is told, if their thread is still open. A group of
+ * messages alone has nothing to post: add the number to the Directory, or delete it.
  */
 export async function approvePending(
   pool: Pool,
@@ -1079,37 +1362,29 @@ export async function approvePending(
   }
   const personId = typeof input['personId'] === 'string' ? input['personId'].trim() : '';
   const unitId = typeof input['unitId'] === 'string' ? input['unitId'].trim() : '';
-  const dateIn = typeof input['activityDate'] === 'string' ? input['activityDate'].trim() : '';
   if (!UUID_RE.test(personId)) return refuse(400, 'choose whose activity this is');
   if (!UUID_RE.test(unitId)) return refuse(400, 'choose a department');
-  if (dateIn !== '') {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIn) || !Number.isFinite(Date.parse(dateIn))) {
-      return refuse(400, 'choose the date of the activity');
-    }
-    if (dateIn > districtDate()) return refuse(400, 'the date cannot be in the future');
-  }
+  const date = dateFrom(input);
+  if (typeof date !== 'string') return date;
 
   const person = await pool.query(
-    `SELECT 1 FROM person
-      WHERE person_id = $1 AND password_hash IS NOT NULL AND removed_at IS NULL`,
+    `SELECT 1 FROM person p
+      WHERE p.person_id = $1 AND p.removed_at IS NULL
+        AND (p.password_hash IS NOT NULL OR ${IS_CONTACT_SQL})`,
     [personId],
   );
-  if (person.rowCount === 0) return refuse(400, 'that account does not exist');
-  const unit = await pool.query(
-    'SELECT 1 FROM activity_unit WHERE unit_id = $1 AND retired_at IS NULL',
-    [unitId],
-  );
-  if (unit.rowCount === 0) return refuse(400, 'that department is not on the list');
+  if (person.rowCount === 0) return refuse(400, 'that person is not in the Directory');
+  if (!(await liveUnit(pool, unitId))) return refuse(400, 'that department is not on the list');
 
-  const claimed = await pool.query<{ from_phone: string; n: string }>(
-    `UPDATE activity_inbound SET state = 'choosing', state_at = now()
-      WHERE inbound_id = $1 AND state = 'pending'
-      RETURNING from_phone,
-                (SELECT count(*) FROM activity_inbound_media m WHERE m.inbound_id = $1) AS n`,
-    [inboundId],
-  );
-  const row = claimed.rows[0];
-  if (row === undefined) return refuse(404, 'this is no longer on the Pending list');
+  const row = await claimPending(pool, inboundId);
+  if (row === null) return refuse(404, 'this is no longer on the Pending list');
+  if (row.files === 0) {
+    await unclaim(pool, inboundId);
+    return refuse(
+      409,
+      'there is no picture to post — add the number to the Directory, or delete it',
+    );
+  }
 
   let postIds: readonly string[];
   try {
@@ -1117,14 +1392,10 @@ export async function approvePending(
       personId,
       unitId,
       actor: identity.personId,
-      activityDate: dateIn === '' ? null : dateIn,
+      activityDate: date === '' ? null : date,
     });
   } catch (e) {
-    await pool.query(
-      `UPDATE activity_inbound SET state = 'pending', state_at = now()
-        WHERE inbound_id = $1 AND state = 'choosing'`,
-      [inboundId],
-    );
+    await unclaim(pool, inboundId);
     throw e;
   }
   await writeLog(pool, {
@@ -1134,14 +1405,96 @@ export async function approvePending(
     unitId,
     detail: {
       inboundId,
-      fromPhone: row.from_phone,
+      fromPhone: row.fromPhone,
       author: personId,
       posts: postIds,
-      media: Number(row.n),
+      media: row.files,
     },
   });
-  if (tellSender !== undefined) await tellSender(row.from_phone, ADDED_REPLY).catch(() => {});
+  if (tellSender !== undefined) await tellSender(row.fromPhone, ADDED_REPLY).catch(() => {});
   return { ok: true, value: { postIds } };
+}
+
+/** `920300…` as the Directory writes a number: `0300…` for Pakistan, `+…` otherwise. */
+function directoryPhone(e164: string): string {
+  return e164.startsWith('92') && e164.length === 12 ? `0${e164.slice(2)}` : `+${e164}`;
+}
+
+/**
+ * *Add to Directory* (ADR-0041 §6): the number becomes a Directory contact under the name and post
+ * the DC types — exactly as Administration → Directory adds one, with its rules — and whatever it
+ * sent is posted under that contact. From now on its pictures post themselves. A group of messages
+ * alone is cleared once the contact exists. ⚠️ A Directory contact can be sent emergency alerts.
+ */
+export async function addToDirectory(
+  pool: Pool,
+  activities: WhatsAppActivities,
+  identity: Identity,
+  inboundId: string,
+  input: Record<string, unknown>,
+  tellSender?: (phone: string, text: string) => Promise<void>,
+): Promise<ActivitiesResult<{ readonly personId: string; readonly postIds: readonly string[] }>> {
+  if (!(await mayClear(pool, identity))) {
+    return refuse(403, 'you do not have permission to clear the Pending list');
+  }
+  const unitIn = typeof input['unitId'] === 'string' ? input['unitId'].trim() : '';
+  if (unitIn !== '' && (!UUID_RE.test(unitIn) || !(await liveUnit(pool, unitIn)))) {
+    return refuse(400, 'that department is not on the list');
+  }
+  const date = dateFrom(input);
+  if (typeof date !== 'string') return date;
+
+  const row = await claimPending(pool, inboundId);
+  if (row === null) return refuse(404, 'this is no longer on the Pending list');
+
+  const made = await addContact(pool, identity, {
+    fullName: input['fullName'],
+    designation: input['designation'],
+    phone: directoryPhone(row.fromPhone),
+  });
+  if (!made.ok) {
+    await unclaim(pool, inboundId);
+    return made;
+  }
+  const personId = made.value.personId;
+  const unitId = unitIn === '' ? await generalUnit(pool) : unitIn;
+  await pool.query('UPDATE person SET activity_unit_id = $2 WHERE person_id = $1', [
+    personId,
+    unitId,
+  ]);
+  await writeLog(pool, {
+    type: 'contact_added',
+    actor: identity.personId,
+    unitId,
+    detail: { inboundId, fromPhone: row.fromPhone, personId },
+  });
+
+  let postIds: readonly string[] = [];
+  if (row.files > 0) {
+    postIds = await postFromInbound(pool, activities, inboundId, {
+      personId,
+      unitId,
+      actor: identity.personId,
+      activityDate: date === '' ? null : date,
+    });
+    await writeLog(pool, {
+      type: 'pending_approved',
+      actor: identity.personId,
+      postId: postIds[0] ?? null,
+      unitId,
+      detail: {
+        inboundId,
+        fromPhone: row.fromPhone,
+        author: personId,
+        posts: postIds,
+        media: row.files,
+      },
+    });
+    if (tellSender !== undefined) await tellSender(row.fromPhone, ADDED_REPLY).catch(() => {});
+  } else {
+    await pool.query('DELETE FROM activity_inbound WHERE inbound_id = $1', [inboundId]);
+  }
+  return { ok: true, value: { personId, postIds } };
 }
 
 /** The DC rejects: the rows and the files are deleted for good; one log line remains. */
@@ -1183,9 +1536,10 @@ export function senderTeller(
   return async (phone, text) => {
     if (!(await sessionWindowOpen(pool, phone))) return;
     const sent = await sendSession(config, { toPhone: phone, text }, fetchImpl);
-    if (!sent.ok)
+    if (!sent.ok) {
       log('info', 'could not tell the sender their activity was approved', {
         failure: sent.failure,
       });
+    }
   };
 }

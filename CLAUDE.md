@@ -115,32 +115,18 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   Never use the other district's cluster on this machine. Full suite runs locally (files run one
   at a time). Rarely a test process dies mid-run here ("Worker exited unexpectedly"; cause
   unknown, never seen in CI). The run's end now names the file (`testing/crashTrace.ts`,
-  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement` —
+  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement`, `takeAction` —
   different files, dying before any test runs, no exit code; not reproducible on demand.
-- **Built (ADR-0038):** B1 `member` role + deny-by-default gate (gated `resolveSession` in
-  `api/server.ts`, pinned by `memberGate.test.ts`; members land on `/activities.html`). B2
-  Activities permissions (`domain/roles.ts`). B3 accounts with Post, `member` by default,
-  "Give login" on a contact (`POST /settings/accounts/:id/grant`).
-  ⚠️ Any role other than `member` still acts as the full control room.
-- **Built (ADR-0039) C1:** Activities with photos — migration 0050, `api/activities.ts`
-  (routes under `/activities/`, the one extra `resolveAnySession`), page `web/activities.html`.
-  Photos in `var/activities/`.
-- **Built (ADR-0039) C2:** migration 0051; hourly housekeeping `jobs/activitiesRetention.ts`
-  (30-day expiry → bucket deletes → encrypted copy to `ACTIVITIES_S3_BUCKET`); DC warning +
-  ZIP (`/activities/expiring[.zip]`, `ops/zip.ts`). No media bucket exists yet.
-- **Built A:** "Install this app" banner (`web/src/install.ts`) on the shell and Activities.
-- **Built (ADR-0039) C3:** videos — migration 0052, chunked resumable upload
-  (`/activities/posts/:id/videos`, `/activities/uploads/:id`), converter `jobs/activitiesVideo.ts`
-  (ffmpeg → 720p + poster; missing ffmpeg = wait, not fail), Range playback. Local ffmpeg:
-  `D:\dnc-bajaur-ffmpeg` via `FFMPEG_PATH`/`FFPROBE_PATH` in `app/.env`. `/activities` never
-  cached by the service worker (v263).
-- **Built (ADR-0040) D:** WhatsApp → Activities — migration 0053, `api/whatsappActivities.ts`
-  (decided before `recordReply`; open emergency → two buttons, *Emergency report* runs today's
-  path with the bytes already fetched), minute sweep `jobs/activitiesInbound.ts`, Pending tab +
-  Change date on the page. `WHATSAPP_ACTIVITIES=off` switches it off. Tested with a stubbed Meta
-  only; go-live needs Bajaur's Meta account.
-- **Next:** small open items in `PLAN.md` §4 (C3 notes, D notes, known bugs), then the go-live
-  checklist (§3) as the owner supplies §2.
+- **Built (ADR-0038/0039/0040/0041):** `member` role + one gate (`memberGate.test.ts`);
+  Activities — photos, 30-day expiry + ZIP + media backup (no bucket yet), videos via ffmpeg
+  (`D:\dnc-bajaur-ffmpeg`, `FFMPEG_PATH`); "Install this app"; WhatsApp → Activities
+  (`api/whatsappActivities.ts`, migrations 0050–0054, sweep `jobs/activitiesInbound.ts`): any
+  Directory contact posts with no login, open emergency → two buttons, no answer in an hour →
+  the emergency, voice notes, unknown numbers → Pending (*Add to Directory*), every account
+  reads all posts. `WHATSAPP_ACTIVITIES=off` switches WhatsApp → Activities off. Shell v264.
+  Tested with a stubbed Meta only. ⚠️ Any role other than `member` is the full control room.
+- **Next:** E2 Officers tab, E3 fewer tabs, E4 Urdu/English toggle (whole app), E5 sign-in link
+  on WhatsApp (needs Meta) — `PLAN.md` §4.
 
 ## 6. Repository map
 

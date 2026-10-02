@@ -24,6 +24,7 @@ import { createNightly } from './jobs/nightly.js';
 import { createActivitiesHousekeeping } from './jobs/activitiesRetention.js';
 import { createVideoConverter, ffmpegTools } from './jobs/activitiesVideo.js';
 import { createInboundSweeper } from './jobs/activitiesInbound.js';
+import { emergencyPathFor } from './api/webhooks.js';
 import { defaultActivitiesRoot } from './api/activities.js';
 import { mediaStore, type MediaEnv } from './ops/offsite.js';
 import { refreshWeather } from './ops/weather.js';
@@ -342,11 +343,15 @@ async function start(): Promise<void> {
   });
 
   /**
-   * WhatsApp → Activities (ADR-0040): a question unanswered for an hour goes to the DC's Pending
-   * list, and held media past the 30-day rule is deleted. Started even when the feature is off,
+   * WhatsApp → Activities (ADR-0040/0041): a question unanswered for an hour goes to its
+   * emergency, as *Emergency report* would, and held media past the 30-day rule is deleted. Started even when the feature is off,
    * so anything held before it was switched off still reaches the DC.
    */
-  const inboundSweeper = createInboundSweeper({ pool, root: activitiesRoot });
+  const inboundSweeper = createInboundSweeper({
+    pool,
+    root: activitiesRoot,
+    ...(whatsapp === null ? {} : { emergencyFor: emergencyPathFor(pool, whatsapp) }),
+  });
 
   /**
    * The weather, refreshed for every screen at once (M4-04, ADR-0013).

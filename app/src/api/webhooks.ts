@@ -95,6 +95,7 @@ import {
 import { defaultEvidenceRoot, store } from '../ops/evidence.js';
 import {
   takeForActivities,
+  type EmergencyPathFor,
   type Prefetched,
   type WhatsAppActivities,
 } from './whatsappActivities.js';
@@ -344,7 +345,7 @@ export async function handleWhatsAppWebhook(
               fetchImpl,
               media: held.media,
               prefetched: held.prefetched,
-              chosen: true,
+              chosen: held.why,
               ...(held.replyContextId === undefined ? {} : { replyContextId: held.replyContextId }),
             }),
         },
@@ -353,7 +354,10 @@ export async function handleWhatsAppWebhook(
           messageId: reply.messageId,
           text: reply.text,
           at: reply.at,
+          tapped: reply.tapped,
           ...(reply.media === undefined ? {} : { media: reply.media }),
+          ...(reply.location === undefined ? {} : { location: reply.location }),
+          ...(reply.reaction === undefined ? {} : { reaction: reply.reaction }),
           ...(reply.replyId === undefined ? {} : { replyId: reply.replyId }),
           ...(reply.contextMessageId === undefined
             ? {}
@@ -381,6 +385,36 @@ export async function handleWhatsAppWebhook(
   }
 
   return { status: 200, body: 'ok', contentType: TEXT };
+}
+
+/**
+ * Today's evidence path for a held picture, for the minute sweep — ADR-0041 §3.
+ *
+ * An officer asked *emergency report or daily activity?* who does not answer within the hour has
+ * their picture treated exactly as *Emergency report*: `recordReply`, unchanged, with the bytes
+ * already fetched. Built here because `recordReply` is this file's and stays private to it.
+ */
+export function emergencyPathFor(
+  pool: Pool,
+  config: WhatsAppConfig,
+  evidenceRoot: string = defaultEvidenceRoot(),
+  fetchImpl: typeof fetch = fetch,
+): EmergencyPathFor {
+  return (fromPhone) => (held) =>
+    recordReply({
+      pool,
+      config,
+      evidenceRoot,
+      fromPhone,
+      text: held.text,
+      at: held.at,
+      tapped: false,
+      fetchImpl,
+      media: held.media,
+      prefetched: held.prefetched,
+      chosen: held.why,
+      ...(held.replyContextId === undefined ? {} : { replyContextId: held.replyContextId }),
+    });
 }
 
 /** Append the outcome of one WhatsApp attempt, if the log does not already carry one. */
@@ -494,11 +528,14 @@ interface ReplyToRecord {
    */
   readonly prefetched?: Prefetched;
   /**
-   * The officer **chose** this incident by tapping *Emergency report* under a question naming it —
-   * ADR-0040. The match is exact, and the note says so in those words rather than claiming they
-   * used WhatsApp's reply control.
+   * Why a held picture is coming down this path (ADR-0040 / ADR-0041), so the note says what
+   * happened rather than claiming they used WhatsApp's reply control:
+   *
+   *   * `tapped` — the officer **chose** this incident with *Emergency report*: the match is exact;
+   *   * `unanswered` — they were asked and did not answer within the hour;
+   *   * `unasked` — the question could not be sent.
    */
-  readonly chosen?: boolean;
+  readonly chosen?: 'tapped' | 'unanswered' | 'unasked';
 }
 
 async function recordReply(reply: ReplyToRecord): Promise<void> {
@@ -849,11 +886,15 @@ async function recordReply(reply: ReplyToRecord): Promise<void> {
            * recent alert"* over an exact match would understate what the record knows, and the
            * reverse would be worse — so the sentence follows which of the two actually happened.
            */
-          (exact && reply.chosen === true
+          (reply.chosen === 'tapped'
             ? '\n(they chose this incident on WhatsApp when asked about their picture — the match is exact)'
-            : exact
-              ? '\n(they replied to this incident’s own message — the match is exact)'
-              : '\n(matched to this incident from the most recent alert sent to that number — the match is inferred)'),
+            : reply.chosen === 'unanswered'
+              ? '\n(they were asked whether this was a report for this incident and did not answer within the hour, so it is attached here — matched from the alert sent to that number)'
+              : reply.chosen === 'unasked'
+                ? '\n(the question about this picture could not be sent, so it is attached here — matched from the alert sent to that number)'
+                : exact
+                  ? '\n(they replied to this incident’s own message — the match is exact)'
+                  : '\n(matched to this incident from the most recent alert sent to that number — the match is inferred)'),
         ...(kept !== null && kept.ok ? { evidenceIds: [kept.evidenceId] } : {}),
         /**
          * 🔴 **This note IS the officer's acknowledgement when it IS their response — 2026-09-04.**

@@ -1264,7 +1264,9 @@ declare const self: ServiceWorkerGlobalScope;
 // went through the cache-first branch: an officer posted, and the list that followed was the
 // one from before the post (found by the C3 browser test). Videos made it worse — a byte-range
 // request cannot be answered from this cache at all.
-const CACHE = 'dnc-shell-v263';
+// v264: Bajaur E1 (ADR-0041) — "Give login" in the contact drawer takes an Activities department.
+// `admin.ts` moved, so the bump.
+const CACHE = 'dnc-shell-v264';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.

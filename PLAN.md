@@ -79,6 +79,21 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 | A ✅ | **"Install this app" banner** — one tap on Android/Windows (Chrome, Edge); "Share → Add to Home Screen" steps on iPhone | — | domain + HTTPS (D-04) |
 | C3 ✅ | Activities, **videos**: resumable chunks, ≤3 min, server → 720p (ffmpeg), processing/ready/failed, `doctor` lists failures | ADR-0039 | ffmpeg on server |
 | D ✅ | **WhatsApp → Activities**, same number; open emergency → two buttons; unknown numbers → Pending list | [ADR-0040](docs/adr/ADR-0040-whatsapp-to-activities.md) | Bajaur's **new** Meta portfolio |
+| E1 ✅ | **Simpler:** any Directory contact posts by WhatsApp with no login; "General" department when none; no answer in an hour → the emergency; voice notes; an unknown number's words → Pending; "Add to Directory" and one-tap Approve on Pending; every account sees every post; Give login takes a department | [ADR-0041](docs/adr/ADR-0041-directory-contacts-post-activities.md) | Bajaur's **new** Meta portfolio |
+| E2 | **Officers tab** in Activities: every Directory contact — department, Activities on/off, Give login (always member) — and Departments becomes the folder list only | ADR-0041 (to extend) | — |
+| E3 | **Fewer tabs:** DC — Activities · New post · Pending (with count) · Officers · History (Log + Recycle bin) · My account; member — Activities · New post · My account | — | — |
+| E4 | **Urdu / English toggle**, across the whole app (control room too). Urdu wording checked by the owner; right-to-left layout | ADR (to write) | — |
+| E5 | **Sign-in link on WhatsApp** when a login is given — the officer sets their own password | ADR (to write) | Meta account + an approved template |
+
+E1 notes (2026-10-02):
+- Decided by the owner in conversation: Directory = known sender; unanswered → emergency; every
+  account reads all posts (DC narrows one with a `deny` of `activities.read_all`); an unknown
+  number's words go to the Activities Pending list (not the control room) with only *Add to
+  Directory* / *Delete*; voice notes are activities.
+- ⚠️ *Add to Directory* makes the number a Directory contact, which can be sent emergency alerts.
+- A known person's stray words with no alert from us are still dropped, as before (only unknown
+  numbers' words are kept). Documents from unknown numbers are kept as a line of text, not the file.
+- Voice notes are stored as sent (Ogg/Opus); older iPhone browsers may not play them.
 
 D notes (2026-10-02):
 - Built and tested locally with a stubbed Meta (`whatsappActivities.test.ts`); **go-live needs

@@ -169,6 +169,12 @@
         border-color: var(--primary);
         color: #fff;
       }
+      /* A long label (who and which department) wraps instead of widening the page. */
+      button.wrap {
+        white-space: normal;
+        text-align: left;
+        max-width: 100%;
+      }
       button.danger {
         color: var(--critical);
         border-color: var(--critical);
@@ -208,6 +214,24 @@
       .caption {
         white-space: pre-wrap;
         margin: 8px 0;
+      }
+      .caption.message {
+        padding: 8px 10px;
+        border-left: 3px solid var(--line);
+        background: var(--paper);
+        border-radius: 6px;
+      }
+      article audio {
+        display: block;
+        width: 100%;
+        margin-top: 8px;
+      }
+      article details {
+        margin-top: 12px;
+      }
+      article h3 {
+        font-size: 0.95rem;
+        margin: 12px 0 4px;
       }
       .photos {
         display: grid;
@@ -438,9 +462,9 @@
         <section>
           <h2>Pending</h2>
           <p class="muted">
-            Pictures and videos sent to the district's WhatsApp number that need you: from a number
-            with no account, from an account with no department, or from an officer who did not say
-            whether they were about their emergency. Approve posts them; Reject deletes them.
+            What was sent to the district's WhatsApp number that needs you — mostly from numbers
+            that are not in the Directory. Add the number to the Directory (its pictures then post
+            by themselves), approve under someone already there, or delete.
           </p>
         </section>
         <div id="pendingList"></div>

@@ -56,6 +56,8 @@ interface Post {
   readonly expiresAt: string;
   readonly photos: readonly { readonly mediaId: string; readonly hasThumb: boolean }[];
   readonly videos: readonly Video[];
+  /** Voice notes, sent by WhatsApp (ADR-0041). */
+  readonly audios: readonly { readonly mediaId: string }[];
   readonly mayDelete: boolean;
   readonly mayModerate: boolean;
   /** Sent to the district's WhatsApp number rather than posted here (ADR-0040). */
@@ -75,7 +77,11 @@ interface PendingGroup {
   readonly receivedAt: string;
   readonly activityDate: string;
   readonly captions: readonly string[];
-  readonly media: readonly { readonly mediaId: string; readonly kind: 'photo' | 'video' }[];
+  readonly messages: readonly string[];
+  readonly media: readonly {
+    readonly mediaId: string;
+    readonly kind: 'photo' | 'video' | 'audio';
+  }[];
   readonly expiresAt: string;
 }
 
@@ -415,8 +421,9 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
     grid.append(...post.videos.map(videoTile));
     card.append(grid);
   }
-  if (post.photos.length === 0 && post.videos.length === 0) {
-    card.append(make('p', 'meta', 'No photos or videos.'));
+  for (const a of post.audios) card.append(audioTile(`/activities/media/${a.mediaId}`));
+  if (post.photos.length === 0 && post.videos.length === 0 && post.audios.length === 0) {
+    card.append(make('p', 'meta', 'No photos, videos or voice notes.'));
   }
 
   const actions = make('div', 'row');
@@ -617,34 +624,49 @@ async function loadBin(): Promise<void> {
 function whyPending(g: PendingGroup): string {
   switch (g.reason) {
     case 'unknown_sender':
-      return 'This number is not linked to any account.';
+      return 'This number is not in the Directory.';
     case 'no_department':
       return 'This account has no default department.';
     case 'not_allowed':
-      return 'This account may not post (suspended, or not permitted).';
+      return 'This person may not post (suspended, or not permitted).';
     case 'no_answer':
       return `Asked whether this was a report for ${g.incidentReference ?? 'their open emergency'} or a daily activity — no answer within an hour.`;
   }
 }
 
+/** A voice note, playable where it is. */
+function audioTile(src: string): HTMLElement {
+  const player = make('audio');
+  player.controls = true;
+  player.preload = 'none';
+  player.src = src;
+  player.setAttribute('aria-label', 'Voice note');
+  return player;
+}
+
+/** The "General" department, when it exists — where a person with none posts (ADR-0041 §2). */
+const generalUnitId = (): string =>
+  liveUnits().find((u) => u.name.trim().toLowerCase() === 'general')?.unitId ?? '';
+
 function pendingCard(g: PendingGroup): HTMLElement {
   const card = make('article');
-  const who = g.personName ?? 'Unknown number';
+  const who = g.personName ?? 'Not in the Directory';
   card.append(make('div', 'meta', `+${g.fromPhone} · ${who} · sent ${when(g.receivedAt)}`));
   card.append(make('div', 'meta', whyPending(g)));
   card.append(make('div', 'meta expires', `Deleted automatically on ${when(g.expiresAt)}`));
   if (g.captions.length > 0) card.append(make('p', 'caption', g.captions.join('\n')));
+  for (const m of g.messages) card.append(make('p', 'caption message', m));
 
+  const src = (mediaId: string): string => `/activities/pending/media/${mediaId}`;
   const photos = g.media.filter((m) => m.kind === 'photo');
   if (photos.length > 0) {
     const grid = make('div', 'photos');
     for (const m of photos) {
-      const src = `/activities/pending/media/${m.mediaId}`;
       const img = make('img');
       img.loading = 'lazy';
       img.alt = 'Photo sent on WhatsApp';
-      img.src = src;
-      img.addEventListener('click', () => openViewer(src));
+      img.src = src(m.mediaId);
+      img.addEventListener('click', () => openViewer(src(m.mediaId)));
       grid.append(img);
     }
     card.append(grid);
@@ -656,92 +678,190 @@ function pendingCard(g: PendingGroup): HTMLElement {
       const tile = make('div', 'video');
       const play = button('▶', 'play');
       play.setAttribute('aria-label', 'Play video');
-      play.addEventListener('click', () =>
-        openViewer(`/activities/pending/media/${m.mediaId}`, 'video'),
-      );
+      play.addEventListener('click', () => openViewer(src(m.mediaId), 'video'));
       tile.append(play);
       grid.append(tile);
     }
     card.append(grid);
   }
+  for (const m of g.media.filter((x) => x.kind === 'audio')) card.append(audioTile(src(m.mediaId)));
 
+  const hasFiles = g.media.length > 0;
   const id = (name: string): string => `${name}-${g.inboundId}`;
-  const person = make('select');
-  person.id = id('who');
-  fillSelect(
-    person,
-    [
-      { value: '', label: 'Choose whose activity this is' },
-      ...people.map((p) => ({
-        value: p.personId,
-        label: p.designation ? `${p.fullName} — ${p.designation}` : p.fullName,
-      })),
-    ],
-    g.personId ?? '',
-  );
-  const live = liveUnits().map((u) => ({ value: u.unitId, label: u.name }));
-  const unit = make('select');
-  unit.id = id('unit');
-  fillSelect(unit, [{ value: '', label: 'Choose a department' }, ...live], g.suggestedUnitId ?? '');
-  // Choosing the account fills in its default department; the DC can still choose another.
-  person.addEventListener('change', () => {
-    const chosen = people.find((p) => p.personId === person.value);
-    const unitId = chosen?.defaultUnitId ?? null;
-    if (unitId !== null && live.some((u) => u.value === unitId)) unit.value = unitId;
-  });
-  const date = make('input');
-  date.id = id('date');
-  date.type = 'date';
-  date.max = me.today;
-  date.value = g.activityDate;
-
-  const field = (text: string, control: HTMLElement): HTMLElement[] => {
+  const field = (text: string, control: HTMLElement): HTMLElement => {
+    const wrap = make('div');
     const label = make('label', undefined, text);
     label.htmlFor = control.id;
-    return [label, control];
+    wrap.append(label, control);
+    return wrap;
   };
-  card.append(
-    ...field('Account', person),
-    ...field('Department', unit),
-    ...field('Date of the activity', date),
-  );
+  const live = liveUnits().map((u) => ({ value: u.unitId, label: u.name }));
+  const unitSelect = (name: string, value: string): HTMLSelectElement => {
+    const s = make('select');
+    s.id = id(name);
+    fillSelect(s, [{ value: '', label: 'Choose a department' }, ...live], value);
+    return s;
+  };
+  const dateInput = (): HTMLInputElement => {
+    const d = make('input');
+    d.id = id('date');
+    d.type = 'date';
+    d.max = me.today;
+    d.value = g.activityDate;
+    return d;
+  };
 
-  const actions = make('div', 'row');
   const error = make('p', 'error');
   error.hidden = true;
-  const approve = button('Approve', 'primary');
-  const reject = button('Reject', 'danger');
+  const buttons: HTMLButtonElement[] = [];
   const run = (go: () => Promise<unknown>): void => {
     void (async () => {
-      approve.disabled = true;
-      reject.disabled = true;
+      for (const b of buttons) b.disabled = true;
       error.hidden = true;
       try {
         await go();
         void loadPending();
       } catch (e) {
         showError(error, e);
-        approve.disabled = false;
-        reject.disabled = false;
+        for (const b of buttons) b.disabled = false;
       }
     })();
   };
-  approve.addEventListener('click', () =>
-    run(() =>
-      api('POST', `/activities/pending/${g.inboundId}/approve`, {
-        personId: person.value,
-        unitId: unit.value,
-        activityDate: date.value,
-      }),
-    ),
-  );
+  const reject = button(hasFiles ? 'Reject' : 'Delete', 'danger');
   reject.addEventListener('click', () => {
-    if (!confirm('Reject and delete these for good? This cannot be undone.')) return;
+    if (!confirm('Delete this for good? This cannot be undone.')) return;
     run(() => api('POST', `/activities/pending/${g.inboundId}/reject`));
   });
-  actions.append(approve, reject);
-  card.append(actions, error);
+
+  // ---- A known person, with something to post: one tap (option 6) ----
+  if (g.personId !== null && hasFiles) {
+    const person = people.find((p) => p.personId === g.personId);
+    const unitId = g.suggestedUnitId ?? generalUnitId();
+    const unitName = units.find((u) => u.unitId === unitId)?.name ?? 'a department';
+    const approve = button(
+      `Approve — ${person?.fullName ?? 'this person'}, ${unitName}`,
+      'primary wrap',
+    );
+    const change = button('Change');
+    buttons.push(approve, change, reject);
+    const form = make('div');
+    form.hidden = true;
+    const personSelect = make('select');
+    personSelect.id = id('who');
+    fillSelect(personSelect, peopleOptions(), g.personId);
+    const unit = unitSelect('unit', unitId);
+    const date = dateInput();
+    form.append(
+      field('Person', personSelect),
+      field('Department', unit),
+      field('Date of the activity', date),
+    );
+    change.addEventListener('click', () => {
+      form.hidden = false;
+      change.hidden = true;
+    });
+    approve.addEventListener('click', () =>
+      run(() =>
+        api('POST', `/activities/pending/${g.inboundId}/approve`, {
+          personId: form.hidden ? g.personId : personSelect.value,
+          unitId: form.hidden ? unitId : unit.value,
+          activityDate: date.value,
+        }),
+      ),
+    );
+    const row = make('div', 'row');
+    row.append(approve, change, reject);
+    card.append(form, row, error);
+    return card;
+  }
+
+  // ---- An unknown number: add it to the Directory (option 3), or post under someone ----
+  const name = make('input');
+  name.id = id('name');
+  name.maxLength = 200;
+  name.placeholder = 'Full name';
+  const post = make('input');
+  post.id = id('post');
+  post.maxLength = 200;
+  post.placeholder = 'Post, e.g. Health Officer';
+  const unit = unitSelect('newUnit', generalUnitId());
+  const add = button('Add to Directory', 'primary');
+  buttons.push(add, reject);
+  add.addEventListener('click', () => {
+    if (name.value.trim() === '') return name.focus();
+    if (post.value.trim() === '') return post.focus();
+    run(() =>
+      api('POST', `/activities/pending/${g.inboundId}/add-contact`, {
+        fullName: name.value.trim(),
+        designation: post.value.trim(),
+        unitId: unit.value,
+      }),
+    );
+  });
+  const addBox = make('div');
+  addBox.append(
+    make('h3', undefined, 'Add this number to the Directory'),
+    make(
+      'p',
+      'meta',
+      hasFiles
+        ? 'Their pictures are posted under them now, and from now on post by themselves. A Directory contact can also be sent emergency alerts — add officers only.'
+        : 'From now on their pictures post by themselves. A Directory contact can also be sent emergency alerts — add officers only.',
+    ),
+    field('Name', name),
+    field('Post', post),
+    field('Department', unit),
+  );
+  const addRow = make('div', 'row');
+  addRow.append(add, reject);
+  card.append(addBox, addRow);
+
+  if (hasFiles) {
+    const other = make('details');
+    other.append(make('summary', undefined, 'Or post it under someone already in the Directory'));
+    const personSelect = make('select');
+    personSelect.id = id('who');
+    fillSelect(personSelect, peopleOptions(), '');
+    const unit2 = unitSelect('unit', generalUnitId());
+    personSelect.addEventListener('change', () => {
+      const chosen = people.find((p) => p.personId === personSelect.value);
+      const u = chosen?.defaultUnitId ?? null;
+      if (u !== null && live.some((x) => x.value === u)) unit2.value = u;
+    });
+    const date = dateInput();
+    const approve = button('Approve');
+    buttons.push(approve);
+    approve.addEventListener('click', () =>
+      run(() =>
+        api('POST', `/activities/pending/${g.inboundId}/approve`, {
+          personId: personSelect.value,
+          unitId: unit2.value,
+          activityDate: date.value,
+        }),
+      ),
+    );
+    const row = make('div', 'row');
+    row.append(approve);
+    other.append(
+      field('Person', personSelect),
+      field('Department', unit2),
+      field('Date of the activity', date),
+      row,
+    );
+    card.append(other);
+  }
+  card.append(error);
   return card;
+}
+
+function peopleOptions(): { value: string; label: string }[] {
+  return [
+    { value: '', label: 'Choose a person' },
+    ...people.map((p) => ({
+      value: p.personId,
+      label: p.designation ? `${p.fullName} — ${p.designation}` : p.fullName,
+    })),
+  ];
 }
 
 async function loadPending(): Promise<void> {
@@ -781,6 +901,8 @@ const LOG_TEXT: Readonly<Record<string, string>> = {
   pending_approved: 'approved pictures sent on WhatsApp',
   pending_rejected: 'rejected pictures sent on WhatsApp',
   pending_expired: 'removed pictures sent on WhatsApp after 30 days',
+  audio_added: 'added a voice note',
+  contact_added: 'added a WhatsApp number to the Directory',
 };
 
 async function loadLog(): Promise<void> {
