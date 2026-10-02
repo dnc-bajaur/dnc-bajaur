@@ -113,8 +113,10 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   `D:\dnc-bajaur-pgdata`, port 5434, `scripts/dev-db.ps1 start`), `app/.env` (gitignored),
   app via `npm start` on `localhost:3100`; `npm run dev:account` / `npm run demo` for dev data.
   Never use the other district's cluster on this machine. Full suite runs locally (files run one
-  at a time). Rarely a test process exits mid-run here ("Worker exited unexpectedly", no file
-  named; cause unknown, never seen in CI) — re-run alone whichever file has no result.
+  at a time). Rarely a test process dies mid-run here ("Worker exited unexpectedly"; cause
+  unknown, never seen in CI). The run's end now names the file (`testing/crashTrace.ts`,
+  trace in `app/var/test-trace.log`). Seen so far: `groups.test.ts`, `integrity.test.ts` —
+  different files, dying before any test runs, no exit code; not reproducible on demand.
 - **Built (ADR-0038):** B1 `member` role + deny-by-default gate (gated `resolveSession` in
   `api/server.ts`, pinned by `memberGate.test.ts`; members land on `/activities.html`). B2
   Activities permissions (`domain/roles.ts`). B3 accounts with Post, `member` by default,

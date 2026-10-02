@@ -2,11 +2,13 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    setupFiles: ['./src/testing/loadEnv.ts'],
+    // `crashTrace` names the file whose test process died, when one does (see the file). First,
+    // so the per-file database clean in `loadEnv` is inside what it watches.
+    setupFiles: ['./src/testing/crashTrace.ts', './src/testing/loadEnv.ts'],
 
     // One query, once, to say whether the local test database still looks like a district.
     // See the file — this failure mode has cost an evening twice.
-    globalSetup: ['./src/testing/globalSetup.ts'],
+    globalSetup: ['./src/testing/globalSetup.ts', './src/testing/crashTraceGlobal.ts'],
 
     // Database tests share one cluster; run files serially so they cannot interleave.
     fileParallelism: false,
