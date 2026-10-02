@@ -734,6 +734,11 @@ export interface Contact {
   readonly phone: string;
   readonly isAdministration: boolean;
   readonly picture: string | null;
+  /**
+   * Whether this person can sign in (ADR-0038). Read by the contact drawer to offer "Give login"
+   * only where there is none yet. Optional because only the directory list reads it.
+   */
+  readonly hasLogin?: boolean;
 }
 
 /**
@@ -994,9 +999,11 @@ export async function listContacts(pool: Pool): Promise<readonly Contact[]> {
     picture: string | null;
     title: string;
     is_administration: boolean;
+    has_login: boolean | null;
   }>(
     `SELECT s.seat_id, s.title, s.is_administration,
-            p.person_id, p.full_name, p.phone, p.picture
+            p.person_id, p.full_name, p.phone, p.picture,
+            (p.password_hash IS NOT NULL) AS has_login
        FROM seat s
        LEFT JOIN duty_assignment d ON d.seat_id = s.seat_id AND d.to_at IS NULL
        LEFT JOIN person p ON p.person_id = d.person_id AND p.removed_at IS NULL
@@ -1017,6 +1024,7 @@ export async function listContacts(pool: Pool): Promise<readonly Contact[]> {
       phone: r.phone ?? '',
       isAdministration: r.is_administration,
       picture: r.picture,
+      hasLogin: r.has_login === true,
     }));
 }
 

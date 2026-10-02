@@ -64,7 +64,19 @@ export type Permission =
   /** Turn installation screens on and off (was in Administration — ADR-0016). */
   | 'capabilities.write'
   /** Arrange the dashboard wall (was in Administration — ADR-0015). */
-  | 'dashboard_layout.write';
+  | 'dashboard_layout.write'
+  /** Activities (ADR-0038/0039, Bajaur): post pictures and videos. */
+  | 'activities.upload'
+  /** Activities: see every post, not only one's own. */
+  | 'activities.read_all'
+  /** Activities: permanently delete one's own posts. */
+  | 'activities.delete_own'
+  /** Activities: hide, restore or permanently delete anybody's post (the Recycle bin). */
+  | 'activities.moderate'
+  /** Activities: create, rename and retire the Department list. */
+  | 'activities.departments'
+  /** Activities: approve or reject media that arrived from an unknown number (ADR-0040). */
+  | 'activities.pending';
 
 export const PERMISSIONS: readonly Permission[] = [
   'accounts.read',
@@ -80,11 +92,25 @@ export const PERMISSIONS: readonly Permission[] = [
   'security_policy.write',
   'capabilities.write',
   'dashboard_layout.write',
+  'activities.upload',
+  'activities.read_all',
+  'activities.delete_own',
+  'activities.moderate',
+  'activities.departments',
+  'activities.pending',
 ];
 
 export function isPermission(value: string): value is Permission {
   return (PERMISSIONS as readonly string[]).includes(value);
 }
+
+/**
+ * Activities defaults, ADR-0038 §3. Every role may upload and delete its own posts; only the DC
+ * (`owner`) and DNC (`admin`) moderate, keep the Department list and clear the Pending list.
+ * A `member` sees only their own posts. Any of these is changed per account by an override.
+ */
+const ACTIVITIES_OWN: readonly Permission[] = ['activities.upload', 'activities.delete_own'];
+const ACTIVITIES_ALL: readonly Permission[] = [...ACTIVITIES_OWN, 'activities.read_all'];
 
 /**
  * The base permission set for each role.
@@ -95,18 +121,24 @@ export function isPermission(value: string): value is Permission {
  * a security-policy floor. Putting those as separate permissions would multiply the enumeration
  * for three rules that are really *"is the subject a peer or above"*. See `api/settings.ts`.
  *
- * `operator` and `viewer` hold none of these: an operator's authority is operational (the
- * roster, the console's operational tabs) and is expressed as its own permissions when those
- * call sites are re-gated (ADR-0032 phase 2). A `viewer` differs from an `operator` only on the
- * operational write paths, which this file does not yet name.
+ * `operator` and `viewer` hold none of the account permissions — only Activities: an
+ * operator's authority is operational (the roster, the console's operational tabs) and is
+ * expressed as its own permissions when those call sites are re-gated (ADR-0032 phase 2). A
+ * `viewer` differs from an `operator` only on the operational write paths, which this file does
+ * not yet name.
  */
 const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   owner: PERMISSIONS,
   admin: PERMISSIONS,
-  operator: [],
-  viewer: [],
-  member: [],
+  operator: ACTIVITIES_ALL,
+  viewer: ACTIVITIES_ALL,
+  member: ACTIVITIES_OWN,
 };
+
+/** True for an Activities permission (ADR-0039), false for an account-management one. */
+export function isActivitiesPermission(p: Permission): boolean {
+  return p.startsWith('activities.');
+}
 
 export type OverrideEffect = 'allow' | 'deny';
 

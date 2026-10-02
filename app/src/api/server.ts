@@ -82,6 +82,7 @@ import {
   accessLog,
   clearOverride,
   createAccount,
+  grantLogin,
   dashboardLayout,
   forceLogout,
   installationCapabilities,
@@ -999,6 +1000,10 @@ async function handleSettings(
     }
     if (req.method === 'POST' && action === 'reactivate') {
       send(await reactivateAccount(pool, identity, subjectId));
+      return;
+    }
+    if (req.method === 'POST' && action === 'grant') {
+      send(await grantLogin(pool, identity, subjectId, input), 201);
       return;
     }
     if (req.method === 'POST' && action === 'reset-password') {

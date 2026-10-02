@@ -105,6 +105,12 @@ const PERMISSIONS: readonly { readonly key: string; readonly label: string }[] =
   { key: 'security_policy.write', label: 'Change the security policy' },
   { key: 'capabilities.write', label: 'Turn installation screens on and off' },
   { key: 'dashboard_layout.write', label: 'Arrange the dashboard wall' },
+  { key: 'activities.upload', label: 'Activities: post pictures and videos' },
+  { key: 'activities.read_all', label: "Activities: see everyone's posts" },
+  { key: 'activities.delete_own', label: 'Activities: delete own posts' },
+  { key: 'activities.moderate', label: "Activities: hide, restore or delete anyone's post" },
+  { key: 'activities.departments', label: 'Activities: keep the Department list' },
+  { key: 'activities.pending', label: 'Activities: approve pictures from unknown numbers' },
 ];
 
 interface Override {
@@ -115,6 +121,7 @@ interface Override {
 interface AccountView {
   readonly personId: string;
   readonly fullName: string;
+  readonly designation: string | null;
   readonly phone: string;
   readonly role: Role;
   readonly suspended: boolean;
@@ -661,14 +668,18 @@ export function mountSettings(): SettingsPanel {
     const bodyEl = document.createElement('div');
 
     const name = textInput('text');
+    const post = textInput('text');
     const phone = textInput('text');
-    const role = choiceSelect(roleChoices(), 'operator');
+    // `member` by default (ADR-0038 §5): most new accounts are officers posting Activities, and
+    // the control room is the deliberate choice, not the one left in place.
+    const role = choiceSelect(roleChoices(), 'member');
     const password = textInput('password');
     const passwordField = labelledField('Temporary password', password);
     wirePasswordEye(password);
 
     bodyEl.append(
       labelledField('Full name', name),
+      labelledField('Post', post),
       labelledField('Phone number', phone),
       labelledField('Role', role),
       passwordField,
@@ -677,7 +688,7 @@ export function mountSettings(): SettingsPanel {
       text(
         'p',
         'settings-drawer-note',
-        'They are made to change the password on first sign-in, so they never keep one you have seen. Only the owner may create an admin.',
+        'They are made to change the password on first sign-in, so they never keep one you have seen. Only the owner may create an admin. Someone already in the contact list gets their login from their contact instead.',
       ),
     );
 
@@ -697,6 +708,7 @@ export function mountSettings(): SettingsPanel {
         create.disabled = true;
         const done = await api<{ personId: string }>('POST', '/settings/accounts', {
           fullName,
+          designation: post.value.trim(),
           phone: number,
           role: role.value,
           password: pw,
@@ -709,7 +721,7 @@ export function mountSettings(): SettingsPanel {
 
     close = openDrawer(
       'Add an account',
-      'A new sign-in for the control room. The name appears in the access log and beside their reports.',
+      'A new sign-in. A member uses Activities only; any other role is the control room. The name appears in the access log.',
       bodyEl,
     ).close;
   }
@@ -740,6 +752,7 @@ export function mountSettings(): SettingsPanel {
     const bodyEl = document.createElement('div');
     bodyEl.append(
       detailList([
+        ['Post', a.designation ?? '—'],
         ['Phone', a.phone],
         ['Role', a.role],
         ['Status', status],

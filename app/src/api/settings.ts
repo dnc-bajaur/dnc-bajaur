@@ -188,6 +188,8 @@ function guardSubject(
 export interface AccountView {
   readonly personId: string;
   readonly fullName: string;
+  /** The post, as text (migration 0049). Null when none was given. Display only. */
+  readonly designation: string | null;
   readonly phone: string;
   readonly role: Role;
   readonly suspended: boolean;
@@ -207,13 +209,15 @@ export async function listAccounts(
   const accounts = await pool.query<{
     person_id: string;
     full_name: string | null;
+    designation: string | null;
     phone: string | null;
     role: string;
     suspended_at: string | null;
     must_change_password: boolean | null;
     last_sign_in_at: string | null;
   }>(
-    `SELECT p.person_id, p.full_name, p.phone, p.role, p.suspended_at, p.must_change_password,
+    `SELECT p.person_id, p.full_name, p.designation, p.phone, p.role, p.suspended_at,
+            p.must_change_password,
             (SELECT max(e.recorded_at) FROM access_event e
               WHERE e.subject_person_id = p.person_id AND e.type = 'login_succeeded') AS last_sign_in_at
        FROM person p
@@ -236,6 +240,7 @@ export async function listAccounts(
     value: accounts.rows.map((r) => ({
       personId: r.person_id,
       fullName: r.full_name ?? '',
+      designation: r.designation,
       phone: r.phone ?? '',
       role: asRole(r.role),
       suspended: r.suspended_at !== null,
@@ -263,23 +268,30 @@ export async function createAccount(
   if (denied !== null) return denied;
 
   const fullName = text(input['fullName']);
+  const designation = text(input['designation']);
   const phone = text(input['phone']);
   const role = text(input['role']) as Role;
   const password = typeof input['password'] === 'string' ? input['password'] : '';
 
   if (fullName === '') return refuse(400, 'a name is required');
   if (phone === '') return refuse(400, 'a phone number is required');
-  if (!(ROLES as readonly string[]).includes(role)) {
-    return refuse(400, `role must be one of ${ROLES.join(', ')}`);
-  }
-  // The owner is established at go-live and moves only by handover — never created here.
-  if (role === 'owner') {
-    return refuse(400, 'there is exactly one owner; hand it over from the owner account');
-  }
-  // Only the owner mints an admin. An admin creating an admin is an admin widening the set of
-  // accounts it cannot itself touch.
-  if (role === 'admin' && identity.role !== 'owner') {
-    return refuse(403, 'only the owner may create an admin account');
+  if (designation.length > 200) return refuse(400, 'that post is too long');
+  const roleRefused = refuseGrantedRole<{ readonly personId: string }>(identity, role);
+  if (roleRefused !== null) return roleRefused;
+
+  // ADR-0038 §5: one person never appears twice. A number already in the contact list gets its
+  // login from there ("Give login"), so the contact and the account stay one row.
+  const contact = await pool.query(
+    `SELECT 1 FROM person
+      WHERE phone = $1 AND password_hash IS NULL AND removed_at IS NULL AND NOT placeholder
+      LIMIT 1`,
+    [phone],
+  );
+  if (contact.rowCount !== 0) {
+    return refuse(
+      409,
+      'that number is already in the contact list — give them a login from their contact, so they are not listed twice',
+    );
   }
 
   let hash: string;
@@ -296,9 +308,9 @@ export async function createAccount(
   let personId: string;
   try {
     const res = await pool.query<{ person_id: string }>(
-      `INSERT INTO person (full_name, phone, password_hash, role, must_change_password)
-       VALUES ($1, $2, $3, $4, $5) RETURNING person_id`,
-      [fullName, phone, hash, role, mustChange],
+      `INSERT INTO person (full_name, phone, password_hash, role, must_change_password, designation)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING person_id`,
+      [fullName, phone, hash, role, mustChange, designation === '' ? null : designation],
     );
     personId = res.rows[0]!.person_id;
   } catch {
@@ -314,6 +326,106 @@ export async function createAccount(
   }).catch(() => {});
 
   return { ok: true, value: { personId } };
+}
+
+/**
+ * The roles an account may be given at creation, and by whom — shared by `createAccount` and
+ * `grantLogin` so the two doors cannot drift apart.
+ */
+function refuseGrantedRole<T>(identity: Identity, role: string): SettingsResult<T> | null {
+  if (!(ROLES as readonly string[]).includes(role)) {
+    return refuse(400, `role must be one of ${ROLES.join(', ')}`);
+  }
+  // The owner is established at go-live and moves only by handover — never created here.
+  if (role === 'owner') {
+    return refuse(400, 'there is exactly one owner; hand it over from the owner account');
+  }
+  // Only the owner mints an admin. An admin creating an admin is an admin widening the set of
+  // accounts it cannot itself touch.
+  if (role === 'admin' && identity.role !== 'owner') {
+    return refuse(403, 'only the owner may create an admin account');
+  }
+  return null;
+}
+
+//------------------------------------------------------------------------------
+// Accounts — give a contact a login (ADR-0038 §5)
+//------------------------------------------------------------------------------
+
+/**
+ * Give a person already in the contact list a sign-in — "Give login".
+ *
+ * The contact's own row gets the password and the role, so the person is never listed twice:
+ * their name, number and post are the ones the directory already holds. The post (the seat's
+ * title) is copied onto the account for display. The same permission and the same role rules
+ * as `createAccount`; the password is temporary and must be changed at first sign-in.
+ */
+export async function grantLogin(
+  pool: Pool,
+  identity: Identity,
+  subjectId: string,
+  input: Record<string, unknown>,
+): Promise<SettingsResult<{ readonly personId: string }>> {
+  const denied = await requirePermission<{ readonly personId: string }>(
+    pool,
+    identity,
+    'accounts.create',
+  );
+  if (denied !== null) return denied;
+
+  const role = text(input['role']);
+  const roleRefused = refuseGrantedRole<{ readonly personId: string }>(identity, role);
+  if (roleRefused !== null) return roleRefused;
+
+  const found = await pool.query<{
+    full_name: string;
+    has_hash: boolean;
+    placeholder: boolean;
+    post: string | null;
+  }>(
+    `SELECT p.full_name, (p.password_hash IS NOT NULL) AS has_hash, p.placeholder,
+            (SELECT s.title FROM duty_assignment d JOIN seat s ON s.seat_id = d.seat_id
+              WHERE d.person_id = p.person_id AND d.to_at IS NULL AND s.retired_at IS NULL
+              ORDER BY d.from_at DESC LIMIT 1) AS post
+       FROM person p
+      WHERE p.person_id = $1 AND p.removed_at IS NULL`,
+    [subjectId],
+  );
+  const contact = found.rows[0];
+  if (contact === undefined) return refuse(404, 'no such contact');
+  if (contact.has_hash) return refuse(409, 'this contact already has a login');
+  if (contact.placeholder) {
+    return refuse(400, 'this is a stand-in number, not a person — put the real officer in first');
+  }
+
+  let hash: string;
+  try {
+    hash = await hashPassword(typeof input['password'] === 'string' ? input['password'] : '');
+  } catch (e) {
+    return refuse(400, (e as Error).message);
+  }
+
+  try {
+    await pool.query(
+      `UPDATE person
+          SET password_hash = $2, role = $3, must_change_password = true,
+              designation = COALESCE(designation, $4)
+        WHERE person_id = $1 AND password_hash IS NULL`,
+      [subjectId, hash, role, contact.post],
+    );
+  } catch {
+    // Migration 0045: one live account per number. Another account already holds this one.
+    return refuse(409, 'that phone number already has an account');
+  }
+
+  await recordAccessEvent(pool, {
+    type: 'granted',
+    actorPersonId: identity.personId,
+    subjectPersonId: subjectId,
+    after: { role, fullName: contact.full_name, fromContact: true },
+  }).catch(() => {});
+
+  return { ok: true, value: { personId: subjectId } };
 }
 
 //------------------------------------------------------------------------------

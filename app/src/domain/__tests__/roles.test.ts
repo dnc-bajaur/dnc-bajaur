@@ -3,8 +3,8 @@
  *
  * Pure, no database. Two things are protected:
  *
- *   * **the base sets** — `operator` and `viewer` hold none of the account-management
- *     permissions, and `owner`/`admin` hold all of them. A widening here is an access
+ *   * **the base sets** — `operator`, `viewer` and `member` hold none of the account-management
+ *     permissions, and `owner`/`admin` hold all of them; the Activities defaults (ADR-0038 §3). A widening here is an access
  *     decision, not a refactor.
  *   * **deny wins** — an `allow` cannot buy back a permission a `deny` took away, and a
  *     `deny` on a permission the role never had is simply a no-op.
@@ -16,6 +16,7 @@ import {
   PERMISSIONS,
   ROLES,
   can,
+  isActivitiesPermission,
   isAdministrative,
   isPermission,
   resolvePermissions,
@@ -46,8 +47,41 @@ describe('base role sets', () => {
 
   it('gives operator, viewer and member none of the account-management permissions', () => {
     for (const role of ['operator', 'viewer', 'member'] as const) {
-      expect(resolvePermissions(role, []).size).toBe(0);
+      const accounts = [...resolvePermissions(role, [])].filter((p) => !isActivitiesPermission(p));
+      expect(accounts, role).toEqual([]);
     }
+  });
+
+  /** ADR-0038 §3, row for row. A change here is an access decision for the DC, not a refactor. */
+  it('sets the Activities defaults the ADR states', () => {
+    const activities = (role: Role): string[] =>
+      [...resolvePermissions(role, [])].filter(isActivitiesPermission).sort();
+    const everything = PERMISSIONS.filter(isActivitiesPermission).sort();
+
+    expect(activities('owner')).toEqual(everything);
+    expect(activities('admin')).toEqual(everything);
+    for (const role of ['operator', 'viewer'] as const) {
+      expect(activities(role), role).toEqual([
+        'activities.delete_own',
+        'activities.read_all',
+        'activities.upload',
+      ]);
+    }
+    expect(activities('member')).toEqual(['activities.delete_own', 'activities.upload']);
+  });
+
+  it('lets the DC widen or narrow one account', () => {
+    expect(can('member', [], 'activities.read_all')).toBe(false);
+    expect(
+      can(
+        'member',
+        [{ permission: 'activities.read_all', effect: 'allow' }],
+        'activities.read_all',
+      ),
+    ).toBe(true);
+    expect(
+      can('operator', [{ permission: 'activities.upload', effect: 'deny' }], 'activities.upload'),
+    ).toBe(false);
   });
 
   it('isAdministrative is true only for owner and admin', () => {
@@ -101,8 +135,8 @@ describe('overrides — deny wins', () => {
 
   it('a deny on a permission the role never had is a no-op, not an error', () => {
     expect(
-      resolvePermissions('viewer', [{ permission: 'accounts.remove', effect: 'deny' }]).size,
-    ).toBe(0);
+      resolvePermissions('viewer', [{ permission: 'accounts.remove', effect: 'deny' }]),
+    ).toEqual(resolvePermissions('viewer', []));
   });
 
   it('resolvePermissions returns only real permissions', () => {

@@ -215,6 +215,138 @@ maybe('the Settings account model', () => {
   });
 
   //--------------------------------------------------------------------------
+  // Member accounts and "Give login" — ADR-0038 §5, Bajaur
+  //--------------------------------------------------------------------------
+
+  /** A directory contact: a post and its holder, with no login — as `load-directory` makes. */
+  async function makeContact(
+    opts: { placeholder?: boolean } = {},
+  ): Promise<{ personId: string; phone: string }> {
+    const phone = `+92340${randomUUID().slice(0, 7)}`;
+    const seat = await pool.query<{ seat_id: string }>(
+      `INSERT INTO seat (title, tier, is_administration) VALUES ($1, 'post', false) RETURNING seat_id`,
+      ['Rescue 1122 Duty Officer'],
+    );
+    const person = await pool.query<{ person_id: string }>(
+      `INSERT INTO person (full_name, phone, placeholder) VALUES ($1, $2, $3) RETURNING person_id`,
+      ['Contact Officer', phone, opts.placeholder ?? false],
+    );
+    await pool.query('INSERT INTO duty_assignment (seat_id, person_id) VALUES ($1, $2)', [
+      seat.rows[0]!.seat_id,
+      person.rows[0]!.person_id,
+    ]);
+    return { personId: person.rows[0]!.person_id, phone };
+  }
+
+  it('creates a member with a post, shown on the account list', async () => {
+    const owner = await makeAccount({ role: 'owner' });
+    const token = await tokenFor(owner.phone);
+
+    const made = await call('POST', '/settings/accounts', token, {
+      fullName: 'TMA Officer',
+      designation: 'Tehsil Municipal Officer',
+      phone: `+92312${randomUUID().slice(0, 7)}`,
+      role: 'member',
+      password: PW,
+    });
+    expect(made.status).toBe(201);
+    const { personId } = (await made.json()) as { personId: string };
+
+    const list = (await (await call('GET', '/settings/accounts', token)).json()) as Array<{
+      personId: string;
+      role: string;
+      designation: string | null;
+    }>;
+    const row = list.find((r) => r.personId === personId);
+    expect(row?.role).toBe('member');
+    expect(row?.designation).toBe('Tehsil Municipal Officer');
+  });
+
+  it('refuses a new account for a number already in the contact list (409)', async () => {
+    const owner = await makeAccount({ role: 'owner' });
+    const contact = await makeContact();
+
+    const res = await call('POST', '/settings/accounts', await tokenFor(owner.phone), {
+      fullName: 'Second Copy',
+      phone: contact.phone,
+      role: 'member',
+      password: PW,
+    });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toMatch(/contact list/);
+  });
+
+  it('gives a contact a login on the same row, which then signs in as a member', async () => {
+    const owner = await makeAccount({ role: 'owner' });
+    const contact = await makeContact();
+
+    const res = await call(
+      'POST',
+      `/settings/accounts/${contact.personId}/grant`,
+      await tokenFor(owner.phone),
+      { role: 'member', password: PW },
+    );
+    expect(res.status).toBe(201);
+
+    const row = await pool.query<{
+      role: string;
+      must_change_password: boolean;
+      designation: string | null;
+      n: string;
+    }>(
+      `SELECT role, must_change_password, designation,
+              (SELECT count(*) FROM person WHERE phone = $2) AS n
+         FROM person WHERE person_id = $1`,
+      [contact.personId, contact.phone],
+    );
+    expect(row.rows[0]).toMatchObject({
+      role: 'member',
+      must_change_password: true,
+      designation: 'Rescue 1122 Duty Officer',
+      n: '1',
+    });
+    expect(await login(pool, contact.phone, PW)).not.toBeNull();
+    expect((await eventsFor(contact.personId, 'granted')).length).toBe(1);
+  });
+
+  it('refuses giving a login twice, to a stand-in, or by an operator', async () => {
+    const owner = await makeAccount({ role: 'owner' });
+    const ownerToken = await tokenFor(owner.phone);
+
+    const contact = await makeContact();
+    const grant = (id: string, token: string): Promise<Response> =>
+      call('POST', `/settings/accounts/${id}/grant`, token, { role: 'member', password: PW });
+
+    expect((await grant(contact.personId, ownerToken)).status).toBe(201);
+    expect((await grant(contact.personId, ownerToken)).status).toBe(409);
+
+    const standIn = await makeContact({ placeholder: true });
+    expect((await grant(standIn.personId, ownerToken)).status).toBe(400);
+
+    const operator = await makeAccount({ role: 'operator' });
+    const other = await makeContact();
+    expect((await grant(other.personId, await tokenFor(operator.phone))).status).toBe(403);
+  });
+
+  it('applies the creation role rules to Give login', async () => {
+    const admin = await makeAccount({ role: 'admin' });
+    const contact = await makeContact();
+    const token = await tokenFor(admin.phone);
+
+    const asOwner = await call('POST', `/settings/accounts/${contact.personId}/grant`, token, {
+      role: 'owner',
+      password: PW,
+    });
+    expect(asOwner.status).toBe(400);
+
+    const asAdmin = await call('POST', `/settings/accounts/${contact.personId}/grant`, token, {
+      role: 'admin',
+      password: PW,
+    });
+    expect(asAdmin.status).toBe(403);
+  });
+
+  //--------------------------------------------------------------------------
   // Role
   //--------------------------------------------------------------------------
 

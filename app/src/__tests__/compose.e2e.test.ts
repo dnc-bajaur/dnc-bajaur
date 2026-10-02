@@ -175,15 +175,22 @@ describe.skipIf(dbUrl === undefined)('the compose form follows the kind', () => 
 
     // Read back from the database rather than from the screen. A form that draws a Venue field
     // and drops it on submit looks perfect in a screenshot.
-    const { rows } = await pool.query<{
-      payload: { kind?: string; details?: Record<string, string> };
-    }>(
-      `SELECT payload FROM incident_event
-        WHERE type = 'reported' AND payload->>'kind' = 'meeting'
-        ORDER BY recorded_at DESC LIMIT 1`,
-    );
+    //
+    // Polled, as 5b does: `#sent` means *durable in the outbox*, not *synced* — the push to the
+    // server follows it. Read once, this raced the sync and failed under a loaded full run.
+    type Payload = { kind?: string; details?: Record<string, string> };
+    const deadline = Date.now() + 15_000;
+    let payload: Payload | undefined;
+    while (Date.now() < deadline && payload === undefined) {
+      const { rows } = await pool.query<{ payload: Payload }>(
+        `SELECT payload FROM incident_event
+          WHERE type = 'reported' AND payload->>'kind' = 'meeting'
+          ORDER BY recorded_at DESC LIMIT 1`,
+      );
+      payload = rows[0]?.payload;
+      if (payload === undefined) await new Promise((r) => setTimeout(r, 150));
+    }
 
-    const payload = rows[0]?.payload;
     expect(payload, 'a meeting should have reached the log').toBeDefined();
     expect(payload?.details).toMatchObject({
       subject: 'Monthly coordination',

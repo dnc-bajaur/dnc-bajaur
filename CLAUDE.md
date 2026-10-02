@@ -118,8 +118,10 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   port 5434; app on `localhost:3100`. Never use the other cluster on this machine.
 - Local DB + app on `localhost:3100` work (`PLAN.md` §5). Full suite passes locally; on this
   machine a worker occasionally crashes under parallel load — re-run that file alone.
-- **Next:** B2 (Activities permissions), then B3 (accounts by Name/Post/Phone, "Give login"),
-  then C1 — order in `PLAN.md` §4. Collect Bajaur's facts (§2) in parallel.
+- **B2/B3 done (2026-10-02):** Activities permissions (`domain/roles.ts`); accounts with Post,
+  `member` by default; "Give login" on a contact (`POST /settings/accounts/:id/grant`).
+- **Next:** C1 — Activities with photos (tables, Department list, upload, views, delete,
+  Recycle bin) per ADR-0039; order in `PLAN.md` §4. Collect Bajaur's facts (§2) in parallel.
 
 ## 6. Repository map
 

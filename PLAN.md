@@ -72,8 +72,8 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 | Step | What | Decision | Needs before go-live |
 |---|---|---|---|
 | B1 ✅ | `member` role + **one deny-by-default gate**: a member reaches only Activities, own password, sign-out and the app shell. Permanent test walks **every** route (INV-05) | [ADR-0038](docs/adr/ADR-0038-member-accounts.md) | — |
-| B2 | Activities permissions in `domain/roles.ts` (table in ADR-0038 §3) + per-account allow/deny | ADR-0038 | — |
-| B3 | Accounts by Name / Post (`person.designation`) / Phone / default department; "Give login" from the contact list; temporary password, changed at first sign-in | ADR-0038 | — |
+| B2 ✅ | Activities permissions in `domain/roles.ts` (table in ADR-0038 §3) + per-account allow/deny | ADR-0038 | — |
+| B3 ✅ | Accounts by Name / Post (`person.designation`) / Phone, `member` by default; a contact's number is refused there and given its login from the contact drawer ("Give login", same row); temporary password, changed at first sign-in. *Default Activity department moves to C1, where the Department list is made.* | ADR-0038 | — |
 | C1 | Activities, **photos**: tables, Department list (DC), post (date, caption, place, ≤10 photos, compressed on the phone), views by department / person / date, soft + hard delete, Recycle bin, log | [ADR-0039](docs/adr/ADR-0039-activities.md) | server disk |
 | C2 | 30-day auto-delete + 3-day warning + ZIP download; media backup | ADR-0039 | Bajaur's media bucket |
 | A | **"Install this app" banner** — one tap on Android/Windows (Chrome, Edge); "Share → Add to Home Screen" steps on iPhone | — | domain + HTTPS (D-04) |
@@ -92,6 +92,9 @@ Known inherited bugs (found 2026-10-02):
 - [ ] `installer/runtime/first-run.mjs` still inserts into the dropped `department` table — the
       Windows installer cannot create the first account. Fix before any Windows install.
 - [x] `npm run dev:account` and `npm run demo` used the dropped `department` table — fixed.
+- [ ] `web/src/admin.ts` contact cards are built with `innerHTML` from the contact's name,
+      post and number, unescaped. Only the administration enters those, but a name containing
+      markup would run in every admin's console. Fix (build with `textContent`) before go-live.
 
 ## 5. To verify (open points)
 

@@ -1250,7 +1250,10 @@ declare const self: ServiceWorkerGlobalScope;
 // v258: Bajaur's `member` accounts (ADR-0038) — the shell sends a member to `/activities.html`,
 // a page of its own the service worker never answers with the shell; storage keys and the
 // session cookie are Bajaur's own. `main.ts` and `index.html` moved, so the bump.
-const CACHE = 'dnc-shell-v258';
+// v259: Bajaur B2/B3 (ADR-0038) — Activities permissions in the overrides editor, "Post" and a
+// `member` default on Add account, and "Give login" in the contact drawer. Settings and the
+// office bundle moved, so the bump.
+const CACHE = 'dnc-shell-v259';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.

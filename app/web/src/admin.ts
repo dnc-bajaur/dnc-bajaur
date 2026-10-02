@@ -787,10 +787,14 @@ export function mountAdmin(): AdminConsole {
     phone: string;
     isAdministration: boolean;
     picture: string | null;
+    /** Whether this person can already sign in (ADR-0038). */
+    hasLogin?: boolean;
   }
 
   interface DirectoryContact {
     id: string;
+    personId: string;
+    hasLogin: boolean;
     name: string;
     role: string;
     phone: string;
@@ -985,7 +989,79 @@ export function mountAdmin(): AdminConsole {
       })();
     });
 
+    if (!contact.hasLogin) {
+      form.append(
+        giveLoginSection(contact, () => {
+          drawer.close();
+          onChanged();
+        }),
+      );
+    }
+
     drawer.open(title, sub, form);
+  }
+
+  /**
+   * "Give login" — ADR-0038 §5, Bajaur.
+   *
+   * The contact's own row gets a sign-in, so the person is never listed twice: the name, number
+   * and post are the directory's. `member` by default — an officer who posts Activities and
+   * reaches nothing else. The server checks `accounts.create` and the role rules (INV-05);
+   * offering the section only to the administration is the courtesy.
+   */
+  function giveLoginSection(contact: DirectoryContact, onDone: () => void): HTMLElement {
+    const section = document.createElement('div');
+    section.className = 'd-field';
+    section.append(
+      text('label', 'd-label', 'Give login'),
+      text(
+        'p',
+        'note',
+        'Lets this person sign in with their phone number. A member uses Activities only; any other role is the control room. They must change the temporary password at first sign-in.',
+      ),
+    );
+
+    const role = document.createElement('select');
+    role.className = 'd-input';
+    for (const [value, label] of [
+      ['member', 'member — Activities only'],
+      ['operator', 'operator — control room'],
+      ['viewer', 'viewer'],
+      ['admin', 'admin (owner only)'],
+    ] as const) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label;
+      role.append(opt);
+    }
+
+    const password = document.createElement('input');
+    password.type = 'password';
+    password.className = 'd-input';
+    password.autocomplete = 'new-password';
+    password.placeholder = 'Temporary password (at least 12 characters)';
+
+    const give = document.createElement('button');
+    give.type = 'button';
+    give.className = 'd-btn primary';
+    give.textContent = 'Give login';
+    give.addEventListener('click', () => {
+      void (async () => {
+        if (password.value === '') return password.focus();
+        give.disabled = true;
+        const done = await api(
+          'POST',
+          `/settings/accounts/${contact.personId}/grant`,
+          { role: role.value, password: password.value },
+          drawer.sink,
+        );
+        give.disabled = false;
+        if (done !== null) onDone();
+      })();
+    });
+
+    section.append(role, password, give);
+    return section;
   }
 
   async function renderDepartments(mine: number): Promise<void> {
@@ -1056,6 +1132,8 @@ export function mountAdmin(): AdminConsole {
       const admin = c.isAdministration === true;
       return {
         id: c.seatId,
+        personId: c.personId,
+        hasLogin: c.hasLogin === true,
         name: c.fullName,
         role: c.designation,
         phone: c.phone.trim() === '' ? 'No mobile number' : c.phone,
