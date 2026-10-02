@@ -112,8 +112,9 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
 - **Local dev works:** Bajaur's own PostgreSQL 17 (`D:\dnc-bajaur-postgres`, data
   `D:\dnc-bajaur-pgdata`, port 5434, `scripts/dev-db.ps1 start`), `app/.env` (gitignored),
   app via `npm start` on `localhost:3100`; `npm run dev:account` / `npm run demo` for dev data.
-  Never use the other district's cluster on this machine. Full suite runs locally; a worker
-  occasionally crashes under parallel load here — re-run that file alone.
+  Never use the other district's cluster on this machine. Full suite runs locally (files run one
+  at a time). Rarely a test process exits mid-run here ("Worker exited unexpectedly", no file
+  named; cause unknown, never seen in CI) — re-run alone whichever file has no result.
 - **Built (ADR-0038):** B1 `member` role + deny-by-default gate (gated `resolveSession` in
   `api/server.ts`, pinned by `memberGate.test.ts`; members land on `/activities.html`). B2
   Activities permissions (`domain/roles.ts`). B3 accounts with Post, `member` by default,
