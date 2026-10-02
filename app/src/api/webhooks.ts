@@ -94,6 +94,11 @@ import {
 } from '../ops/whatsapp.js';
 import { defaultEvidenceRoot, store } from '../ops/evidence.js';
 import {
+  takeForActivities,
+  type Prefetched,
+  type WhatsAppActivities,
+} from './whatsappActivities.js';
+import {
   ACKNOWLEDGE_REPLY,
   ATTENDING_REPLY,
   DECLINED_REPLY,
@@ -168,6 +173,12 @@ export async function handleWhatsAppWebhook(
    * from the same place the other three do.
    */
   evidenceRoot: string = defaultEvidenceRoot(),
+  /**
+   * WhatsApp → Activities (ADR-0040). Absent: switched off, and every photo and video takes
+   * today's path exactly as before. Present: a photo or video is decided on first — see
+   * `api/whatsappActivities.ts` — and only the emergency branch reaches `recordReply`.
+   */
+  activities?: WhatsAppActivities,
 ): Promise<WebhookReply> {
   if (config === null) {
     return { status: 404, body: 'whatsapp is not configured', contentType: TEXT };
@@ -306,6 +317,52 @@ export async function handleWhatsAppWebhook(
       }
     }
 
+    /**
+     * **Activities first, for a photo or a video, and for a tap on its two buttons** — ADR-0040.
+     *
+     * A sender with an open emergency is asked which it is, and *Emergency report* hands the media
+     * back to `recordReply` below, unchanged, with the bytes already fetched. Everything else —
+     * words, a voice note, a document, a pin, every other tap — returns `false` here and goes on
+     * exactly as before.
+     */
+    if (activities !== undefined) {
+      const taken = await takeForActivities(
+        {
+          pool,
+          config,
+          fetchImpl,
+          activities,
+          emergency: (held) =>
+            recordReply({
+              pool,
+              config,
+              evidenceRoot,
+              fromPhone: reply.fromPhone,
+              text: held.text,
+              at: held.at,
+              tapped: false,
+              fetchImpl,
+              media: held.media,
+              prefetched: held.prefetched,
+              chosen: true,
+              ...(held.replyContextId === undefined ? {} : { replyContextId: held.replyContextId }),
+            }),
+        },
+        {
+          fromPhone: reply.fromPhone,
+          messageId: reply.messageId,
+          text: reply.text,
+          at: reply.at,
+          ...(reply.media === undefined ? {} : { media: reply.media }),
+          ...(reply.replyId === undefined ? {} : { replyId: reply.replyId }),
+          ...(reply.contextMessageId === undefined
+            ? {}
+            : { replyContextId: reply.contextMessageId }),
+        },
+      );
+      if (taken) continue;
+    }
+
     await recordReply({
       pool,
       config,
@@ -430,6 +487,18 @@ interface ReplyToRecord {
    * `InboundReply.contextMessageId`, and `messageById`.
    */
   readonly replyContextId?: string;
+  /**
+   * The file's bytes, already fetched — ADR-0040. Set only when the media was held while the
+   * officer was asked *emergency report or daily activity?*, so it is not fetched from Meta twice
+   * (and Meta's link may have expired in the meantime).
+   */
+  readonly prefetched?: Prefetched;
+  /**
+   * The officer **chose** this incident by tapping *Emergency report* under a question naming it —
+   * ADR-0040. The match is exact, and the note says so in those words rather than claiming they
+   * used WhatsApp's reply control.
+   */
+  readonly chosen?: boolean;
 }
 
 async function recordReply(reply: ReplyToRecord): Promise<void> {
@@ -667,6 +736,7 @@ async function recordReply(reply: ReplyToRecord): Promise<void> {
           message.incidentId,
           attempt,
           fetchImpl,
+          reply.prefetched,
         );
 
   /**
@@ -779,9 +849,11 @@ async function recordReply(reply: ReplyToRecord): Promise<void> {
            * recent alert"* over an exact match would understate what the record knows, and the
            * reverse would be worse — so the sentence follows which of the two actually happened.
            */
-          (exact
-            ? '\n(they replied to this incident’s own message — the match is exact)'
-            : '\n(matched to this incident from the most recent alert sent to that number — the match is inferred)'),
+          (exact && reply.chosen === true
+            ? '\n(they chose this incident on WhatsApp when asked about their picture — the match is exact)'
+            : exact
+              ? '\n(they replied to this incident’s own message — the match is exact)'
+              : '\n(matched to this incident from the most recent alert sent to that number — the match is inferred)'),
         ...(kept !== null && kept.ok ? { evidenceIds: [kept.evidenceId] } : {}),
         /**
          * 🔴 **This note IS the officer's acknowledgement when it IS their response — 2026-09-04.**
@@ -1192,8 +1264,13 @@ async function keepEvidence(
   incidentId: string,
   attempt: { readonly personId?: string | null; readonly seatId?: string | null } | undefined,
   fetchImpl: typeof fetch,
+  /** Already fetched while the officer was asked which it is (ADR-0040). */
+  prefetched?: Prefetched,
 ): Promise<KeptEvidence> {
-  const got = await downloadMedia(config, media.mediaId, fetchImpl);
+  const got =
+    prefetched === undefined
+      ? await downloadMedia(config, media.mediaId, fetchImpl)
+      : ({ ok: true, ...prefetched } as const);
 
   if (!got.ok) {
     log('warn', 'inbound whatsapp media could not be fetched', {

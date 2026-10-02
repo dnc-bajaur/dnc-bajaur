@@ -148,6 +148,7 @@ import type { Nightly } from '../jobs/nightly.js';
 import { correlationIdFrom, log, withContext } from '../obs/log.js';
 import {
   addPhoto,
+  changeDate,
   createPost,
   createUnit,
   defaultActivitiesRoot,
@@ -169,6 +170,14 @@ import {
   uploadState,
   type ActivitiesResult,
 } from './activities.js';
+import {
+  approvePending,
+  listPending,
+  rejectPending,
+  senderTeller,
+  servePendingMedia,
+  type WhatsAppActivities,
+} from './whatsappActivities.js';
 
 /**
  * The sync server. Plain `node:http`, no framework — see ADR-0007.
@@ -206,6 +215,12 @@ export interface ServerOptions {
    * than at its next timed pass (`jobs/activitiesVideo.ts`). Absent: the timed pass finds it.
    */
   readonly onVideoUploaded?: () => void;
+  /**
+   * WhatsApp → Activities (ADR-0040): photos and videos sent to the district's number become
+   * Activities. Off unless set — `main.ts` sets it unless `WHATSAPP_ACTIVITIES=off`. Off, every
+   * photo and video takes the evidence path exactly as before. The Pending list works either way.
+   */
+  readonly activitiesFromWhatsApp?: boolean;
   /**
    * Whether Bajaur's media bucket is set up (ADR-0039 §8), for the DC's warning to say so.
    * Absent means not set up — the honest default.
@@ -1072,8 +1087,13 @@ async function handleActivities(
   root: string,
   backup: { readonly configured: boolean; readonly why: string | null },
   onVideoUploaded: (() => void) | undefined,
+  tellSender: ((phone: string, text: string) => Promise<void>) | undefined,
 ): Promise<void> {
   const pathname = url.pathname;
+  const fromWhatsApp: WhatsAppActivities = {
+    root,
+    ...(onVideoUploaded === undefined ? {} : { onVideo: onVideoUploaded }),
+  };
   const send = <T>(result: ActivitiesResult<T>, okStatus = 200): void => {
     if (!result.ok) json(res, result.status, { error: result.error });
     else json(res, okStatus, result.value);
@@ -1150,7 +1170,37 @@ async function handleActivities(
     return notAllowed();
   }
 
-  const post = /^\/activities\/posts\/([^/]+)(?:\/(photos|videos|hide|restore))?$/.exec(pathname);
+  // The Pending list (ADR-0040): WhatsApp media the DC approves or rejects.
+  if (pathname === '/activities/pending') {
+    if (req.method !== 'GET') return notAllowed();
+    return send(await listPending(pool, identity));
+  }
+
+  const pendingMedia = /^\/activities\/pending\/media\/([^/]+)$/.exec(pathname);
+  if (pendingMedia !== null) {
+    if (req.method !== 'GET') return notAllowed();
+    if (!UUID_RE.test(pendingMedia[1]!)) return void json(res, 404, { error: 'no such file' });
+    const reply = await servePendingMedia(pool, root, res, identity, pendingMedia[1]!);
+    if (reply !== null && !reply.ok) json(res, reply.status, { error: reply.error });
+    return;
+  }
+
+  const pending = /^\/activities\/pending\/([^/]+)\/(approve|reject)$/.exec(pathname);
+  if (pending !== null) {
+    if (req.method !== 'POST') return notAllowed();
+    if (!UUID_RE.test(pending[1]!)) {
+      return void json(res, 404, { error: 'this is no longer on the Pending list' });
+    }
+    if (pending[2] === 'reject')
+      return send(await rejectPending(pool, root, identity, pending[1]!));
+    const input = await bodyOf(req);
+    if (input === null) return bad();
+    return send(await approvePending(pool, fromWhatsApp, identity, pending[1]!, input, tellSender));
+  }
+
+  const post = /^\/activities\/posts\/([^/]+)(?:\/(photos|videos|hide|restore|date))?$/.exec(
+    pathname,
+  );
   if (post !== null) {
     const postId = post[1]!;
     const action = post[2];
@@ -1168,6 +1218,11 @@ async function handleActivities(
     }
     if (req.method === 'POST' && (action === 'hide' || action === 'restore')) {
       return send(await moderatePost(pool, identity, postId, action));
+    }
+    if (req.method === 'PUT' && action === 'date') {
+      const input = await bodyOf(req);
+      if (input === null) return bad();
+      return send(await changeDate(pool, identity, postId, input));
     }
     return notAllowed();
   }
@@ -2187,6 +2242,14 @@ export function createSyncServer(options: ServerOptions): Server {
             // recomputed — see `defaultEvidenceRoot`, which exists because two copies of this
             // join once disagreed and the symptom was a file nobody could find.
             evidenceRoot,
+            options.activitiesFromWhatsApp === true
+              ? {
+                  root: activitiesRoot,
+                  ...(options.onVideoUploaded === undefined
+                    ? {}
+                    : { onVideo: options.onVideoUploaded }),
+                }
+              : undefined,
           );
           res.writeHead(reply.status, { 'content-type': reply.contentType });
           res.end(reply.body);
@@ -3299,6 +3362,7 @@ export function createSyncServer(options: ServerOptions): Server {
             activitiesRoot,
             activitiesBackup,
             options.onVideoUploaded,
+            senderTeller(pool, whatsapp, options.whatsappFetch ?? fetch),
           );
           return;
         }

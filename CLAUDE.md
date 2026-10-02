@@ -134,8 +134,13 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   (ffmpeg → 720p + poster; missing ffmpeg = wait, not fail), Range playback. Local ffmpeg:
   `D:\dnc-bajaur-ffmpeg` via `FFMPEG_PATH`/`FFPROBE_PATH` in `app/.env`. `/activities` never
   cached by the service worker (v263).
-- **Next:** D — WhatsApp → Activities (ADR-0040; buildable locally, go-live needs Bajaur's Meta
-  account). Small open items in `PLAN.md` §4 (C3 notes, known bugs).
+- **Built (ADR-0040) D:** WhatsApp → Activities — migration 0053, `api/whatsappActivities.ts`
+  (decided before `recordReply`; open emergency → two buttons, *Emergency report* runs today's
+  path with the bytes already fetched), minute sweep `jobs/activitiesInbound.ts`, Pending tab +
+  Change date on the page. `WHATSAPP_ACTIVITIES=off` switches it off. Tested with a stubbed Meta
+  only; go-live needs Bajaur's Meta account.
+- **Next:** small open items in `PLAN.md` §4 (C3 notes, D notes, known bugs), then the go-live
+  checklist (§3) as the owner supplies §2.
 
 ## 6. Repository map
 

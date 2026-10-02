@@ -78,7 +78,17 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 | C2 ✅ | 30-day auto-delete + 3-day warning + ZIP download; media backup | ADR-0039 | Bajaur's media bucket (`ACTIVITIES_S3_BUCKET`, 30-day lifecycle rule) |
 | A ✅ | **"Install this app" banner** — one tap on Android/Windows (Chrome, Edge); "Share → Add to Home Screen" steps on iPhone | — | domain + HTTPS (D-04) |
 | C3 ✅ | Activities, **videos**: resumable chunks, ≤3 min, server → 720p (ffmpeg), processing/ready/failed, `doctor` lists failures | ADR-0039 | ffmpeg on server |
-| D | **WhatsApp → Activities**, same number; open emergency → two buttons; unknown numbers → Pending list | [ADR-0040](docs/adr/ADR-0040-whatsapp-to-activities.md) | Bajaur's **new** Meta portfolio |
+| D ✅ | **WhatsApp → Activities**, same number; open emergency → two buttons; unknown numbers → Pending list | [ADR-0040](docs/adr/ADR-0040-whatsapp-to-activities.md) | Bajaur's **new** Meta portfolio |
+
+D notes (2026-10-02):
+- Built and tested locally with a stubbed Meta (`whatsappActivities.test.ts`); **go-live needs
+  Bajaur's new Meta portfolio and number** (§3). On unless `WHATSAPP_ACTIVITIES=off`.
+- Decisions the ADR left open are written down in ADR-0040's implementation notes (button titles,
+  what counts as an open emergency, replies, late taps, the 30-day rule for held media).
+- New in the app: **Pending** tab (DC/DNC, `activities.pending`), **Change date** on a post, and
+  "sent on WhatsApp" on posts that came that way.
+- Not yet tried against Meta itself: a real album, a real video (WhatsApp sends ≤16 MB MP4), and
+  the two-button question on a real handset.
 
 C1 notes (2026-10-02):
 - Activities are **online only** — no offline outbox (ADR-0002 is for emergencies). A post is

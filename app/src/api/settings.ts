@@ -82,7 +82,10 @@ function text(v: unknown): string {
  * Read fresh on every request, like the seat (`resolveIdentity`) — an override cleared a
  * second ago must bite on the next call, not on the next sign-in.
  */
-async function loadOverrides(pool: Pool, personId: string): Promise<PermissionOverride[]> {
+export async function loadOverrides(
+  pool: Pick<Pool, 'query'>,
+  personId: string,
+): Promise<PermissionOverride[]> {
   const res = await pool.query<{ permission: string; effect: string }>(
     'SELECT permission, effect FROM person_permission WHERE person_id = $1',
     [personId],

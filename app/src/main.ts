@@ -23,6 +23,7 @@ import { defaultEvidenceRoot } from './ops/evidence.js';
 import { createNightly } from './jobs/nightly.js';
 import { createActivitiesHousekeeping } from './jobs/activitiesRetention.js';
 import { createVideoConverter, ffmpegTools } from './jobs/activitiesVideo.js';
+import { createInboundSweeper } from './jobs/activitiesInbound.js';
 import { defaultActivitiesRoot } from './api/activities.js';
 import { mediaStore, type MediaEnv } from './ops/offsite.js';
 import { refreshWeather } from './ops/weather.js';
@@ -218,6 +219,11 @@ async function start(): Promise<void> {
     activitiesRoot,
     activitiesBackup: { configured: activitiesMedia.configured, why: activitiesMedia.why },
     onVideoUploaded: () => videoConverter.kick(),
+    /**
+     * WhatsApp → Activities (ADR-0040): on unless this district set `WHATSAPP_ACTIVITIES=off`.
+     * Off, every photo and video sent to the district's number takes the evidence path as before.
+     */
+    activitiesFromWhatsApp: process.env['WHATSAPP_ACTIVITIES']?.trim().toLowerCase() !== 'off',
     // Late-bound on purpose: the server is created before the job, and the console's
     // "back up now" button needs the job rather than a copy of its options.
     get nightly() {
@@ -336,6 +342,13 @@ async function start(): Promise<void> {
   });
 
   /**
+   * WhatsApp → Activities (ADR-0040): a question unanswered for an hour goes to the DC's Pending
+   * list, and held media past the 30-day rule is deleted. Started even when the feature is off,
+   * so anything held before it was switched off still reaches the DC.
+   */
+  const inboundSweeper = createInboundSweeper({ pool, root: activitiesRoot });
+
+  /**
    * The weather, refreshed for every screen at once (M4-04, ADR-0013).
    *
    * Fifteen minutes, and the first fetch happens at startup so a freshly installed screen has
@@ -447,6 +460,7 @@ async function start(): Promise<void> {
   scheduler.start();
   nightly.start();
   activitiesHousekeeping.start();
+  inboundSweeper.start();
   videoConverter.start();
   log('info', 'started', { port, nodeEnv });
 
@@ -461,6 +475,7 @@ async function start(): Promise<void> {
       // Reversing this could leave a pass writing to a closed pool mid-escalation.
       nightly.stop();
       activitiesHousekeeping.stop();
+      inboundSweeper.stop();
       videoConverter.stop();
       clearInterval(weatherTimer);
       await scheduler.stop();

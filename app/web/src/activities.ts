@@ -58,6 +58,25 @@ interface Post {
   readonly videos: readonly Video[];
   readonly mayDelete: boolean;
   readonly mayModerate: boolean;
+  /** Sent to the district's WhatsApp number rather than posted here (ADR-0040). */
+  readonly source: 'app' | 'whatsapp';
+  readonly mayChangeDate: boolean;
+}
+
+/** WhatsApp media waiting for the DC (ADR-0040). */
+interface PendingGroup {
+  readonly inboundId: string;
+  readonly fromPhone: string;
+  readonly reason: 'unknown_sender' | 'no_department' | 'not_allowed' | 'no_answer';
+  readonly personId: string | null;
+  readonly personName: string | null;
+  readonly suggestedUnitId: string | null;
+  readonly incidentReference: string | null;
+  readonly receivedAt: string;
+  readonly activityDate: string;
+  readonly captions: readonly string[];
+  readonly media: readonly { readonly mediaId: string; readonly kind: 'photo' | 'video' }[];
+  readonly expiresAt: string;
 }
 
 interface Video {
@@ -197,11 +216,12 @@ const can = (p: string): boolean => me.permissions.includes(`activities.${p}`);
 // Tabs
 //------------------------------------------------------------------------------
 
-type Tab = 'posts' | 'new' | 'units' | 'bin' | 'log' | 'account';
+type Tab = 'posts' | 'new' | 'pending' | 'units' | 'bin' | 'log' | 'account';
 
 const TAB_LABEL: Readonly<Record<Tab, string>> = {
   posts: 'Activities',
   new: 'New post',
+  pending: 'Pending',
   units: 'Departments',
   bin: 'Recycle bin',
   log: 'Log',
@@ -211,6 +231,7 @@ const TAB_LABEL: Readonly<Record<Tab, string>> = {
 function tabsFor(): Tab[] {
   const tabs: Tab[] = ['posts'];
   if (can('upload')) tabs.push('new');
+  if (can('pending')) tabs.push('pending');
   if (can('departments')) tabs.push('units');
   if (can('moderate')) tabs.push('bin', 'log');
   tabs.push('account');
@@ -228,6 +249,7 @@ function show(tab: Tab): void {
     void loadExpiring();
   }
   if (tab === 'bin') void loadBin();
+  if (tab === 'pending') void loadPending();
   if (tab === 'log') void loadLog();
   if (tab === 'units') void loadPeople().then(drawUnits);
 }
@@ -367,7 +389,8 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
   const by = post.authorDesignation
     ? `${post.authorName} — ${post.authorDesignation}`
     : post.authorName;
-  card.append(make('div', 'meta', `${by} · posted ${when(post.createdAt)}`));
+  const how = post.source === 'whatsapp' ? 'sent on WhatsApp' : 'posted';
+  card.append(make('div', 'meta', `${by} · ${how} ${when(post.createdAt)}`));
   if (post.place !== null) card.append(make('div', 'meta', `Place: ${post.place}`));
   // Within the last days of its thirty, everyone who can see the post is told (ADR-0039 §7).
   if (Date.parse(post.expiresAt) - Date.now() < WARNING_MS) {
@@ -417,6 +440,24 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
     actions.append(b);
   };
 
+  if (!inBin && post.mayChangeDate) {
+    // A WhatsApp post is dated the day it arrived (ADR-0040 §5); the activity may be older.
+    const change = button('Change date');
+    change.addEventListener('click', () => {
+      const input = make('input');
+      input.type = 'date';
+      input.max = me.today;
+      input.value = post.activityDate;
+      input.setAttribute('aria-label', 'Date of the activity');
+      const save = button('Save date', 'primary');
+      change.replaceWith(input);
+      act(save, () =>
+        api('PUT', `/activities/posts/${post.postId}/date`, { activityDate: input.value }),
+      );
+      input.focus();
+    });
+    actions.append(change);
+  }
   if (inBin) {
     act(button('Restore'), () => api('POST', `/activities/posts/${post.postId}/restore`));
   } else if (post.mayModerate) {
@@ -570,6 +611,155 @@ async function loadBin(): Promise<void> {
 }
 
 //------------------------------------------------------------------------------
+// The Pending list (ADR-0040)
+//------------------------------------------------------------------------------
+
+function whyPending(g: PendingGroup): string {
+  switch (g.reason) {
+    case 'unknown_sender':
+      return 'This number is not linked to any account.';
+    case 'no_department':
+      return 'This account has no default department.';
+    case 'not_allowed':
+      return 'This account may not post (suspended, or not permitted).';
+    case 'no_answer':
+      return `Asked whether this was a report for ${g.incidentReference ?? 'their open emergency'} or a daily activity — no answer within an hour.`;
+  }
+}
+
+function pendingCard(g: PendingGroup): HTMLElement {
+  const card = make('article');
+  const who = g.personName ?? 'Unknown number';
+  card.append(make('div', 'meta', `+${g.fromPhone} · ${who} · sent ${when(g.receivedAt)}`));
+  card.append(make('div', 'meta', whyPending(g)));
+  card.append(make('div', 'meta expires', `Deleted automatically on ${when(g.expiresAt)}`));
+  if (g.captions.length > 0) card.append(make('p', 'caption', g.captions.join('\n')));
+
+  const photos = g.media.filter((m) => m.kind === 'photo');
+  if (photos.length > 0) {
+    const grid = make('div', 'photos');
+    for (const m of photos) {
+      const src = `/activities/pending/media/${m.mediaId}`;
+      const img = make('img');
+      img.loading = 'lazy';
+      img.alt = 'Photo sent on WhatsApp';
+      img.src = src;
+      img.addEventListener('click', () => openViewer(src));
+      grid.append(img);
+    }
+    card.append(grid);
+  }
+  const clips = g.media.filter((m) => m.kind === 'video');
+  if (clips.length > 0) {
+    const grid = make('div', 'videos');
+    for (const m of clips) {
+      const tile = make('div', 'video');
+      const play = button('▶', 'play');
+      play.setAttribute('aria-label', 'Play video');
+      play.addEventListener('click', () =>
+        openViewer(`/activities/pending/media/${m.mediaId}`, 'video'),
+      );
+      tile.append(play);
+      grid.append(tile);
+    }
+    card.append(grid);
+  }
+
+  const id = (name: string): string => `${name}-${g.inboundId}`;
+  const person = make('select');
+  person.id = id('who');
+  fillSelect(
+    person,
+    [
+      { value: '', label: 'Choose whose activity this is' },
+      ...people.map((p) => ({
+        value: p.personId,
+        label: p.designation ? `${p.fullName} — ${p.designation}` : p.fullName,
+      })),
+    ],
+    g.personId ?? '',
+  );
+  const live = liveUnits().map((u) => ({ value: u.unitId, label: u.name }));
+  const unit = make('select');
+  unit.id = id('unit');
+  fillSelect(unit, [{ value: '', label: 'Choose a department' }, ...live], g.suggestedUnitId ?? '');
+  // Choosing the account fills in its default department; the DC can still choose another.
+  person.addEventListener('change', () => {
+    const chosen = people.find((p) => p.personId === person.value);
+    const unitId = chosen?.defaultUnitId ?? null;
+    if (unitId !== null && live.some((u) => u.value === unitId)) unit.value = unitId;
+  });
+  const date = make('input');
+  date.id = id('date');
+  date.type = 'date';
+  date.max = me.today;
+  date.value = g.activityDate;
+
+  const field = (text: string, control: HTMLElement): HTMLElement[] => {
+    const label = make('label', undefined, text);
+    label.htmlFor = control.id;
+    return [label, control];
+  };
+  card.append(
+    ...field('Account', person),
+    ...field('Department', unit),
+    ...field('Date of the activity', date),
+  );
+
+  const actions = make('div', 'row');
+  const error = make('p', 'error');
+  error.hidden = true;
+  const approve = button('Approve', 'primary');
+  const reject = button('Reject', 'danger');
+  const run = (go: () => Promise<unknown>): void => {
+    void (async () => {
+      approve.disabled = true;
+      reject.disabled = true;
+      error.hidden = true;
+      try {
+        await go();
+        void loadPending();
+      } catch (e) {
+        showError(error, e);
+        approve.disabled = false;
+        reject.disabled = false;
+      }
+    })();
+  };
+  approve.addEventListener('click', () =>
+    run(() =>
+      api('POST', `/activities/pending/${g.inboundId}/approve`, {
+        personId: person.value,
+        unitId: unit.value,
+        activityDate: date.value,
+      }),
+    ),
+  );
+  reject.addEventListener('click', () => {
+    if (!confirm('Reject and delete these for good? This cannot be undone.')) return;
+    run(() => api('POST', `/activities/pending/${g.inboundId}/reject`));
+  });
+  actions.append(approve, reject);
+  card.append(actions, error);
+  return card;
+}
+
+async function loadPending(): Promise<void> {
+  const list = el('pendingList');
+  list.replaceChildren(make('p', 'muted', 'Loading…'));
+  try {
+    if (people.length === 0) await loadPeople();
+    const groups = await api<PendingGroup[]>('GET', '/activities/pending');
+    list.replaceChildren(...groups.map(pendingCard));
+    if (groups.length === 0) list.append(make('p', 'muted', 'Nothing is waiting.'));
+  } catch (e) {
+    const p = make('p', 'error');
+    showError(p, e);
+    list.replaceChildren(p);
+  }
+}
+
+//------------------------------------------------------------------------------
 // The log
 //------------------------------------------------------------------------------
 
@@ -587,6 +777,10 @@ const LOG_TEXT: Readonly<Record<string, string>> = {
   unit_renamed: 'renamed a department',
   unit_retired: 'retired a department',
   default_unit_set: "set a person's default department",
+  date_changed: 'changed the date of a post',
+  pending_approved: 'approved pictures sent on WhatsApp',
+  pending_rejected: 'rejected pictures sent on WhatsApp',
+  pending_expired: 'removed pictures sent on WhatsApp after 30 days',
 };
 
 async function loadLog(): Promise<void> {
@@ -599,7 +793,7 @@ async function loadLog(): Promise<void> {
         const row = make('div', 'list-row');
         // An expiry has no person: the 30-day rule did it.
         const who =
-          l.type === 'expired' || l.type === 'video_failed'
+          l.type === 'expired' || l.type === 'video_failed' || l.type === 'pending_expired'
             ? 'The app'
             : (l.actorName ?? 'Someone');
         const what = [who, LOG_TEXT[l.type] ?? l.type];
@@ -610,6 +804,12 @@ async function loadLog(): Promise<void> {
         }
         if (l.type === 'unit_renamed') what.push(`(was ${String(d['from'] ?? '')})`);
         if (l.type === 'video_failed') what.push(`(${String(d['reason'] ?? '')})`);
+        if (l.type === 'date_changed') {
+          what.push(`(${String(d['from'] ?? '')} to ${String(d['to'] ?? '')})`);
+        }
+        if (l.type.startsWith('pending_') && typeof d['fromPhone'] === 'string') {
+          what.push(`(from +${d['fromPhone']})`);
+        }
         row.append(
           make('span', undefined, what.join(' ')),
           make('span', 'meta', when(l.recordedAt)),

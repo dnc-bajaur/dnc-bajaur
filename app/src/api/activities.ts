@@ -103,10 +103,10 @@ export const MAX_CHUNK_BYTES = 8 * 1024 * 1024;
 /** An upload with no chunk for this long is given up, and its bytes removed. */
 export const ABANDONED_UPLOAD_HOURS = 24;
 
-const PHOTO_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png', 'image/webp']);
+export const PHOTO_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png', 'image/webp']);
 /** What a phone's camera writes: MP4 (Android) and QuickTime (iPhone). Both by their bytes. */
-const VIDEO_TYPES: ReadonlySet<string> = new Set(['video/mp4', 'video/quicktime']);
-const EXT: Readonly<Record<string, string>> = {
+export const VIDEO_TYPES: ReadonlySet<string> = new Set(['video/mp4', 'video/quicktime']);
+export const EXT: Readonly<Record<string, string>> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
@@ -140,11 +140,13 @@ async function caller(pool: Pool, identity: Identity): Promise<Caller> {
   return { identity, can: await permissionsOf(pool, identity) };
 }
 
-async function writeLog(
-  pool: Pool,
+/** One line in `activity_log`. Also written by WhatsApp → Activities (`whatsappActivities.ts`). */
+export async function writeLog(
+  pool: Pick<Pool, 'query'>,
   entry: {
     readonly type: string;
-    readonly actor: string;
+    /** Null only when nobody did it — the 30-day rule, or a question nobody answered. */
+    readonly actor: string | null;
     readonly postId?: string | null;
     readonly unitId?: string | null;
     readonly detail?: Record<string, unknown>;
@@ -434,6 +436,8 @@ export interface PostView {
   readonly place: string | null;
   readonly createdAt: string;
   readonly hiddenAt: string | null;
+  /** How it arrived: posted in the app, or sent to the district's WhatsApp number (ADR-0040). */
+  readonly source: 'app' | 'whatsapp';
   /** When the 30-day rule deletes it (ADR-0039 §7). */
   readonly expiresAt: string;
   readonly photos: readonly { readonly mediaId: string; readonly hasThumb: boolean }[];
@@ -443,6 +447,7 @@ export interface PostView {
   readonly mayModerate: boolean;
   readonly mayAddPhotos: boolean;
   readonly mayAddVideos: boolean;
+  readonly mayChangeDate: boolean;
 }
 
 export type VideoStatus = 'uploading' | 'processing' | 'ready' | 'failed';
@@ -470,6 +475,7 @@ interface PostRow {
   place: string | null;
   created_at: string;
   hidden_at: string | null;
+  source: 'app' | 'whatsapp';
   expires_at: string;
   photos: { mediaId: string; hasThumb: boolean }[] | null;
   videos: VideoView[] | null;
@@ -479,7 +485,7 @@ const POST_SELECT = `
   SELECT p.post_id, p.unit_id, u.name AS unit_name, p.author_person_id,
          a.full_name AS author_name, a.designation AS author_designation,
          to_char(p.activity_date, 'YYYY-MM-DD') AS activity_date,
-         p.caption, p.place, p.created_at, p.hidden_at,
+         p.caption, p.place, p.created_at, p.hidden_at, p.source,
          p.created_at + make_interval(days => ${RETENTION_DAYS}) AS expires_at,
          (SELECT json_agg(json_build_object('mediaId', m.media_id,
                                             'hasThumb', m.thumb_path IS NOT NULL)
@@ -513,6 +519,7 @@ function toView(c: Caller, r: PostRow): PostView {
     place: r.place,
     createdAt: r.created_at,
     hiddenAt: r.hidden_at,
+    source: r.source,
     expiresAt: r.expires_at,
     photos,
     videos,
@@ -521,6 +528,7 @@ function toView(c: Caller, r: PostRow): PostView {
     mayAddPhotos: mayPost && photos.length < MAX_PHOTOS_PER_POST,
     mayAddVideos:
       mayPost && videos.filter((v) => v.status !== 'failed').length < MAX_VIDEOS_PER_POST,
+    mayChangeDate: mayPost || c.can.has('activities.moderate'),
   };
 }
 
@@ -655,6 +663,58 @@ export async function createPost(
   const postId = res.rows[0]!.post_id;
   await writeLog(pool, { type: 'posted', actor: identity.personId, postId, unitId });
 
+  const row = await pool.query<PostRow>(`${POST_SELECT} WHERE p.post_id = $1`, [postId]);
+  return { ok: true, value: toView(c, row.rows[0]!) };
+}
+
+/**
+ * Change the day a post's activity happened. A post that came by WhatsApp is dated the day it
+ * arrived (ADR-0040 §5), which is not always the day of the activity. Its author may change it
+ * while it is not in the Recycle bin; a moderator may change anybody's. Logged with both dates.
+ */
+export async function changeDate(
+  pool: Pool,
+  identity: Identity,
+  postId: string,
+  input: Record<string, unknown>,
+): Promise<ActivitiesResult<PostView>> {
+  const c = await caller(pool, identity);
+  const found = await pool.query<{
+    author_person_id: string;
+    hidden_at: string | null;
+    activity_date: string;
+  }>(
+    `SELECT author_person_id, hidden_at, to_char(activity_date, 'YYYY-MM-DD') AS activity_date
+       FROM activity_post WHERE post_id = $1`,
+    [postId],
+  );
+  const post = found.rows[0];
+  if (post === undefined || !maySee(c, post.author_person_id, post.hidden_at)) {
+    return refuse(404, 'no such post');
+  }
+  const own = post.author_person_id === identity.personId;
+  const allowed =
+    c.can.has('activities.moderate') || (own && post.hidden_at === null && mayUpload(c) === null);
+  if (!allowed) return refuse(403, 'you do not have permission to change this post');
+
+  const activityDate = text(input['activityDate']);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(activityDate) || !Number.isFinite(Date.parse(activityDate))) {
+    return refuse(400, 'choose the date of the activity');
+  }
+  if (activityDate > districtDate()) return refuse(400, 'the date cannot be in the future');
+
+  if (activityDate !== post.activity_date) {
+    await pool.query('UPDATE activity_post SET activity_date = $2 WHERE post_id = $1', [
+      postId,
+      activityDate,
+    ]);
+    await writeLog(pool, {
+      type: 'date_changed',
+      actor: identity.personId,
+      postId,
+      detail: { from: post.activity_date, to: activityDate },
+    });
+  }
   const row = await pool.query<PostRow>(`${POST_SELECT} WHERE p.post_id = $1`, [postId]);
   return { ok: true, value: toView(c, row.rows[0]!) };
 }
@@ -1066,7 +1126,7 @@ export async function dropAbandonedUploads(pool: Pool, root: string): Promise<nu
   return rows.length;
 }
 
-async function removeFiles(root: string, paths: readonly (string | null)[]): Promise<void> {
+export async function removeFiles(root: string, paths: readonly (string | null)[]): Promise<void> {
   for (const p of paths) {
     if (p === null) continue;
     try {

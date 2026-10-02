@@ -55,6 +55,41 @@ it is and costs the officer one tap, only in that case.
 - **A second WhatsApp number for activities** — cleanest, but needs another SIM. Not chosen.
 - **A caption keyword (`#activity`)** — easily forgotten, error-prone. Rejected.
 
+## Implementation notes (phase D, 2026-10-02)
+
+Built in `app/src/api/whatsappActivities.ts` (migration `0053`, sweep `jobs/activitiesInbound.ts`,
+test `api/__tests__/whatsappActivities.test.ts`). Where the build had to decide something this ADR
+did not say:
+
+- **Only photos and videos.** A voice note, document, sticker, words, a pin or any other tap take
+  today's path untouched. Activities accepts JPEG/PNG/WebP photos and MP4/MOV videos, as in-app.
+- **"Open emergency"** is the incident today's path would attach the media to — the message the
+  officer replied to, else the most recent alert to that number within 24 hours — when it is not
+  resolved or closed. Any kind (emergency, notice, meeting) counts: asking costs one tap, and not
+  asking could lose an emergency's photo.
+- **Button titles.** Meta allows 20 characters, so the buttons read *Emergency report* / *Daily
+  activity*, and the question above them names the incident: *"You have an open emergency,
+  DNC-BAJAUR-n. Is this picture a report for it, or a daily activity?"*
+- **The emergency branch is today's path**, called with the bytes already fetched (Meta's link may
+  have expired by the tap). Its note says the officer *chose* the incident — an exact match. If the
+  question cannot be sent, or the file cannot be fetched or is not a type Activities takes, an
+  emergency's media goes down today's path at once rather than waiting on a tap.
+- **A known sender** is exactly one account (signs in, not removed) whose number matches. It must
+  hold `activities.upload` and not be suspended, and have a live default department; otherwise
+  the media goes to the Pending list, saying why. Two accounts on one number → the DC chooses.
+- **Replies.** *"Received — added to Activities."* once per post (not per photo of an album).
+  Media going to the Pending list gets *"Received — the DC office will add it to Activities."*
+  once, so the sender is not left with silence. A second tap on an answered question gets *"This
+  has already been dealt with."*
+- **A late tap counts.** A question moved to the Pending list for no answer can still be answered
+  by the officer until the DC decides it.
+- **Who clears the Pending list** is the `activities.pending` permission (DC and DNC by default).
+  Approve chooses account, department and date; reject is a hard delete. Both are logged.
+- **30 days.** Held media is deleted after 30 days like any post (`pending_expired` in the log).
+- **The date** of any post can be changed afterwards by its author or a moderator (`date_changed`).
+- **The switch:** `WHATSAPP_ACTIVITIES=off` turns it off; every photo and video is then evidence
+  as before. The Pending list and the sweep keep working for anything already held.
+
 ## How we would know this was wrong
 
 Officers often choose the wrong button, or the Pending list fills with ordinary emergency
