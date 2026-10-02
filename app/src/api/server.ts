@@ -153,6 +153,8 @@ import {
   createUnit,
   defaultActivitiesRoot,
   deletePost,
+  giveOfficerLogin,
+  listOfficers,
   listPeople,
   listPosts,
   listUnits,
@@ -166,6 +168,7 @@ import {
   receiveChunk,
   serveMedia,
   setDefaultUnit,
+  setOfficerActivities,
   startVideo,
   uploadState,
   type ActivitiesResult,
@@ -1142,6 +1145,22 @@ async function handleActivities(
   if (pathname === '/activities/people') {
     if (req.method !== 'GET') return notAllowed();
     return send(await listPeople(pool, identity));
+  }
+
+  if (pathname === '/activities/officers') {
+    if (req.method !== 'GET') return notAllowed();
+    return send(await listOfficers(pool, identity));
+  }
+
+  const officer = /^\/activities\/officers\/([^/]+)\/(activities|login)$/.exec(pathname);
+  if (officer !== null) {
+    if (req.method !== 'POST') return notAllowed();
+    if (!UUID_RE.test(officer[1]!)) return void json(res, 404, { error: 'no such officer' });
+    const input = await bodyOf(req);
+    if (input === null) return bad();
+    return officer[2] === 'activities'
+      ? send(await setOfficerActivities(pool, identity, officer[1]!, input))
+      : send(await giveOfficerLogin(pool, identity, officer[1]!, input), 201);
   }
 
   if (pathname === '/activities/log') {

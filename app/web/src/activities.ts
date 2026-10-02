@@ -1,8 +1,9 @@
 /**
  * Activities — the page a `member` account lives on (ADR-0038 / ADR-0039, Bajaur — C1–C3).
  *
- * Posts with photos and videos, filtered by department, person and date; the Department list; the Recycle
- * bin; the log; and the account's own password and default department.
+ * Posts with photos and videos, filtered by department, person and date; the Department list; the
+ * Officers list (everyone who posts: department, Activities on/off, Give login); the Recycle bin;
+ * the log; and the account's own password and default department.
  *
  * Nothing here enforces anything. The server decides what this account may do (INV-05): this
  * page reads `/activities/me` to know which tabs and buttons to draw, and every action is asked
@@ -41,6 +42,20 @@ interface Person {
   readonly fullName: string;
   readonly designation: string | null;
   readonly defaultUnitId: string | null;
+}
+
+/** Everyone who posts, for the DC (ADR-0041 §9). */
+interface Officer {
+  readonly personId: string;
+  readonly fullName: string;
+  readonly designation: string | null;
+  readonly phone: string;
+  readonly defaultUnitId: string | null;
+  readonly inDirectory: boolean;
+  readonly role: string | null;
+  readonly suspended: boolean;
+  readonly placeholder: boolean;
+  readonly activitiesOn: boolean;
 }
 
 interface Post {
@@ -222,12 +237,13 @@ const can = (p: string): boolean => me.permissions.includes(`activities.${p}`);
 // Tabs
 //------------------------------------------------------------------------------
 
-type Tab = 'posts' | 'new' | 'pending' | 'units' | 'bin' | 'log' | 'account';
+type Tab = 'posts' | 'new' | 'pending' | 'officers' | 'units' | 'bin' | 'log' | 'account';
 
 const TAB_LABEL: Readonly<Record<Tab, string>> = {
   posts: 'Activities',
   new: 'New post',
   pending: 'Pending',
+  officers: 'Officers',
   units: 'Departments',
   bin: 'Recycle bin',
   log: 'Log',
@@ -238,7 +254,7 @@ function tabsFor(): Tab[] {
   const tabs: Tab[] = ['posts'];
   if (can('upload')) tabs.push('new');
   if (can('pending')) tabs.push('pending');
-  if (can('departments')) tabs.push('units');
+  if (can('departments')) tabs.push('officers', 'units');
   if (can('moderate')) tabs.push('bin', 'log');
   tabs.push('account');
   return tabs;
@@ -257,7 +273,8 @@ function show(tab: Tab): void {
   if (tab === 'bin') void loadBin();
   if (tab === 'pending') void loadPending();
   if (tab === 'log') void loadLog();
-  if (tab === 'units') void loadPeople().then(drawUnits);
+  if (tab === 'officers') void loadOfficers();
+  if (tab === 'units') drawUnits();
 }
 
 //------------------------------------------------------------------------------
@@ -985,30 +1002,6 @@ function drawUnits(): void {
   }
   if (units.length === 0)
     list.append(make('p', 'muted', 'No departments yet. Add the first one above.'));
-
-  const peopleList = el('peopleList');
-  peopleList.replaceChildren();
-  const options = [
-    { value: '', label: '— none —' },
-    ...liveUnits().map((u) => ({ value: u.unitId, label: u.name })),
-  ];
-  for (const p of people) {
-    const row = make('div', 'list-row');
-    row.append(
-      make('span', undefined, p.designation ? `${p.fullName} — ${p.designation}` : p.fullName),
-    );
-    const select = make('select');
-    select.style.maxWidth = '260px';
-    fillSelect(select, options, p.defaultUnitId ?? '');
-    select.addEventListener('change', () => {
-      void api('PUT', '/activities/default-unit', {
-        personId: p.personId,
-        unitId: select.value === '' ? null : select.value,
-      }).catch((e: unknown) => showError(error, e));
-    });
-    row.append(select);
-    peopleList.append(row);
-  }
 }
 
 el<HTMLFormElement>('unitForm').addEventListener('submit', (e) => {
@@ -1024,6 +1017,157 @@ el<HTMLFormElement>('unitForm').addEventListener('submit', (e) => {
     })
     .catch((err: unknown) => showError(error, err));
 });
+
+//------------------------------------------------------------------------------
+// Officers — everyone who posts (ADR-0041 §9). The server checks every change (INV-05).
+//------------------------------------------------------------------------------
+
+let officers: Officer[] = [];
+
+async function loadOfficers(): Promise<void> {
+  const list = el('officerList');
+  list.replaceChildren(make('p', 'muted', 'Loading…'));
+  try {
+    officers = await api<Officer[]>('GET', '/activities/officers');
+    drawOfficers();
+  } catch (e) {
+    const p = make('p', 'error');
+    showError(p, e);
+    list.replaceChildren(p);
+  }
+}
+
+function loginText(o: Officer): string {
+  if (o.role === null) return 'WhatsApp only — no login';
+  if (o.role === 'member') return 'Login: Activities only';
+  return `Login: ${o.role} — control room`;
+}
+
+function officerRow(o: Officer): HTMLElement {
+  const row = make('div', 'list-row officer');
+  const error = make('p', 'error');
+  error.hidden = true;
+  const fail = (e: unknown): void => showError(error, e);
+  const replace = (next: Officer): void => {
+    officers = officers.map((x) => (x.personId === next.personId ? next : x));
+    row.replaceWith(officerRow(next));
+  };
+
+  row.append(
+    make('div', 'officer-name', o.designation ? `${o.fullName} — ${o.designation}` : o.fullName),
+  );
+  const facts = [o.phone, loginText(o)];
+  if (!o.inDirectory) facts.push('not in the Directory');
+  if (o.placeholder) facts.push('stand-in number');
+  if (o.suspended) facts.push('suspended');
+  row.append(make('div', 'meta', facts.filter((f) => f !== '').join(' · ')));
+
+  const controls = make('div', 'row');
+
+  const unit = make('select');
+  unit.setAttribute('aria-label', `Department of ${o.fullName}`);
+  fillSelect(
+    unit,
+    [
+      { value: '', label: 'Department — none (General)' },
+      ...liveUnits().map((u) => ({ value: u.unitId, label: u.name })),
+    ],
+    o.defaultUnitId ?? '',
+  );
+  unit.addEventListener('change', () => {
+    error.hidden = true;
+    const unitId = unit.value === '' ? null : unit.value;
+    void api('PUT', '/activities/default-unit', { personId: o.personId, unitId })
+      .then(() => replace({ ...o, defaultUnitId: unitId }))
+      .catch((e: unknown) => {
+        unit.value = o.defaultUnitId ?? '';
+        fail(e);
+      });
+  });
+
+  const toggle = make('label', 'switch');
+  const box = make('input');
+  box.type = 'checkbox';
+  box.checked = o.activitiesOn;
+  box.addEventListener('change', () => {
+    error.hidden = true;
+    box.disabled = true;
+    void api<Officer>('POST', `/activities/officers/${o.personId}/activities`, { on: box.checked })
+      .then(replace)
+      .catch((e: unknown) => {
+        box.checked = o.activitiesOn;
+        box.disabled = false;
+        fail(e);
+      });
+  });
+  toggle.append(box, document.createTextNode('Activities on'));
+  controls.append(unit, toggle);
+
+  // Always `member` here: a control-room login is given from the console, never from Activities.
+  if (o.role === null && !o.placeholder) {
+    const give = button('Give login');
+    give.addEventListener('click', () => {
+      give.hidden = true;
+      const form = make('div', 'row');
+      const password = make('input');
+      password.type = 'password';
+      password.autocomplete = 'new-password';
+      password.placeholder = 'Temporary password (12+ characters)';
+      const send = button('Give login', 'primary');
+      const cancel = button('Cancel');
+      cancel.addEventListener('click', () => {
+        form.remove();
+        give.hidden = false;
+      });
+      send.addEventListener('click', () => {
+        if (password.value === '') return password.focus();
+        error.hidden = true;
+        send.disabled = true;
+        void api<Officer>('POST', `/activities/officers/${o.personId}/login`, {
+          password: password.value,
+          activityUnitId: unit.value,
+        })
+          .then(replace)
+          .catch((e: unknown) => {
+            send.disabled = false;
+            fail(e);
+          });
+      });
+      form.append(
+        make('span', 'meta', 'Activities only. They change this password at first sign-in.'),
+        password,
+        send,
+        cancel,
+      );
+      row.insertBefore(form, error);
+      password.focus();
+    });
+    controls.append(give);
+  }
+
+  row.append(controls, error);
+  return row;
+}
+
+function drawOfficers(): void {
+  const list = el('officerList');
+  const find = el<HTMLInputElement>('officerFind').value.trim().toLowerCase();
+  const shown = officers.filter(
+    (o) =>
+      find === '' ||
+      [o.fullName, o.designation ?? '', o.phone].some((t) => t.toLowerCase().includes(find)),
+  );
+  list.replaceChildren(...shown.map(officerRow));
+  if (officers.length === 0) {
+    list.append(
+      make('p', 'muted', 'Nobody yet. Add officers to the Directory in the control room.'),
+    );
+  } else if (shown.length === 0) {
+    list.append(make('p', 'muted', 'Nobody matches.'));
+  }
+}
+
+el<HTMLInputElement>('officerFind').addEventListener('input', drawOfficers);
 
 //------------------------------------------------------------------------------
 // New post — photos are shrunk on the phone

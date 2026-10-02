@@ -42,6 +42,19 @@ Activities Pending list even though it might be an emergency report.
 7. **Every account sees every post** (`activities.read_all` for `member` too) and manages its own.
    The DC can take the right to see others' posts away from one account with a `deny` override.
 8. **"Give login"** on a Directory contact takes a department as well.
+9. **The Officers tab** (E2, added 2026-10-02). The DC keeps everyone who posts in one list on
+   the Activities page: every Directory contact and every account, each with its **department**,
+   an **Activities on/off** switch, and **Give login**. The Departments tab keeps only the list
+   of departments (the folders).
+   - The list shows phone numbers, so it needs `activities.departments` — the DC's and DNC's.
+   - A department can now be set for a contact with no login (before, only for an account).
+   - *Activities off* is a `deny` of `activities.upload`, the same override and the same
+     permission (`accounts.set_permission`) as the Settings panel, written to the access log. It
+     stops both doors: the New post form, and WhatsApp (their media waits on Pending as
+     `not_allowed`). The switch and the WhatsApp sender rule share one function
+     (`mayPostActivities`), so they cannot disagree.
+   - *Give login* here is **always `member`** — Activities only, whatever is asked for. A
+     control-room role is given from the contact drawer in the console, never from Activities.
 
 ## Consequences
 

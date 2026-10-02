@@ -238,6 +238,141 @@ maybe('Activities (ADR-0039, phase C1)', () => {
     expect(row.rows[0]!.activity_unit_id).toBe(unitId);
   });
 
+  describe('the Officers tab (ADR-0041 §9, E2)', () => {
+    interface Officer {
+      personId: string;
+      defaultUnitId: string | null;
+      inDirectory: boolean;
+      role: string | null;
+      activitiesOn: boolean;
+    }
+
+    /** A Directory contact with no login: a person holding a live post. */
+    async function contact(): Promise<string> {
+      const phone = `+92303${Math.floor(Math.random() * 900 + 100)}${randomUUID().slice(0, 6)}`;
+      const person = await pool.query<{ person_id: string }>(
+        'INSERT INTO person (full_name, phone) VALUES ($1, $2) RETURNING person_id',
+        [`Field Officer ${randomUUID().slice(0, 8)}`, phone],
+      );
+      const seat = await pool.query<{ seat_id: string }>(
+        `INSERT INTO seat (title, tier) VALUES ($1, 'post') RETURNING seat_id`,
+        [`Field Post ${randomUUID().slice(0, 8)}`],
+      );
+      await pool.query('INSERT INTO duty_assignment (seat_id, person_id) VALUES ($1, $2)', [
+        seat.rows[0]!.seat_id,
+        person.rows[0]!.person_id,
+      ]);
+      return person.rows[0]!.person_id;
+    }
+
+    async function officer(personId: string): Promise<Officer | undefined> {
+      const res = await call(admin, '/activities/officers');
+      expect(res.status).toBe(200);
+      return ((await res.json()) as Officer[]).find((o) => o.personId === personId);
+    }
+
+    const may = async (personId: string): Promise<boolean> =>
+      (
+        await pool.query<{ denied: boolean }>(
+          `SELECT EXISTS (SELECT 1 FROM person_permission WHERE person_id = $1
+                     AND permission = 'activities.upload' AND effect = 'deny') AS denied`,
+          [personId],
+        )
+      ).rows[0]!.denied === false;
+
+    it('is the DC / DNC’s only: a member or an operator is refused, and so is every change', async () => {
+      const id = await contact();
+      for (const token of [memberA.token, operator]) {
+        expect((await call(token, '/activities/officers')).status).toBe(403);
+        const off = await call(token, `/activities/officers/${id}/activities`, 'POST', {
+          on: false,
+        });
+        expect(off.status).toBe(403);
+        const login = await call(token, `/activities/officers/${id}/login`, 'POST', {
+          password: 'temporary-password-2026',
+        });
+        expect(login.status).toBe(403);
+      }
+      expect(await may(id)).toBe(true);
+    });
+
+    it('lists every Directory contact and every account', async () => {
+      const id = await contact();
+      expect(await officer(id)).toMatchObject({
+        inDirectory: true,
+        role: null,
+        activitiesOn: true,
+      });
+      expect(await officer(memberA.personId)).toMatchObject({
+        inDirectory: false,
+        role: 'member',
+      });
+    });
+
+    it('sets the department of a contact with no login', async () => {
+      const id = await contact();
+      const res = await call(admin, '/activities/default-unit', 'PUT', { personId: id, unitId });
+      expect(res.status).toBe(200);
+      expect((await officer(id))?.defaultUnitId).toBe(unitId);
+    });
+
+    it('turns Activities off and on for a contact, attributed in the access log', async () => {
+      const id = await contact();
+      const off = await call(admin, `/activities/officers/${id}/activities`, 'POST', { on: false });
+      expect(off.status).toBe(200);
+      expect(((await off.json()) as Officer).activitiesOn).toBe(false);
+      expect(await may(id)).toBe(false);
+
+      const on = await call(admin, `/activities/officers/${id}/activities`, 'POST', { on: true });
+      expect(((await on.json()) as Officer).activitiesOn).toBe(true);
+      expect(await may(id)).toBe(true);
+
+      const events = await pool.query<{ type: string }>(
+        'SELECT type FROM access_event WHERE subject_person_id = $1 ORDER BY seq',
+        [id],
+      );
+      expect(events.rows.map((r) => r.type)).toEqual(['permission_set', 'permission_cleared']);
+    });
+
+    it('turns Activities off for an account, and its posting is refused', async () => {
+      const officerAccount = await account('member');
+      const off = await call(
+        admin,
+        `/activities/officers/${officerAccount.personId}/activities`,
+        'POST',
+        { on: false },
+      );
+      expect(off.status).toBe(200);
+      expect((await post(officerAccount.token)).status).toBe(403);
+
+      await call(admin, `/activities/officers/${officerAccount.personId}/activities`, 'POST', {
+        on: true,
+      });
+      expect((await post(officerAccount.token)).status).toBe(201);
+    });
+
+    it('gives a login that is always member, whatever is asked for', async () => {
+      const id = await contact();
+      const res = await call(admin, `/activities/officers/${id}/login`, 'POST', {
+        password: 'temporary-password-2026',
+        activityUnitId: unitId,
+        role: 'admin',
+      });
+      expect(res.status).toBe(201);
+      expect(await res.json()).toMatchObject({ role: 'member', defaultUnitId: unitId });
+      const row = await pool.query<{ role: string; must_change_password: boolean }>(
+        'SELECT role, must_change_password FROM person WHERE person_id = $1',
+        [id],
+      );
+      expect(row.rows[0]).toEqual({ role: 'member', must_change_password: true });
+
+      const again = await call(admin, `/activities/officers/${id}/login`, 'POST', {
+        password: 'temporary-password-2026',
+      });
+      expect(again.status).toBe(409);
+    });
+  });
+
   describe('posting', () => {
     it('is refused until a forced password change is done', async () => {
       const fresh = await account('member', true);

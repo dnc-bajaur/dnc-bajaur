@@ -350,6 +350,30 @@
       .picked-videos .list-row button {
         padding: 0 9px;
       }
+      .officer {
+        display: block;
+      }
+      .officer-name {
+        font-weight: 600;
+      }
+      .officer .row {
+        margin-top: 6px;
+      }
+      .officer select {
+        max-width: 260px;
+      }
+      .officer label.switch {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        margin: 0;
+      }
+      .officer label.switch input {
+        width: auto;
+      }
+      .officer input[type='password'] {
+        max-width: 260px;
+      }
       [hidden] {
         display: none !important;
       }
@@ -450,10 +474,20 @@
           <p id="unitError" class="error" role="alert" hidden></p>
           <div id="unitList" style="margin-top: 12px"></div>
         </section>
+      </div>
+
+      <!-- Officers (DC / DNC) — everyone who posts: department, on/off, login (ADR-0041 §9) -->
+      <div id="view-officers" hidden>
         <section>
-          <h2>Each person's default department</h2>
-          <p class="muted">Pre-filled on their new posts. They can still choose another.</p>
-          <div id="peopleList"></div>
+          <h2>Officers</h2>
+          <p class="muted">
+            Every Directory contact, and every account. Their department is filed on their posts
+            (they can still choose another in the app). Activities off: nothing they send is posted
+            — it waits on the Pending list. Give login lets them sign in to Activities only.
+          </p>
+          <input id="officerFind" type="search" placeholder="Find by name, post or number" />
+          <p id="officerError" class="error" role="alert" hidden></p>
+          <div id="officerList" style="margin-top: 12px"></div>
         </section>
       </div>
 

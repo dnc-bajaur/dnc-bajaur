@@ -1266,7 +1266,9 @@ declare const self: ServiceWorkerGlobalScope;
 // request cannot be answered from this cache at all.
 // v264: Bajaur E1 (ADR-0041) — "Give login" in the contact drawer takes an Activities department.
 // `admin.ts` moved, so the bump.
-const CACHE = 'dnc-shell-v264';
+// v265: Bajaur E2 (ADR-0041 §9) — the Officers tab on `/activities.html`; Departments keeps only
+// the folder list. `activities.html` and its script moved, so the bump.
+const CACHE = 'dnc-shell-v265';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.

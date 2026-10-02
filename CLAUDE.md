@@ -123,10 +123,11 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   (`api/whatsappActivities.ts`, migrations 0050–0054, sweep `jobs/activitiesInbound.ts`): any
   Directory contact posts with no login, open emergency → two buttons, no answer in an hour →
   the emergency, voice notes, unknown numbers → Pending (*Add to Directory*), every account
-  reads all posts. `WHATSAPP_ACTIVITIES=off` switches WhatsApp → Activities off. Shell v264.
+  reads all posts. `WHATSAPP_ACTIVITIES=off` switches WhatsApp → Activities off. Officers tab
+  (E2, ADR-0041 §9): department, Activities on/off, Give login (always `member`). Shell v265.
   Tested with a stubbed Meta only. ⚠️ Any role other than `member` is the full control room.
-- **Next:** E2 Officers tab, E3 fewer tabs, E4 Urdu/English toggle (whole app), E5 sign-in link
-  on WhatsApp (needs Meta) — `PLAN.md` §4.
+- **Next:** E3 fewer tabs, E4 Urdu/English toggle (whole app), E5 sign-in link on WhatsApp
+  (needs Meta) — `PLAN.md` §4.
 
 ## 6. Repository map
 

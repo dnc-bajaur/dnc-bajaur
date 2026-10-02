@@ -49,7 +49,7 @@ import { referenceFor } from '../db/referenceStore.js';
 import { foldIncident } from '../domain/incident.js';
 import { formatReference } from '../domain/reference.js';
 import { districtDate } from '../domain/districtTime.js';
-import { resolvePermissions, type Role } from '../domain/roles.js';
+import type { Role } from '../domain/roles.js';
 import { decideType } from '../ops/fileType.js';
 import {
   downloadMedia,
@@ -74,6 +74,7 @@ import {
   RETENTION_DAYS,
   VIDEO_TYPES,
   inside,
+  mayPostActivities,
   removeFiles,
   writeLog,
   type ActivitiesResult,
@@ -451,9 +452,7 @@ async function senderOf(pool: Pick<Pool, 'query'>, phone: string): Promise<Sende
   if (rows.length !== 1) return { ok: false, reason: 'unknown_sender', personId: null };
   const r = rows[0]!;
   const overrides = await loadOverrides(pool, r.person_id);
-  const may = r.has_login
-    ? resolvePermissions(r.role, overrides).has('activities.upload')
-    : !overrides.some((o) => o.permission === 'activities.upload' && o.effect === 'deny');
+  const may = mayPostActivities({ hasLogin: r.has_login, role: r.role }, overrides);
   if (r.blocked || !may) return { ok: false, reason: 'not_allowed', personId: r.person_id };
   return { ok: true, personId: r.person_id, unitId: r.unit_id ?? (await generalUnit(pool)) };
 }

@@ -14,7 +14,8 @@
  *   * `activities.read_all`    — see everyone's posts (without it: one's own only);
  *   * `activities.delete_own`  — permanently delete one's own posts;
  *   * `activities.moderate`    — hide (Recycle bin), restore, or permanently delete any post;
- *   * `activities.departments` — keep the Department list and set people's default department.
+ *   * `activities.departments` — keep the Department list and the Officers list (people's
+ *     department; Activities on/off and Give login also ask the account permissions).
  *
  * **Every create, delete and restore is attributable** (INV-06): it appends to `activity_log`,
  * which outlives the post — a hard delete leaves exactly one line saying who deleted which post
@@ -41,12 +42,25 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import type { Pool } from '../db/pool.js';
 import type { Identity } from '../auth/sessions.js';
-import type { Permission } from '../domain/roles.js';
 import { districtDate } from '../domain/districtTime.js';
 import { decideType } from '../ops/fileType.js';
 import { fits, zipWriter } from '../ops/zip.js';
 import { log } from '../obs/log.js';
-import { permissionsOf } from './settings.js';
+import { recordAccessEvent } from '../db/accessLog.js';
+import {
+  resolvePermissions,
+  type Permission,
+  type PermissionOverride,
+  type Role,
+} from '../domain/roles.js';
+import {
+  clearOverride,
+  grantLogin,
+  loadOverrides,
+  permissionsOf,
+  requirePermission,
+  setOverride,
+} from './settings.js';
 
 export type ActivitiesResult<T> =
   | { readonly ok: true; readonly value: T }
@@ -377,9 +391,11 @@ export async function setDefaultUnit(
     if (live.rowCount === 0) return refuse(404, 'no such department');
   }
 
+  // An account, or a Directory contact with no login — who posts by WhatsApp (ADR-0041 §1).
   const res = await pool.query(
-    `UPDATE person SET activity_unit_id = $2
-      WHERE person_id = $1 AND password_hash IS NOT NULL AND removed_at IS NULL`,
+    `UPDATE person p SET activity_unit_id = $2
+      WHERE p.person_id = $1 AND p.removed_at IS NULL
+        AND (p.password_hash IS NOT NULL OR ${IS_CONTACT_SQL})`,
     [personId, unitId],
   );
   if (res.rowCount === 0) return refuse(404, 'no such account');
@@ -444,6 +460,221 @@ export async function listPeople(
       defaultUnitId: r.activity_unit_id,
     })),
   };
+}
+
+//------------------------------------------------------------------------------
+// Officers — the DC's one list of everyone who posts (ADR-0041 §9, Bajaur — E2)
+//------------------------------------------------------------------------------
+
+/**
+ * May this person post Activities? An account by its role and overrides; a Directory contact
+ * with no login has no role to ask, so it may — unless the DC has denied `activities.upload` to
+ * it (ADR-0041 §1). Suspension is not asked here: it stops everything, not just Activities.
+ * Shared with WhatsApp → Activities, so the Officers tab and the sender rule cannot disagree.
+ */
+export function mayPostActivities(
+  login: { readonly hasLogin: boolean; readonly role: Role },
+  overrides: readonly PermissionOverride[],
+): boolean {
+  return login.hasLogin
+    ? resolvePermissions(login.role, overrides).has('activities.upload')
+    : !overrides.some((o) => o.permission === 'activities.upload' && o.effect === 'deny');
+}
+
+export interface OfficerView {
+  readonly personId: string;
+  readonly fullName: string;
+  /** The post: the account's own text, else the Directory post the contact holds. */
+  readonly designation: string | null;
+  readonly phone: string;
+  readonly defaultUnitId: string | null;
+  /** Holds a Directory post — is sent emergency alerts, and posts by WhatsApp with no login. */
+  readonly inDirectory: boolean;
+  /** The account's role, or null for a contact with no login. */
+  readonly role: Role | null;
+  readonly suspended: boolean;
+  /** A stand-in number, not a person (migration 0008) — never given a login. */
+  readonly placeholder: boolean;
+  /** May post Activities — in the app with a login, and by WhatsApp either way. */
+  readonly activitiesOn: boolean;
+}
+
+interface OfficerRow {
+  person_id: string;
+  full_name: string | null;
+  designation: string | null;
+  phone: string | null;
+  activity_unit_id: string | null;
+  in_directory: boolean;
+  has_login: boolean;
+  role: Role;
+  suspended: boolean;
+  placeholder: boolean;
+}
+
+const OFFICER_SQL = `
+  SELECT p.person_id, p.full_name, p.phone, p.role, p.placeholder,
+         u.unit_id AS activity_unit_id,
+         COALESCE(p.designation,
+                  (SELECT s.title FROM duty_assignment d JOIN seat s ON s.seat_id = d.seat_id
+                    WHERE d.person_id = p.person_id AND d.to_at IS NULL AND s.retired_at IS NULL
+                    ORDER BY d.from_at DESC LIMIT 1)) AS designation,
+         ${IS_CONTACT_SQL} AS in_directory,
+         p.password_hash IS NOT NULL AS has_login,
+         (p.suspended_at IS NOT NULL OR p.disabled_at IS NOT NULL) AS suspended
+    FROM person p
+    LEFT JOIN activity_unit u ON u.unit_id = p.activity_unit_id AND u.retired_at IS NULL
+   WHERE p.removed_at IS NULL
+     AND (p.password_hash IS NOT NULL OR ${IS_CONTACT_SQL})`;
+
+function officerView(r: OfficerRow, overrides: readonly PermissionOverride[]): OfficerView {
+  return {
+    personId: r.person_id,
+    fullName: r.full_name ?? '',
+    designation: r.designation,
+    phone: r.phone ?? '',
+    defaultUnitId: r.activity_unit_id,
+    inDirectory: r.in_directory,
+    role: r.has_login ? r.role : null,
+    suspended: r.suspended,
+    placeholder: r.placeholder,
+    activitiesOn: mayPostActivities({ hasLogin: r.has_login, role: r.role }, overrides),
+  };
+}
+
+async function loadOfficer(pool: Pool, personId: string): Promise<OfficerView | null> {
+  if (!UUID_RE.test(personId)) return null;
+  const { rows } = await pool.query<OfficerRow>(`${OFFICER_SQL} AND p.person_id = $1`, [personId]);
+  const r = rows[0];
+  return r === undefined ? null : officerView(r, await loadOverrides(pool, personId));
+}
+
+/**
+ * Every Directory contact and every account — the people who post — with their department,
+ * whether they may post, and whether they can sign in. Phone numbers are on it, so it is the
+ * DC's: the same permission that keeps the Department list.
+ */
+export async function listOfficers(
+  pool: Pool,
+  identity: Identity,
+): Promise<ActivitiesResult<readonly OfficerView[]>> {
+  const c = await caller(pool, identity);
+  if (!c.can.has('activities.departments')) {
+    return refuse(403, 'you do not have permission to see the Officers list');
+  }
+  const { rows } = await pool.query<OfficerRow>(`${OFFICER_SQL} ORDER BY lower(p.full_name)`);
+  const overrides = await pool.query<{ person_id: string; permission: string; effect: string }>(
+    `SELECT person_id, permission, effect FROM person_permission WHERE person_id = ANY($1)`,
+    [rows.map((r) => r.person_id)],
+  );
+  const byPerson = new Map<string, PermissionOverride[]>();
+  for (const o of overrides.rows) {
+    const list = byPerson.get(o.person_id) ?? [];
+    list.push({ permission: o.permission, effect: o.effect === 'deny' ? 'deny' : 'allow' });
+    byPerson.set(o.person_id, list);
+  }
+  return { ok: true, value: rows.map((r) => officerView(r, byPerson.get(r.person_id) ?? [])) };
+}
+
+/**
+ * Activities on or off for one person — an `activities.upload` override, the same record and the
+ * same permission (`accounts.set_permission`) as the Settings panel. Off stops both doors: the
+ * New post form and WhatsApp (their media goes to Pending, `not_allowed`).
+ *
+ * An account goes through Settings' own `setOverride` / `clearOverride`, so the owner and admin
+ * rules apply unchanged. A contact with no login is not an account Settings acts on; its one
+ * override is written here, and attributed the same way (INV-06).
+ */
+export async function setOfficerActivities(
+  pool: Pool,
+  identity: Identity,
+  personId: string,
+  input: Record<string, unknown>,
+): Promise<ActivitiesResult<OfficerView>> {
+  const on = input['on'];
+  if (typeof on !== 'boolean') return refuse(400, "'on' must be true or false");
+  const denied = await requirePermission<never>(pool, identity, 'accounts.set_permission');
+  if (denied !== null) return denied;
+
+  const officer = await loadOfficer(pool, personId);
+  if (officer === null) return refuse(404, 'no such officer');
+
+  if (officer.role !== null) {
+    const overrides = await loadOverrides(pool, personId);
+    const current = overrides.find((o) => o.permission === 'activities.upload');
+    if (!on) {
+      const r = await setOverride(pool, identity, personId, {
+        permission: 'activities.upload',
+        effect: 'deny',
+      });
+      if (!r.ok) return r;
+    } else {
+      if (current?.effect === 'deny') {
+        const r = await clearOverride(pool, identity, personId, 'activities.upload');
+        if (!r.ok) return r;
+      }
+      // A role that does not hold it by default needs it allowed outright.
+      if (!resolvePermissions(officer.role, []).has('activities.upload')) {
+        const r = await setOverride(pool, identity, personId, {
+          permission: 'activities.upload',
+          effect: 'allow',
+        });
+        if (!r.ok) return r;
+      }
+    }
+  } else if (on) {
+    const res = await pool.query(
+      `DELETE FROM person_permission WHERE person_id = $1 AND permission = 'activities.upload'`,
+      [personId],
+    );
+    if ((res.rowCount ?? 0) > 0) {
+      await recordAccessEvent(pool, {
+        type: 'permission_cleared',
+        actorPersonId: identity.personId,
+        subjectPersonId: personId,
+        before: { permission: 'activities.upload' },
+      });
+    }
+  } else {
+    await pool.query(
+      `INSERT INTO person_permission (person_id, permission, effect, set_by_person_id)
+       VALUES ($1, 'activities.upload', 'deny', $2)
+       ON CONFLICT (person_id, permission)
+         DO UPDATE SET effect = 'deny', set_at = now(), set_by_person_id = EXCLUDED.set_by_person_id`,
+      [personId, identity.personId],
+    );
+    await recordAccessEvent(pool, {
+      type: 'permission_set',
+      actorPersonId: identity.personId,
+      subjectPersonId: personId,
+      after: { permission: 'activities.upload', effect: 'deny' },
+    });
+  }
+
+  const after = await loadOfficer(pool, personId);
+  return after === null ? refuse(404, 'no such officer') : { ok: true, value: after };
+}
+
+/**
+ * "Give login" from the Officers tab — always `member`, so an officer reached here can only ever
+ * sign in to Activities (ADR-0038). Settings' `grantLogin` does the work and the checking
+ * (`accounts.create`, a contact with no login, not a stand-in); a control-room role is given
+ * from the contact drawer in the console, never from here.
+ */
+export async function giveOfficerLogin(
+  pool: Pool,
+  identity: Identity,
+  personId: string,
+  input: Record<string, unknown>,
+): Promise<ActivitiesResult<OfficerView>> {
+  const granted = await grantLogin(pool, identity, personId, {
+    password: input['password'],
+    activityUnitId: input['activityUnitId'],
+    role: 'member',
+  });
+  if (!granted.ok) return granted;
+  const after = await loadOfficer(pool, personId);
+  return after === null ? refuse(404, 'no such officer') : { ok: true, value: after };
 }
 
 //------------------------------------------------------------------------------
