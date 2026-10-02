@@ -103,9 +103,10 @@ interface Identity {
    * The access role — ADR-0032. `owner` · `admin` · `operator` · `viewer`, on `person.role`.
    * Sent by `/auth/me` since phase 1. The shell reads it for nothing more than deciding whether
    * the Settings tab is offered (`owner`/`admin` only, via `isAdministration`); every
-   * `/settings` endpoint gates itself server-side regardless (INV-05).
+   * `/settings` endpoint gates itself server-side regardless (INV-05). A `member` (ADR-0038) is
+   * sent to Activities and never sees the shell — a convenience, the server gate is the rule.
    */
-  role: 'owner' | 'admin' | 'operator' | 'viewer';
+  role: 'owner' | 'admin' | 'operator' | 'viewer' | 'member';
   /**
    * Set when an administrator reset this account's password (ADR-0032 phase 3). Sign-in lands
    * the holder on "change my password" and they cannot leave it until they comply — the forced
@@ -225,6 +226,9 @@ function wirePasswordEye(input: HTMLInputElement): void {
     input.focus();
   });
 }
+
+/** Where a `member` account lives (ADR-0038): Activities, a page of its own. */
+const MEMBER_HOME = '/activities.html';
 
 async function boot(): Promise<void> {
   // Ask the browser not to evict an unreported emergency under storage pressure. Best
@@ -5812,6 +5816,10 @@ async function boot(): Promise<void> {
       // than assumed — a menu drawn from a stale set is a screen missing tabs for a reason
       // nobody can see.
       await loadIdentity();
+      if (identity?.role === 'member') {
+        location.replace(MEMBER_HOME);
+        return;
+      }
       paintIdentity();
 
       // A `must_change_password` account is held on "change my password" and cannot leave it.
@@ -5933,6 +5941,14 @@ async function boot(): Promise<void> {
   paintStatus();
   await paintQueue();
   await loadIdentity();
+
+  // A member (ADR-0038) has Activities and nothing else here — the server refuses them every
+  // operational route, so the shell does not start a sync or a board it would only be refused.
+  // Read through a cast: `loadIdentity` assigns it, which control-flow narrowing cannot see.
+  if ((identity as Identity | null)?.role === 'member') {
+    location.replace(MEMBER_HOME);
+    return;
+  }
 
   // A session that came back with `must_change_password` set — an administrator reset it while
   // the tab was closed — lands straight on the forced dialog (ADR-0032 phase 3). No-op otherwise.

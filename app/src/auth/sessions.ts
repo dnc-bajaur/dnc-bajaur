@@ -39,8 +39,8 @@ export interface Identity {
   readonly tier: Tier | null;
   readonly canBreakGlass: boolean;
   /**
-   * The account's access role — ADR-0032. `owner` · `admin` · `operator` · `viewer`, on
-   * `person.role`, an explicit column an administrator sets. NEVER derived from the
+   * The account's access role — ADR-0032/0038. `owner` · `admin` · `operator` · `viewer` ·
+   * `member`, on `person.role`, an explicit column an administrator sets. NEVER derived from the
    * designation text (ADR-0029 §2). Re-read on every request, like the seat.
    */
   readonly role: Role;
@@ -132,9 +132,12 @@ interface IdentityRow {
   must_change_password: boolean | null;
 }
 
-/** A stored role that is not one of the four is read as the least-privileged, never trusted. */
+/**
+ * A stored role that is not a known one is read as the least-privileged, never trusted. That is
+ * `member` since ADR-0038 — `viewer` is not enforced on operational writes (PLAN.md §4).
+ */
 function toRole(value: string): Role {
-  return (ROLES as readonly string[]).includes(value) ? (value as Role) : 'viewer';
+  return (ROLES as readonly string[]).includes(value) ? (value as Role) : 'member';
 }
 
 function toIdentity(r: IdentityRow): Identity {

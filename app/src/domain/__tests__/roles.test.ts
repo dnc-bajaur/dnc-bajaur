@@ -44,8 +44,8 @@ describe('base role sets', () => {
     }
   });
 
-  it('gives operator and viewer none of the account-management permissions', () => {
-    for (const role of ['operator', 'viewer'] as const) {
+  it('gives operator, viewer and member none of the account-management permissions', () => {
+    for (const role of ['operator', 'viewer', 'member'] as const) {
       expect(resolvePermissions(role, []).size).toBe(0);
     }
   });
@@ -56,6 +56,7 @@ describe('base role sets', () => {
       admin: true,
       operator: false,
       viewer: false,
+      member: false,
     };
     for (const role of ROLES) expect(isAdministrative(role)).toBe(expected[role]);
   });

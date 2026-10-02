@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Activities — District Nerve Center Bajaur</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <!--
+      Activities — ADR-0038 / ADR-0039, Bajaur.
+
+      A page of its own, not a screen in the shell. A `member` account (an officer who signs in
+      for Activities only) is sent here by the shell, and the server refuses a member on every
+      operational route — so nothing the control room uses is downloaded, started or polled for
+      them. The service worker does not answer this navigation with the shell
+      (`NOT_THE_APP` in `src/sw.ts`).
+
+      Phase B: who is signed in, change password, sign out. Phase C fills in the Activities.
+      The colour tokens are the shell's own (`index.html` :root), copied for the few used here.
+    -->
+    <script>
+      try {
+        if (localStorage.getItem('dnc-bajaur.theme') === 'dark') {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      } catch (e) {}
+    </script>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f7f8fa;
+        --card: #ffffff;
+        --line: #d8dce4;
+        --ink: #111319;
+        --muted: #5f6774;
+        --primary: #5b3fd6;
+        --critical: #c11414;
+        font-family:
+          'Segoe UI',
+          system-ui,
+          -apple-system,
+          'Noto Sans',
+          Arial,
+          sans-serif;
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --paper: #08090c;
+        --card: #111319;
+        --line: #2a2e39;
+        --ink: #f4f4f7;
+        --muted: #8b8fa3;
+        --primary: #9b83ff;
+        --critical: #f26a6a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        line-height: 1.5;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+        background: var(--card);
+      }
+      header h1 {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+      main {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+      section {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      h2 {
+        margin: 0 0 8px;
+        font-size: 1rem;
+      }
+      p {
+        margin: 0 0 8px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      label {
+        display: block;
+        margin: 10px 0 4px;
+        font-size: 0.9rem;
+      }
+      input {
+        width: 100%;
+        padding: 10px;
+        font: inherit;
+        color: var(--ink);
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+      button {
+        font: inherit;
+        padding: 9px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--ink);
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: #fff;
+        margin-top: 12px;
+      }
+      .error {
+        color: var(--critical);
+        margin-top: 8px;
+      }
+      .ok {
+        margin-top: 8px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Activities · Bajaur</h1>
+      <button id="signOut" type="button">Sign out</button>
+    </header>
+    <main>
+      <p id="status" class="muted">Loading…</p>
+
+      <div id="page" hidden>
+        <section>
+          <h2 id="who"></h2>
+          <p class="muted" id="role"></p>
+        </section>
+
+        <section id="mustChange" hidden>
+          <h2>Choose your own password</h2>
+          <p>Your account was given a temporary password. Choose your own before you continue.</p>
+        </section>
+
+        <section id="activities">
+          <h2>Activities</h2>
+          <p class="muted">Uploading your department's daily pictures will appear here soon.</p>
+        </section>
+
+        <section>
+          <h2>Change password</h2>
+          <form id="password">
+            <label for="current">Current password</label>
+            <input
+              id="current"
+              name="current"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+            <label for="next">New password (at least 12 characters)</label>
+            <input
+              id="next"
+              name="next"
+              type="password"
+              autocomplete="new-password"
+              minlength="12"
+              required
+            />
+            <button class="primary" type="submit">Change password</button>
+            <p id="passwordError" class="error" role="alert" hidden></p>
+            <p id="passwordOk" class="ok" role="status" hidden>Password changed.</p>
+          </form>
+        </section>
+      </div>
+    </main>
+    <script src="/activities.js"></script>
+  </body>
+</html>

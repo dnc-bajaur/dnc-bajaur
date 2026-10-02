@@ -9,7 +9,7 @@ import type { IncidentEvent } from '../domain/events.js';
 import {
   changeOwnPassword,
   login,
-  resolveSession,
+  resolveSession as resolveAnySession,
   revokeSession,
   SESSION_TTL_HOURS,
   type Identity,
@@ -335,8 +335,35 @@ function json(res: ServerResponse, status: number, body: unknown): void {
  *
  * Returns false having already answered the request; today it never does.
  */
-function requireSeat(_res: ServerResponse, _identity: Identity): boolean {
+function requireSeat(res: ServerResponse, identity: Identity): boolean {
+  // ADR-0038: account types diverged again. A `member` never reaches here — the gated
+  // `resolveSession` below refuses it first — but this was named the place to re-tighten, so
+  // it refuses too, rather than relying on a check somewhere else.
+  if (identity.role === 'member') {
+    json(res, 403, { error: MEMBER_REFUSED });
+    return false;
+  }
   return true;
+}
+
+/**
+ * ADR-0038 — the one gate that keeps a `member` out of the control room.
+ *
+ * A member is an officer who signs in for Activities only. Every operational route in this
+ * file authenticates its caller through `resolveSession`, and this one refuses a member by
+ * throwing `MemberRefused`, which the request handler answers with 403. So the gate is **deny
+ * by default**: a route added later is closed to members without anybody remembering to close
+ * it. The few routes a member may use — `/auth/me`, and Activities — call `resolveAnySession`
+ * on purpose, and a test pins that list (`memberGate.test.ts`).
+ */
+const MEMBER_REFUSED = 'this account may use Activities only';
+
+class MemberRefused extends Error {}
+
+async function resolveSession(pool: Pool, token: string): Promise<Identity | null> {
+  const identity = await resolveAnySession(pool, token);
+  if (identity?.role === 'member') throw new MemberRefused(MEMBER_REFUSED);
+  return identity;
 }
 
 async function readBody(req: IncomingMessage): Promise<string> {
@@ -3062,7 +3089,10 @@ export function createSyncServer(options: ServerOptions): Server {
 
         if (url.pathname === '/auth/me' || url.pathname === '/sync') {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          // `/auth/me` is open to a member (ADR-0038): the client needs the role to know which
+          // screen to draw. `/sync` is the incident record, and is not.
+          const resolve = url.pathname === '/auth/me' ? resolveAnySession : resolveSession;
+          const identity = token === null ? null : await resolve(pool, token);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3120,6 +3150,11 @@ export function createSyncServer(options: ServerOptions): Server {
 
         json(res, 404, { error: 'not found' });
       } catch (err) {
+        // ADR-0038: a member reached an operational route. Refused, not an error.
+        if (err instanceof MemberRefused) {
+          if (!res.headersSent) json(res, 403, { error: MEMBER_REFUSED });
+          return;
+        }
         // Never leak internals to a caller, but never swallow the cause either. The
         // correlation id is already on this line, so the 500 an operator saw can be found.
         log('error', 'unhandled request error', {

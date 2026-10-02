@@ -109,14 +109,17 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   files, database suites included (they run only in GitHub Actions; no local database yet).
 - **Decided, not built:** Bajaur's three requirements — install banner, `member` accounts,
   Activities (+ WhatsApp route). ADR-0038/0039/0040; phases A–D in `PLAN.md` §4.
-- ⚠️ **Until ADR-0038 ships, every account of any role acts as the full control room.** Create
-  no account except the control room's.
+- **B1 done (2026-10-02):** `member` role + deny-by-default gate (gated `resolveSession` in
+  `api/server.ts`, pinned by `memberGate.test.ts`); members land on `/activities.html`.
+  ⚠️ Any role other than `member` still acts as the full control room.
 - **Not deployed.** No server, domain, WhatsApp number or backup bucket exists for Bajaur yet.
 - **2026-10-02** — Every name that could collide with the other district on a shared machine,
   server or browser is now Bajaur's own (`PLAN.md` §6). Dev: own cluster `D:\dnc-bajaur-*`,
   port 5434; app on `localhost:3100`. Never use the other cluster on this machine.
-- **Next:** owner builds the local database (`PLAN.md` §5); then `.env` + run on localhost.
-  Collect Bajaur's facts (§2); build phases A–D only with the owner's go-ahead.
+- Local DB + app on `localhost:3100` work (`PLAN.md` §5). Full suite passes locally; on this
+  machine a worker occasionally crashes under parallel load — re-run that file alone.
+- **Next:** B2 (Activities permissions), then B3 (accounts by Name/Post/Phone, "Give login"),
+  then C1 — order in `PLAN.md` §4. Collect Bajaur's facts (§2) in parallel.
 
 ## 6. Repository map
 

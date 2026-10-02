@@ -1247,7 +1247,10 @@ declare const self: ServiceWorkerGlobalScope;
 // `Attending` tap. The word matched nowhere else in the product: the dashboard's own counters
 // (`panels.ts`) and the Board strip both already say "Responded" for this stage, and the
 // drawer alone used older wording for the identical fact. `web/src/main.ts` moved, so the bump.
-const CACHE = 'dnc-shell-v257';
+// v258: Bajaur's `member` accounts (ADR-0038) — the shell sends a member to `/activities.html`,
+// a page of its own the service worker never answers with the shell; storage keys and the
+// session cookie are Bajaur's own. `main.ts` and `index.html` moved, so the bump.
+const CACHE = 'dnc-shell-v258';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.
@@ -1468,7 +1471,8 @@ self.addEventListener('fetch', (event) => {
    * static legal document, and a person with no connection has nothing to read anyway. Failing
    * is the honest outcome.
    */
-  const NOT_THE_APP = ['/privacy', '/terms', '/data-deletion'];
+  // `/activities.html` is the member page (ADR-0038): a page of its own, never the shell.
+  const NOT_THE_APP = ['/privacy', '/terms', '/data-deletion', '/activities.html'];
 
   /**
    * **The same rule, for the two paths that carry a token — and this is the one that broke the

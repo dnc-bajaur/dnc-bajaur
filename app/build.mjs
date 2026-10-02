@@ -404,6 +404,23 @@ export async function buildWeb(out = dist) {
   });
 
   /**
+   * Activities — a page of its own for `member` accounts (ADR-0038/0039, Bajaur). Not a screen
+   * in the shell: an officer who signs in for Activities never downloads the control room.
+   */
+  await build({
+    ...common,
+    entryPoints: [join(web, 'src', 'activities.ts')],
+    outfile: join(out, 'activities.js'),
+  });
+  await writeFile(
+    join(out, 'activities.html'),
+    stripShellComments(
+      (await readFile(join(web, 'activities.html'), 'utf8')).replace(/\r\n/g, '\n'),
+    ),
+    'utf8',
+  );
+
+  /**
    * `index.html`, with its comments left behind — M9-20.
    *
    * **This file is the single largest thing the district downloads**, and it was not close:

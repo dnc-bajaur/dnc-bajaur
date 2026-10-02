@@ -71,7 +71,7 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 
 | Step | What | Decision | Needs before go-live |
 |---|---|---|---|
-| B1 | `member` role + **one deny-by-default gate**: a member reaches only Activities, own password, sign-out and the app shell. Permanent test walks **every** route (INV-05) | [ADR-0038](docs/adr/ADR-0038-member-accounts.md) | — |
+| B1 ✅ | `member` role + **one deny-by-default gate**: a member reaches only Activities, own password, sign-out and the app shell. Permanent test walks **every** route (INV-05) | [ADR-0038](docs/adr/ADR-0038-member-accounts.md) | — |
 | B2 | Activities permissions in `domain/roles.ts` (table in ADR-0038 §3) + per-account allow/deny | ADR-0038 | — |
 | B3 | Accounts by Name / Post (`person.designation`) / Phone / default department; "Give login" from the contact list; temporary password, changed at first sign-in | ADR-0038 | — |
 | C1 | Activities, **photos**: tables, Department list (DC), post (date, caption, place, ≤10 photos, compressed on the phone), views by department / person / date, soft + hard delete, Recycle bin, log | [ADR-0039](docs/adr/ADR-0039-activities.md) | server disk |
@@ -81,8 +81,8 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 | D | **WhatsApp → Activities**, same number; open emergency → two buttons; unknown numbers → Pending list | [ADR-0040](docs/adr/ADR-0040-whatsapp-to-activities.md) | Bajaur's **new** Meta portfolio |
 
 Rules that hold until these ship:
-- **Until B1 ships, create no account except the control room's.** Today every account,
-  of any role, acts as the full control room (ADR-0038, Context).
+- **B1 shipped (2026-10-02):** a `member` account is refused every operational route. Accounts
+  of the other roles (`operator`, `viewer`, `admin`) still act as the full control room.
 - Existing gap: the `viewer` role is not enforced on operational writes. Do not issue viewer
   accounts until it is.
 - WhatsApp setup and template submission happen **only** on Bajaur's new Meta business

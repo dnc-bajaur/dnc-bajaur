@@ -62,9 +62,9 @@ function refuse<T>(status: number, error: string): SettingsResult<T> {
   return { ok: false, status, error };
 }
 
-/** A stored role string that is not one of the four is read as the least-privileged. */
+/** A stored role string that is not a known one is read as the least-privileged (`member`). */
 function asRole(value: string): Role {
-  return (ROLES as readonly string[]).includes(value) ? (value as Role) : 'viewer';
+  return (ROLES as readonly string[]).includes(value) ? (value as Role) : 'member';
 }
 
 function text(v: unknown): string {
@@ -218,7 +218,7 @@ export async function listAccounts(
               WHERE e.subject_person_id = p.person_id AND e.type = 'login_succeeded') AS last_sign_in_at
        FROM person p
       WHERE p.password_hash IS NOT NULL AND p.removed_at IS NULL
-      ORDER BY array_position(ARRAY['owner','admin','operator','viewer'], p.role), p.full_name`,
+      ORDER BY array_position(ARRAY['owner','admin','operator','viewer','member'], p.role), p.full_name`,
   );
 
   const overrides = await pool.query<{ person_id: string; permission: string; effect: string }>(

@@ -52,6 +52,18 @@ officer accounts on the current code would hand every one of them the control ro
 
    A temporary password is set and must be changed at first sign-in (existing behaviour).
 
+### Implementation note (2026-10-02, B1)
+
+`requireSeat` guarded only ten routes, so the gate is one level lower: `api/server.ts` imports
+the session resolver as `resolveAnySession` and wraps it in a local `resolveSession` that throws
+for a `member` (answered 403). Every operational route already authenticates through that name,
+so the gate is **deny by default** — a route added later is closed to members without anyone
+remembering. Only `/auth/me` (and, from Phase C, Activities) calls `resolveAnySession`;
+`memberGate.test.ts` walks every route read from the router's source and counts those calls.
+`requireSeat` refuses a member too. A stored role the code does not know is now read as
+`member` (least privilege), not `viewer`. The client sends a member to `/activities.html`, a
+page of its own that the service worker never answers with the shell.
+
 ## Rationale
 
 Adding a role and closing one reserved gate is the smallest change that makes officer accounts

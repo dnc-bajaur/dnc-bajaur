@@ -80,8 +80,8 @@ const RAIL_BADGES: Record<SettingsTab, string> = {
   layout: 'Wall',
 };
 
-/** The four roles, and the two an account may be created or moved to from the panel. */
-const ROLES = ['owner', 'admin', 'operator', 'viewer'] as const;
+/** The roles (ADR-0032), plus `member` — an officer who signs in for Activities only (ADR-0038). */
+const ROLES = ['owner', 'admin', 'operator', 'viewer', 'member'] as const;
 type Role = (typeof ROLES)[number];
 
 /**
@@ -645,7 +645,10 @@ export function mountSettings(): SettingsPanel {
     // `owner` is never chosen from a form — it is established at go-live and moves only by
     // handover, which the server enforces. An admin creating/raising an admin is owner-only
     // there too; offering it here and letting the server refuse is the honest failure.
-    return ROLES.filter((r) => r !== 'owner').map((r) => ({ value: r, label: r }));
+    return ROLES.filter((r) => r !== 'owner').map((r) => ({
+      value: r,
+      label: r === 'member' ? 'member — Activities only' : r,
+    }));
   }
 
   /**

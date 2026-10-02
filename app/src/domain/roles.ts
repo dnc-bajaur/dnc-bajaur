@@ -21,10 +21,15 @@
  * the designation text (ADR-0029 §2) — it is an explicit `person.role` column.
  */
 
-export type Role = 'owner' | 'admin' | 'operator' | 'viewer';
+/**
+ * `member` (ADR-0038, Bajaur) is an officer who signs in for Activities only. It holds none of
+ * the permissions below, and the server refuses it on every operational route — see the gated
+ * `resolveSession` in `api/server.ts`.
+ */
+export type Role = 'owner' | 'admin' | 'operator' | 'viewer' | 'member';
 
 /** Order is authority-descending, for anything that needs to compare two roles. */
-export const ROLES: readonly Role[] = ['owner', 'admin', 'operator', 'viewer'];
+export const ROLES: readonly Role[] = ['owner', 'admin', 'operator', 'viewer', 'member'];
 
 /**
  * The closed enumeration of permissions.
@@ -100,6 +105,7 @@ const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   admin: PERMISSIONS,
   operator: [],
   viewer: [],
+  member: [],
 };
 
 export type OverrideEffect = 'allow' | 'deny';
