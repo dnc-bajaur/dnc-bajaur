@@ -42,6 +42,13 @@ export interface Dictionary {
 const PLACEHOLDER = /\{([a-z][a-zA-Z0-9]*)\}/g;
 
 /**
+ * Placeholders that stand for a number only. `"{n} today"` must match "3 today" and never
+ * "Nothing reported today" — a free placeholder there would turn any sentence ending in "today"
+ * into half-Urdu. Every other name (`{name}`, `{when}`) matches any text.
+ */
+const NUMERIC = new Set(['n', 'm', 'i', 'p', 'h', 'count', 'status']);
+
+/**
  * Builds the lookup from the JSON file: `"English": "اردو"`. A key with `{name}` in it is a
  * pattern — `"Pending ({n})": "زیر التوا ({n})"` — whose captured part is carried across, itself
  * translated when it is a known phrase (a department or a category name, say).
@@ -60,7 +67,7 @@ export function compile(raw: Readonly<Record<string, string>>): Dictionary {
     let last = 0;
     for (const m of en.matchAll(PLACEHOLDER)) {
       source += escape(normalise(en.slice(last, m.index)));
-      source += '(.+?)';
+      source += NUMERIC.has(m[1]!) ? '(\\d[\\d,.]*)' : '(.+?)';
       names.push(m[1]!);
       last = m.index + m[0].length;
     }
@@ -82,10 +89,36 @@ function normalise(s: string): string {
   return s.replace(/\s+/g, ' ');
 }
 
-/** The Urdu for one phrase, or `null` when the dictionary does not know it. */
+/**
+ * The Urdu for one phrase, or `null` when the dictionary does not know it.
+ *
+ * A line built of labels joined by " · " or " — " ("0300… · Login: Activities only · not in
+ * the Directory", "fire — issued") is tried label by label when the whole is unknown: the known
+ * labels become Urdu, the rest (a number, a name, a date) stay as they are.
+ */
 export function translateText(dict: Dictionary, text: string): string | null {
   const key = normalise(text).trim();
   if (key === '') return null;
+  return translatePhrase(dict, key) ?? translateLabels(dict, key, 0);
+}
+
+const SEPARATORS = [' · ', ' — '] as const;
+
+function translateLabels(dict: Dictionary, key: string, level: number): string | null {
+  const sep = SEPARATORS[level];
+  if (sep === undefined) return null;
+  if (!key.includes(sep)) return translateLabels(dict, key, level + 1);
+  let changed = false;
+  const parts = key.split(sep).map((part) => {
+    const t = translatePhrase(dict, part) ?? translateLabels(dict, part, level + 1);
+    if (t === null) return part;
+    changed = true;
+    return t;
+  });
+  return changed ? parts.join(sep) : null;
+}
+
+function translatePhrase(dict: Dictionary, key: string): string | null {
   const hit = dict.exact.get(key);
   if (hit !== undefined) return hit;
   for (const p of dict.patterns) {
@@ -99,6 +132,20 @@ export function translateText(dict: Dictionary, text: string): string | null {
     return out;
   }
   return null;
+}
+
+/**
+ * A dialog's text (`confirm`, `prompt`, `alert`): paragraphs separated by a blank line are
+ * translated one by one, so a known question above an unknown detail (someone's name, an
+ * incident's words) still reads in Urdu.
+ */
+export function translateMessage(dict: Dictionary, text: string): string {
+  const whole = translateText(dict, text);
+  if (whole !== null) return whole;
+  return text
+    .split(/\n\s*\n/)
+    .map((part) => translateText(dict, part) ?? part)
+    .join('\n\n');
 }
 
 /** Keeps the white space around a phrase: "  Sign out " stays spaced as it was. */
@@ -141,6 +188,24 @@ function translateTextNode(dict: Dictionary, node: Text): void {
   }
 }
 
+/**
+ * A paragraph with markup inside it — `<p>An emergency <b>must</b> reach…</p>` — cannot be put
+ * into Urdu piece by piece: Urdu orders its words differently, so the bold word lands somewhere
+ * else. Such an element is marked `data-i18n="html"` and its whole inner HTML is the key; the
+ * Urdu side is HTML too. The word list is this product's own static file, never anyone's input.
+ * Returns true when the element is handled as one piece (translated now, or earlier).
+ */
+function translateWhole(dict: Dictionary, el: Element): boolean {
+  const mode = el.getAttribute('data-i18n');
+  if (mode === 'done') return true;
+  if (mode !== 'html') return false;
+  const hit = dict.exact.get(normalise(el.innerHTML).trim());
+  if (hit === undefined) return false; // not in the list: its pieces are tried one by one
+  el.setAttribute('data-i18n', 'done');
+  el.innerHTML = hit;
+  return true;
+}
+
 /** Translates everything under `root` — the node itself included. */
 export function translateTree(dict: Dictionary, root: Node): void {
   if (root.nodeType === Node.TEXT_NODE) {
@@ -150,13 +215,17 @@ export function translateTree(dict: Dictionary, root: Node): void {
   if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_NODE) return;
   if (root instanceof Element) {
     if (skipped(root)) return;
+    if (translateWhole(dict, root)) return;
     translateElementAttributes(dict, root);
   }
   const doc = root.ownerDocument ?? (root as Document);
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
     acceptNode: (n) => {
-      if (n.nodeType === Node.ELEMENT_NODE && skipped(n as Element)) {
-        return NodeFilter.FILTER_REJECT; // and everything under it
+      if (n.nodeType === Node.ELEMENT_NODE) {
+        // Skipped, or already put into Urdu as one piece: nothing under it is looked at again.
+        if (skipped(n as Element) || translateWhole(dict, n as Element)) {
+          return NodeFilter.FILTER_REJECT;
+        }
       }
       return NodeFilter.FILTER_ACCEPT;
     },
@@ -195,6 +264,15 @@ export function currentLang(): Lang {
   return document.documentElement.lang === 'ur' ? 'ur' : 'en';
 }
 
+/**
+ * The locale dates and times are written in: Urdu month and day names on an Urdu page, with
+ * the digits 0–9 kept (ADR-0042 §7). `undefined` — the browser's own — on an English page,
+ * which is what every screen passed before.
+ */
+export function dateLocale(): string | undefined {
+  return currentLang() === 'ur' ? 'ur-PK-u-nu-latn' : undefined;
+}
+
 /** Remembers the choice on this device and reopens the page in it. */
 export function chooseLang(lang: Lang): void {
   try {
@@ -229,14 +307,18 @@ export function drawLangSwitch(slot: HTMLElement): void {
   slot.replaceChildren(b);
 }
 
-let active: Dictionary | null = null;
-
 /**
- * For words that never reach the page as text — `confirm()`, `prompt()`, `alert()`. The English
- * comes back unchanged on an English page, or before the word list has arrived.
+ * Words that never reach the page as text — `confirm()`, `prompt()`, `alert()` — are caught at
+ * the browser's own functions, so no screen has to remember to ask for them.
  */
-export function t(text: string): string {
-  return active === null ? text : (translateText(active, text) ?? text);
+function translateDialogs(dict: Dictionary): void {
+  const { alert: a, confirm: c, prompt: p } = window;
+  window.alert = (message?: unknown) => {
+    a.call(window, translateMessage(dict, String(message ?? '')));
+  };
+  window.confirm = (message?: string) => c.call(window, translateMessage(dict, message ?? ''));
+  window.prompt = (message?: string, value?: string) =>
+    p.call(window, translateMessage(dict, message ?? ''), value);
 }
 
 /** Lifts the head script's "hold the paint" class — the page shows, translated or not. */
@@ -255,7 +337,7 @@ export async function startUrdu(): Promise<void> {
     const res = await fetch('/ur.json');
     if (!res.ok) throw new Error(String(res.status));
     const dict = compile((await res.json()) as Record<string, string>);
-    active = dict;
+    translateDialogs(dict);
     translateTree(dict, document);
     document.title = translateText(dict, document.title) ?? document.title;
     keepTranslating(dict, document.body);

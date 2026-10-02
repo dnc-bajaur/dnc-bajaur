@@ -125,7 +125,8 @@ describe.skipIf(dbUrl === undefined)('Urdu / English (E4)', () => {
     expect(await tabLabels(page)).toEqual(['Activities', 'New post', 'My account']);
   }, 120_000);
 
-  it('gives the control room the same switch', async () => {
+  it('gives the control room the same switch, its words, and Urdu dialogs', async () => {
+    const owner = await seedActor(pool, { title: 'Urdu e2e DC', role: 'owner' });
     const page = await (await browser.newContext()).newPage();
     await page.goto(origin);
     await page.waitForSelector('#login');
@@ -134,5 +135,28 @@ describe.skipIf(dbUrl === undefined)('Urdu / English (E4)', () => {
     await page.waitForFunction(() => !document.documentElement.classList.contains('i18n-pending'));
     expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
     expect(await page.locator('#langSwitch').textContent()).toBe('English');
+    expect(await page.locator('#loginSubmit').textContent()).toBe('سائن اِن');
+
+    await page.fill('#phone', owner.phone);
+    await page.fill('#password', TEST_PASSWORD);
+    await page.click('#loginSubmit');
+    await page.waitForSelector('#nav:not([hidden])');
+    // Drawn after sign-in, so translated by the observer, not the first pass.
+    await page.waitForFunction(() => document.getElementById('navBoard')?.textContent === 'ریکارڈ');
+    expect(await page.locator('#navReport').textContent()).toBe('رپورٹ');
+    // The signed-in name is someone's name, never translated.
+    expect(await page.locator('#whoName').getAttribute('translate')).toBe('no');
+
+    // A dialog the screens raise in English is shown in Urdu.
+    const said = new Promise<string>((resolve) => {
+      page.once('dialog', (d) => {
+        resolve(d.message());
+        void d.dismiss();
+      });
+    });
+    await page.evaluate(() => {
+      confirm('Delete this for good? This cannot be undone.');
+    });
+    expect(await said).toBe('اسے ہمیشہ کے لیے حذف کر دیں؟ یہ واپس نہیں ہو سکے گا۔');
   }, 120_000);
 });

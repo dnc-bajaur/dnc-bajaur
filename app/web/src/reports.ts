@@ -29,6 +29,7 @@
  */
 
 import { incidentRow, type IncidentRowData } from './incidentRow.js';
+import { dateLocale } from './i18n.js';
 
 interface Summary {
   period: { from: string; to: string; fromDate: string; toDate: string };
@@ -703,7 +704,7 @@ export function mountReports(options: { onOpen: (incidentId: string) => void }):
       summary.period.fromDate === summary.period.toDate
         ? `${summary.period.fromDate}`
         : `${summary.period.fromDate} to ${summary.period.toDate}`;
-    asOf.textContent = `Folded from the record at ${new Date(summary.performance.asOf).toLocaleTimeString()}`;
+    asOf.textContent = `Folded from the record at ${new Date(summary.performance.asOf).toLocaleTimeString(dateLocale())}`;
 
     /**
      * ⚠️ **Truncation is said out loud.** A total nobody can tell is short is a number somebody

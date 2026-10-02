@@ -81,6 +81,16 @@
         font-family: 'Segoe UI', 'Noto Naskh Arabic', 'Noto Sans Arabic', Tahoma, system-ui,
           sans-serif;
       }
+      /*
+        A left-to-right page cannot be scrolled past its left edge, so whatever hangs over it (a
+        sheen, a travelling row, a film strip) was never seen. A right-to-left page CAN be
+        scrolled past its left edge, so the same overhang made the dashboard slide 300px
+        sideways. Clipping it keeps Urdu looking like the English it mirrors.
+      */
+      :root[dir='rtl'] body,
+      :root[dir='rtl'] #dashboardView {
+        overflow-x: clip;
+      }
       #langSlot:empty {
         display: none;
       }
@@ -879,6 +889,30 @@
           padding-left: var(--pad);
         }
       }
+      /*
+       * Urdu (E4, ADR-0042): the line runs the other way. Urdu starts at its right-hand end, so
+       * that end must enter first — from the left, travelling right. Run leftwards in a
+       * right-to-left page, the text also sat past the left edge, which a right-to-left page can
+       * scroll to: the whole dashboard slid sideways.
+       */
+      :root[dir='rtl'] .tick {
+        padding-left: 0;
+        padding-right: 100%;
+        animation-name: tick-rtl;
+      }
+      @keyframes tick-rtl {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(100%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :root[dir='rtl'] .tick {
+          padding-right: var(--pad);
+        }
+      }
       .tick b {
         color: var(--primary);
         font-weight: var(--w3);
@@ -940,11 +974,30 @@
        * JavaScript would put the theme's appearance in two places — the stylesheet and a
        * string in the bundle — and the one that would drift is the one nobody looks at.
        */
+      /* The language switch (E4) wears the theme switch's clothes: the same kind of control. */
+      #langSwitch {
+        flex: 0 0 auto;
+        min-height: 36px;
+        margin-inline-start: 0.8rem;
+        padding: 0 0.7rem;
+        background: none;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        color: var(--slate);
+        font: inherit;
+        font-size: var(--t2);
+        font-weight: var(--w2);
+        cursor: pointer;
+      }
+      #langSwitch:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
       #theme {
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        margin-left: 0.8rem;
+        margin-inline-start: 0.8rem;
         flex: 0 0 auto;
         min-height: 36px;
         padding: 0 0.55rem;
@@ -8076,7 +8129,7 @@
         <span id="themeWord">Dark</span>
       </button>
       <div id="who" hidden>
-        <span id="whoName"></span>
+        <span id="whoName" translate="no" dir="auto"></span>
         <br /><button type="button" id="changePw">Change my password</button>
         <button type="button" id="logout">Sign out</button>
       </div>

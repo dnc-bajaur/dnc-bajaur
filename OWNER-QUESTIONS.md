@@ -14,9 +14,31 @@ answered.
 
 3. **Please read the Urdu wording** in `app/web/ur.json` (English left, Urdu right). It is my
    draft. Correct any line directly, or tell me what to change. Some choices to check:
-   *History* → "ریکارڈ", *Pending* → "زیرِ التوا", *Retire (a department)* → "ختم کریں",
+   *History* → "تاریخچہ" (*Record* is "ریکارڈ"), *Pending* → "زیرِ التوا", *Retire (a department)* → "ختم کریں",
    *Recycle bin* → "ری سائیکل بِن".
 4. **Font:** Urdu screens use a Naskh-style face (Segoe UI / Noto Naskh), not Nastaliq —
    Nastaliq needs twice the line height and the control room screens would not fit. Say if you
    want Nastaliq at least on Activities.
 5. **Digits stay 0-9** (not ۰-۹), because phone and incident numbers are read out and typed back.
+
+## ⚠️ Possible other-district name in the code (found 2026-10-03)
+
+6. The name **"Nawaz"** appears in this repository as an example officer name and in old notes:
+   `db/migrations/0020_dispatch.sql:53`, `src/api/contacts.ts:275`, `src/jobs/whatsappChannel.ts:764`,
+   `src/domain/notifications.ts:42,184`, `src/domain/events.ts:120,454`,
+   `src/domain/__tests__/notifications.test.ts` (test id `person-nawaz`),
+   `src/api/__tests__/board.test.ts:354`, `web/src/__tests__/duplicates.test.ts:21`, and
+   `web/src/sw.ts:1027-1048` ("nawaz-ae's parallel … change" — looks like the other project's
+   branch names). **If this is a real person or name from the other district, say so and I will
+   replace every one with a neutral placeholder** (a migration file's comment included — comments
+   in an applied migration can be edited safely). I did not change them on my own because most
+   are only illustrative and the change touches many files. The one place a user could see it —
+   the "How to use" guide's example screen — now says "Duty Officer" instead.
+
+## The "How to use" guide is out of date (found 2026-10-03, while translating it)
+
+7. The guide inside the app still describes the original deployment: it says *departments have
+   no logins* (Bajaur now gives officers `member` logins for Activities), it never mentions
+   **Activities** or the WhatsApp → Activities path, and it speaks of "all 79 departments".
+   I translated it faithfully as it stands. **Should I rewrite it for Bajaur** (add an
+   Activities chapter, drop what no longer applies)? I will not invent Bajaur facts in it.

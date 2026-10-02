@@ -22,6 +22,8 @@
  * free to disagree with the first, and a review then has two documents and no record.
  */
 
+import { dateLocale } from './i18n.js';
+
 interface Actor {
   seatTitle: string | null;
   personName: string | null;
@@ -172,7 +174,7 @@ function actorWords(actor: Actor | null): string {
 }
 
 function when(iso: string | null): string {
-  return iso === null ? '—' : new Date(iso).toLocaleString();
+  return iso === null ? '—' : new Date(iso).toLocaleString(dateLocale());
 }
 
 function section(heading: string): HTMLElement {

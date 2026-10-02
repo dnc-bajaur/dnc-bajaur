@@ -57,7 +57,7 @@ import type { DashboardLinks, DashboardScreen } from './dashboard.js';
 import type { DispatchPanel, RecordOutcome, ToldEntry } from './dispatch.js';
 import { incidentRow, type IncidentRowData } from './incidentRow.js';
 import { offerInstall } from './install.js';
-import { drawLangSwitch, startUrdu } from './i18n.js';
+import { dateLocale, drawLangSwitch, startUrdu } from './i18n.js';
 
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -1213,7 +1213,7 @@ async function boot(): Promise<void> {
   function namedDay(iso: string): string {
     const [y, m, d] = iso.split('-').map(Number);
     if (y === undefined || m === undefined || d === undefined) return iso;
-    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(dateLocale(), {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
@@ -2986,7 +2986,7 @@ async function boot(): Promise<void> {
     boardAsOf.dataset['stale'] = String(stale);
     boardAsOfText.textContent = stale
       ? `NOT LIVE — last reached the server ${Math.round(age / 1000)}s ago. Do not act on this without checking.`
-      : `Live as of ${new Date(data.asOf).toLocaleTimeString()}`;
+      : `Live as of ${new Date(data.asOf).toLocaleTimeString(dateLocale())}`;
   }
 
   /**
@@ -4401,7 +4401,7 @@ async function boot(): Promise<void> {
   }
 
   function when(iso: string): string {
-    return new Date(iso).toLocaleString();
+    return new Date(iso).toLocaleString(dateLocale());
   }
 
   /** A value with the answer to "who set this, when, and what did it replace". */

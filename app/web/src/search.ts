@@ -21,6 +21,7 @@
  */
 
 import { incidentRow, type IncidentRowData } from './incidentRow.js';
+import { dateLocale } from './i18n.js';
 
 interface SearchResponse {
   asOf: string;
@@ -51,7 +52,7 @@ function asDateValue(iso: string): string {
 }
 
 function readable(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString(dateLocale(), {
     day: 'numeric',
     month: 'long',
     year: 'numeric',

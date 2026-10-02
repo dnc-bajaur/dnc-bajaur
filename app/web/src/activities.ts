@@ -20,7 +20,7 @@
  */
 
 import { offerInstall } from './install.js';
-import { drawLangSwitch, startUrdu, t } from './i18n.js';
+import { dateLocale, drawLangSwitch, startUrdu } from './i18n.js';
 
 interface Me {
   readonly personId: string;
@@ -215,7 +215,7 @@ function showError(target: HTMLElement, e: unknown): void {
 }
 
 function when(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+  return new Date(iso).toLocaleString(dateLocale(), {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -224,7 +224,7 @@ function when(iso: string): string {
 }
 
 function day(date: string): string {
-  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(dateLocale(), {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -494,7 +494,7 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
   error.hidden = true;
   const act = (b: HTMLButtonElement, run: () => Promise<unknown>, ask?: string): void => {
     b.addEventListener('click', () => {
-      if (ask !== undefined && !confirm(t(ask))) return;
+      if (ask !== undefined && !confirm(ask)) return;
       void (async () => {
         b.disabled = true;
         error.hidden = true;
@@ -794,7 +794,7 @@ function pendingCard(g: PendingGroup): HTMLElement {
   };
   const reject = button(hasFiles ? 'Reject' : 'Delete', 'danger');
   reject.addEventListener('click', () => {
-    if (!confirm(t('Delete this for good? This cannot be undone.'))) return;
+    if (!confirm('Delete this for good? This cannot be undone.')) return;
     run(() => api('POST', `/activities/pending/${g.inboundId}/reject`));
   });
 
@@ -1009,10 +1009,7 @@ async function loadLog(): Promise<void> {
           details.setAttribute('translate', 'no');
           line.append(' ', details);
         }
-        row.append(
-          line,
-          make('span', 'meta', when(l.recordedAt)),
-        );
+        row.append(line, make('span', 'meta', when(l.recordedAt)));
         return row;
       }),
     );
@@ -1042,7 +1039,7 @@ function drawUnits(): void {
       buttons.style.marginTop = '0';
       const rename = button('Rename');
       rename.addEventListener('click', () => {
-        const name = prompt(t('New name for this department'), u.name);
+        const name = prompt('New name for this department', u.name);
         if (name === null || name.trim() === '' || name.trim() === u.name) return;
         void api('PATCH', `/activities/units/${u.unitId}`, { name: name.trim() })
           .then(() => loadUnits().then(drawUnits))
@@ -1050,7 +1047,7 @@ function drawUnits(): void {
       });
       const retire = button('Retire', 'danger');
       retire.addEventListener('click', () => {
-        if (!confirm(t(`Retire "${u.name}"? Its old posts keep its name.`))) return;
+        if (!confirm(`Retire "${u.name}"? Its old posts keep its name.`)) return;
         void api('POST', `/activities/units/${u.unitId}/retire`)
           .then(() => loadUnits().then(drawUnits))
           .catch((e: unknown) => showError(error, e));

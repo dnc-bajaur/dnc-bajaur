@@ -38,6 +38,7 @@
 import { mountTilt, reducedMotion, stripTiltStyles, makeCard } from './tilt.js';
 import { isNight, mountWeatherScene, sceneFor, type WeatherScene } from './weather.js';
 import { openDrawer } from './drawer.js';
+import { dateLocale } from './i18n.js';
 
 interface PanelRow {
   name: string;
@@ -1697,7 +1698,10 @@ function renderNews(feed: DashboardFeed): void {
         row.rel = 'noopener noreferrer';
       }
 
-      row.appendChild(span('ntitle', item.title));
+      // A headline is the outlet's words — never put through the Urdu word list (ADR-0042).
+      const title = span('ntitle', item.title);
+      title.setAttribute('translate', 'no');
+      row.appendChild(title);
 
       // Each story's own age, which is a different fact from when we fetched the list.
       const outlet = item.outlet !== null && item.outlet !== '' ? item.outlet : '';
@@ -2162,7 +2166,7 @@ function untilWords(iso: string): string {
   const sameDay = ends.toDateString() === new Date().toDateString();
   return sameDay
     ? hhmm(ends)
-    : ends.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    : ends.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' });
 }
 
 function renderFacts(feed: DashboardFeed): void {
@@ -3177,7 +3181,7 @@ export function startClock(): void {
   const tick = (): void => {
     const now = new Date();
     el('clock').textContent = hhmm(now);
-    el('dateline').textContent = now.toLocaleDateString(undefined, {
+    el('dateline').textContent = now.toLocaleDateString(dateLocale(), {
       weekday: 'short',
       day: 'numeric',
       month: 'long',

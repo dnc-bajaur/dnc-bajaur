@@ -82,7 +82,7 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 | E1 ✅ | **Simpler:** any Directory contact posts by WhatsApp with no login; "General" department when none; no answer in an hour → the emergency; voice notes; an unknown number's words → Pending; "Add to Directory" and one-tap Approve on Pending; every account sees every post; Give login takes a department | [ADR-0041](docs/adr/ADR-0041-directory-contacts-post-activities.md) | Bajaur's **new** Meta portfolio |
 | E2 ✅ | **Officers tab** in Activities: every Directory contact — department, Activities on/off, Give login (always member) — and Departments becomes the folder list only | [ADR-0041 §9](docs/adr/ADR-0041-directory-contacts-post-activities.md) | — |
 | E3 ✅ | **Fewer tabs:** DC — Activities · New post · Pending (with count) · Officers · History (Log + Recycle bin) · My account; member — Activities · New post · My account | — | — |
-| E4 ⏳ | **Urdu / English toggle**, across the whole app (control room too). Urdu wording checked by the owner; right-to-left layout. **E4a ✅** switch + engine + Activities in Urdu; **E4b** sign-in and control room screens, one by one | [ADR-0042](docs/adr/ADR-0042-urdu-english.md) | owner reads `app/web/ur.json` |
+| E4 ⏳ | **Urdu / English toggle**, across the whole app (control room too). Urdu wording checked by the owner; right-to-left layout. **E4a ✅** switch + engine + Activities in Urdu; **E4b ✅** sign-in and control room screens; **E4c** the How-to-use guide | [ADR-0042](docs/adr/ADR-0042-urdu-english.md) | owner reads `app/web/ur.json` |
 | E5 | **Sign-in link on WhatsApp** when a login is given — the officer sets their own password | ADR (to write) | Meta account + an approved template |
 
 E4 notes (2026-10-03):
@@ -90,8 +90,15 @@ E4 notes (2026-10-03):
   reach the page; `translate="no"` marks people's words. Per device (`dnc-bajaur.lang`), set
   before the first paint, page held ≤ 4 s for the word list. Pinned by `i18n.test.ts` and
   `activitiesUrdu.e2e.test.ts`.
-- E4a: Activities is fully in the list. The control room has the switch and turns right-to-left,
-  but its words are still English until E4b adds them screen by screen.
+- E4a: Activities is fully in the list. E4b: the control room (sign-in, Dashboard, Report, Record,
+  incident, Administration, Settings, Status) — found by crawling every screen in Urdu; dates in
+  Urdu (`dateLocale()`), dialogs translated at `confirm`/`prompt`/`alert`, lines of labels joined
+  by " · " or " — " translated label by label. What stays English on purpose: names, headlines,
+  service names and other data people typed; the WhatsApp message (Meta-approved text).
+- RTL: the ticker runs the other way; `overflow-x: clip` on an RTL page and on the dashboard (an
+  overhang past the left edge made the wall slide sideways).
+- Known, inherited (also in English): at 1366 px the Record's last column header ("Action")
+  hangs past the right edge.
 
 E3 notes (2026-10-03):
 - The Department list now sits under **Officers** (same permission, `activities.departments`).

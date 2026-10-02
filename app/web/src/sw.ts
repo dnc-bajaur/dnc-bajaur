@@ -1271,7 +1271,9 @@ declare const self: ServiceWorkerGlobalScope;
 // v266: Bajaur E3 — fewer Activities tabs: Departments under Officers, Log and Recycle bin under
 // History, Pending shows its count. With it, E4's start (ADR-0042): the Urdu switch on both pages
 // and `ur.json`. `activities.html`, `index.html` and their scripts moved, so the bump.
-const CACHE = 'dnc-shell-v266';
+// v267: Bajaur E4b (ADR-0042) — the control room's words in `ur.json`, dates in Urdu on an Urdu
+// page, dialogs translated, right-to-left fixes (ticker direction, dashboard overflow).
+const CACHE = 'dnc-shell-v267';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.
