@@ -60,8 +60,14 @@ a full Urdu text cannot fit in.
   translatable; screens that join them into one string stay English until split.
 - User data that happens to equal a UI phrase exactly (a caption reading just "Approve") would be
   translated unless its element is marked `translate="no"`.
-- Right-to-left is the browser's: flex rows and text flip; margins written as `left`/`right` do
-  not. Screens are moved to logical properties (`margin-inline-start`) as they are reviewed.
+- Right-to-left is the browser's: flex rows and text flip. Every stylesheet's margins, paddings,
+  borders and alignment were moved to logical properties (`margin-inline-start`), which change
+  nothing in English; positions (`left:`/`right:`) were moved only where a control sits at a
+  line's end (the password eye, the expand mark). What hangs past the left edge is clipped on an
+  Urdu page, as it already was, unseen, on an English one.
+- The guide ("How to use") is translated a paragraph at a time: `help.ts` marks each block, and the
+  word list's keys for it are that block's inner HTML. Editing a guide paragraph in English makes
+  that paragraph English again on an Urdu page until its line in `ur.json` is updated.
 
 ### We must therefore also
 - Mark people's words `translate="no"` on every screen that is translated.

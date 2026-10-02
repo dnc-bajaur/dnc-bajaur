@@ -165,7 +165,7 @@ button.dfcancel {
   The operator's own record — M7-08. Pushed to the end of the row and kept quiet: it is
   used forty times a day and must not shout, but it must never be hunted for either.
 */
-.trec { margin-left: auto; display: flex; align-items: center; gap: 0.3rem; }
+.trec { margin-inline-start: auto; display: flex; align-items: center; gap: 0.3rem; }
 .tbtn {
   font: inherit; font-size: var(--t1); font-weight: var(--w2);
   padding: 0.2rem 0.5rem; cursor: pointer;
@@ -219,7 +219,7 @@ button.dfcancel {
   proportional digits make two identical numbers look different.
 */
 .dnum {
-  flex-basis: 100%; padding-left: calc(20px + 0.5rem);
+  flex-basis: 100%; padding-inline-start: calc(20px + 0.5rem);
   font-size: var(--t2); color: var(--slate); font-variant-numeric: tabular-nums;
 }
 /*
@@ -249,12 +249,12 @@ button.dfcancel {
 .davatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; }
 .dwho { font-size: var(--t2); color: var(--slate); }
 /* The designation, on its own indented line under the name — 2026-09-01, so a contact row reads
-   the way a phone's contact list does (Name / post / phone). Same `flex-basis`/`padding-left` as
+   the way a phone's contact list does (Name / post / phone). Same `flex-basis`/`padding-inline-start` as
    `.dnum` so both align under the label, not the checkbox. A step above `.dwho` in ink, because
    it is the half of the row an operator is usually searching for: they know the post they want
    and not the name of whoever holds it tonight. `--ink`, no new colour. */
 .ddesig {
-  flex-basis: 100%; padding-left: calc(20px + 0.5rem);
+  flex-basis: 100%; padding-inline-start: calc(20px + 0.5rem);
   font-size: var(--t2); color: var(--ink);
 }
 /*
@@ -271,7 +271,7 @@ button.dfcancel {
 */
 .dfold {
   display: block; width: 100%; min-height: 44px; margin: 0.2rem 0;
-  padding: 0 0.3rem; text-align: left;
+  padding: 0 0.3rem; text-align: start;
   background: transparent; color: var(--slate);
   border: none; border-top: 1px dashed var(--line);
   font: inherit; font-size: var(--t2); cursor: pointer;
@@ -296,7 +296,7 @@ button.dfcancel {
 .dhintrow {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.5rem;
   width: 100%; min-height: 36px; padding: 0.2rem;
-  background: transparent; border: none; text-align: left;
+  background: transparent; border: none; text-align: start;
   font: inherit; cursor: pointer;
 }
 .dhintrow:hover .dlabel { text-decoration: underline; }
@@ -332,7 +332,7 @@ button.dsend:disabled { background: var(--card2); color: var(--muted); cursor: d
   margin: 0;
   font-size: var(--t2);
   color: var(--pending);
-  border-left: 3px solid var(--pending);
+  border-inline-start: 3px solid var(--pending);
   background: var(--pending-wash);
   padding: 0.4rem 0.55rem;
   border-radius: 0 4px 4px 0;
@@ -387,7 +387,7 @@ button.dsend:disabled { background: var(--card2); color: var(--muted); cursor: d
   font-size: var(--t5);
   font-weight: var(--w3);
   font-variant-numeric: tabular-nums;
-  margin-right: 0.2rem;
+  margin-inline-end: 0.2rem;
 }
 
 .attc-unanswered .attv {
@@ -464,7 +464,7 @@ button.dsend:disabled { background: var(--card2); color: var(--muted); cursor: d
 .takenote {
   margin: 0.6rem 0 0;
   padding: 0.5rem 0.6rem;
-  border-left: 3px solid var(--ok);
+  border-inline-start: 3px solid var(--ok);
   background: var(--ok-wash);
   font-size: var(--t3);
   font-weight: var(--w2);
@@ -472,6 +472,6 @@ button.dsend:disabled { background: var(--card2); color: var(--muted); cursor: d
 }
 
 .takenote.takebad {
-  border-left-color: var(--critical);
+  border-inline-start-color: var(--critical);
   background: var(--critical-wash);
 }

@@ -147,6 +147,13 @@ describe.skipIf(dbUrl === undefined)('Urdu / English (E4)', () => {
     // The signed-in name is someone's name, never translated.
     expect(await page.locator('#whoName').getAttribute('translate')).toBe('no');
 
+    // The guide: a paragraph with markup inside is translated as one piece, markup and all.
+    await page.locator('#navHelp').click();
+    await page.waitForSelector('#help-overview h2');
+    expect(await page.locator('#help-overview h2').textContent()).toBe('یہ سسٹم کس لیے ہے');
+    const rule = page.locator('#help-overview p b').first();
+    expect(await rule.textContent()).toContain('ایمرجنسی، جہاں سے بھی رپورٹ ہو');
+
     // A dialog the screens raise in English is shown in Urdu.
     const said = new Promise<string>((resolve) => {
       page.once('dialog', (d) => {

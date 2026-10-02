@@ -115,7 +115,7 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   Never use the other district's cluster on this machine. Full suite runs locally (files run one
   at a time). Rarely a test process dies mid-run here ("Worker exited unexpectedly"; cause
   unknown, never seen in CI). The run's end now names the file (`testing/crashTrace.ts`,
-  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement`, `takeAction`, `contrast`, `authPassword` —
+  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement`, `takeAction`, `contrast`, `authPassword`, `activitiesVideo`, `log` —
   different files, dying before any test runs, no exit code; not reproducible on demand.
 - **Built (ADR-0038/0039/0040/0041):** `member` role + one gate (`memberGate.test.ts`);
   Activities — photos, 30-day expiry + ZIP + media backup (no bucket yet), videos via ffmpeg
@@ -126,11 +126,10 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   reads all posts. `WHATSAPP_ACTIVITIES=off` switches WhatsApp → Activities off. Officers tab
   (E2, ADR-0041 §9): department, Activities on/off, Give login (always `member`). E3 fewer tabs:
   Departments under Officers, Log + Recycle bin under History, Pending count. E4a Urdu switch
-  (ADR-0042): `web/src/i18n.ts` + word list `web/ur.json`; Activities and control room in Urdu
-  (E4b). Shell v267.
+  (ADR-0042): `web/src/i18n.ts` + word list `web/ur.json`; the whole app and the guide in Urdu
+  (E4b/E4c), wording awaits the owner. Shell v268.
   Tested with a stubbed Meta only. ⚠️ Any role other than `member` is the full control room.
-- **Next:** E4c Urdu for the How-to-use guide (`help.ts`, whole-paragraph keys), E5 sign-in link
-  on WhatsApp (needs Meta) —
+- **Next:** E5 sign-in link on WhatsApp (built against a stubbed Meta; go-live needs Meta) —
   `PLAN.md` §4. Owner's open questions: `OWNER-QUESTIONS.md`.
 
 ## 6. Repository map

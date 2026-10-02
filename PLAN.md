@@ -82,7 +82,7 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 | E1 ✅ | **Simpler:** any Directory contact posts by WhatsApp with no login; "General" department when none; no answer in an hour → the emergency; voice notes; an unknown number's words → Pending; "Add to Directory" and one-tap Approve on Pending; every account sees every post; Give login takes a department | [ADR-0041](docs/adr/ADR-0041-directory-contacts-post-activities.md) | Bajaur's **new** Meta portfolio |
 | E2 ✅ | **Officers tab** in Activities: every Directory contact — department, Activities on/off, Give login (always member) — and Departments becomes the folder list only | [ADR-0041 §9](docs/adr/ADR-0041-directory-contacts-post-activities.md) | — |
 | E3 ✅ | **Fewer tabs:** DC — Activities · New post · Pending (with count) · Officers · History (Log + Recycle bin) · My account; member — Activities · New post · My account | — | — |
-| E4 ⏳ | **Urdu / English toggle**, across the whole app (control room too). Urdu wording checked by the owner; right-to-left layout. **E4a ✅** switch + engine + Activities in Urdu; **E4b ✅** sign-in and control room screens; **E4c** the How-to-use guide | [ADR-0042](docs/adr/ADR-0042-urdu-english.md) | owner reads `app/web/ur.json` |
+| E4 ✅ | **Urdu / English toggle**, across the whole app (control room too). Urdu wording checked by the owner; right-to-left layout. **E4a ✅** switch + engine + Activities in Urdu; **E4b ✅** sign-in and control room screens; **E4c ✅** the How-to-use guide | [ADR-0042](docs/adr/ADR-0042-urdu-english.md) | owner reads `app/web/ur.json` |
 | E5 | **Sign-in link on WhatsApp** when a login is given — the officer sets their own password | ADR (to write) | Meta account + an approved template |
 
 E4 notes (2026-10-03):
@@ -95,8 +95,12 @@ E4 notes (2026-10-03):
   Urdu (`dateLocale()`), dialogs translated at `confirm`/`prompt`/`alert`, lines of labels joined
   by " · " or " — " translated label by label. What stays English on purpose: names, headlines,
   service names and other data people typed; the WhatsApp message (Meta-approved text).
-- RTL: the ticker runs the other way; `overflow-x: clip` on an RTL page and on the dashboard (an
-  overhang past the left edge made the wall slide sideways).
+- E4c: the guide is translated paragraph by paragraph (`help.ts` marks each block
+  `data-i18n="html"`; its keys in `ur.json` are generated from that marking). Every stylesheet's
+  left/right margins, paddings, borders and alignment are now logical properties (unchanged in
+  English).
+- RTL: the ticker runs the other way; `overflow-x: clip` on an RTL page, the dashboard and the
+  Record (an overhang past the left edge made them slide sideways).
 - Known, inherited (also in English): at 1366 px the Record's last column header ("Action")
   hangs past the right edge.
 

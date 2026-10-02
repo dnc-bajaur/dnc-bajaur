@@ -85,10 +85,12 @@
         A left-to-right page cannot be scrolled past its left edge, so whatever hangs over it (a
         sheen, a travelling row, a film strip) was never seen. A right-to-left page CAN be
         scrolled past its left edge, so the same overhang made the dashboard slide 300px
-        sideways. Clipping it keeps Urdu looking like the English it mirrors.
+        sideways, and the Record 50px (its last column header is wider than a 1366px screen in
+        English too). Clipping it keeps Urdu looking like the English it mirrors.
       */
       :root[dir='rtl'] body,
-      :root[dir='rtl'] #dashboardView {
+      :root[dir='rtl'] #dashboardView,
+      :root[dir='rtl'] #boardView {
         overflow-x: clip;
       }
       #langSlot:empty {
@@ -530,8 +532,8 @@
         text-transform: uppercase;
       }
       .now {
-        text-align: right;
-        margin-left: auto;
+        text-align: end;
+        margin-inline-start: auto;
       }
       /*
        * The heartbeat and the poll ring.
@@ -725,10 +727,10 @@
         display: flex;
         align-items: center;
         gap: 0.4rem;
-        margin-left: auto;
+        margin-inline-start: auto;
       }
       .beat + .now {
-        margin-left: 0.7rem;
+        margin-inline-start: 0.7rem;
       }
       .beat .pip {
         width: 7px;
@@ -787,7 +789,7 @@
        * scene. It shrinks instead.
        */
       #who {
-        margin-left: 0.8rem;
+        margin-inline-start: 0.8rem;
       }
       @media (max-width: 30rem) {
         #who,
@@ -940,7 +942,7 @@
         font-size: var(--t2);
         font-weight: var(--w1);
         color: var(--slate);
-        text-align: right;
+        text-align: end;
       }
       #who button {
         margin: 0;
@@ -1239,7 +1241,7 @@
         flex-direction: column;
         transform: translateX(100%);
         transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-        border-left: 1px solid var(--line);
+        border-inline-start: 1px solid var(--line);
         position: relative;
         z-index: 1001;
         overflow: hidden;
@@ -1425,7 +1427,7 @@
         background: var(--card);
         color: var(--ink);
         box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
-        border-left: 1px solid var(--line);
+        border-inline-start: 1px solid var(--line);
         display: flex;
         flex-direction: column;
         transform: translateX(100%);
@@ -1547,13 +1549,13 @@
       */
       #dashboardView .panel h2[data-expand] {
         position: relative;
-        padding-right: 16px;
+        padding-inline-end: 16px;
         cursor: pointer;
       }
       #dashboardView .panel h2[data-expand]::after {
         content: '\2922';
         position: absolute;
-        right: 0;
+        inset-inline-end: 0;
         top: 0.05em;
         font-size: 0.9em;
         line-height: 1;
@@ -1766,7 +1768,7 @@
         color: var(--ink);
         background: var(--card2);
         border: 1px solid var(--line);
-        border-left: 3px solid var(--slate);
+        border-inline-start: 3px solid var(--slate);
         border-radius: 0 var(--r2) var(--r2) 0;
         padding: 10px 12px;
       }
@@ -1777,7 +1779,7 @@
         said. The left edge is the differentiator, not the only carrier.
       */
       .d-msg.in {
-        border-left-color: var(--ok);
+        border-inline-start-color: var(--ok);
       }
       /*
         Every office answered and none can take it — `main.ts` adds `unheld` here. Burnt orange,
@@ -1785,12 +1787,12 @@
         reporting one. Three classes, so it wins over `.d-msg.none`'s hairline edge below.
       */
       .d-msg.in.unheld {
-        border-left-color: var(--unheld);
+        border-inline-start-color: var(--unheld);
       }
       .d-msg.none {
         color: var(--muted);
         font-style: italic;
-        border-left-color: var(--line);
+        border-inline-start-color: var(--line);
       }
       .d-msg-meta {
         display: block;
@@ -1805,7 +1807,7 @@
       .d-update {
         background: var(--card2);
         border: 1px solid var(--line);
-        border-left: 3px solid var(--primary);
+        border-inline-start: 3px solid var(--primary);
         border-radius: var(--r3);
         padding: 11px 13px;
       }
@@ -1958,7 +1960,7 @@
         font: inherit;
         font-size: var(--t2);
         font-weight: var(--w2);
-        text-align: left;
+        text-align: start;
         padding: 8px 10px;
         border: 0;
         border-radius: var(--r2);
@@ -2677,7 +2679,7 @@
          * properties inherit and an inner card would otherwise take its parent's.
          */
         padding: var(--face-pad, 0.55rem 0.7rem);
-        border-left: var(--face-edge-w, 1px) solid var(--face-edge, var(--line));
+        border-inline-start: var(--face-edge-w, 1px) solid var(--face-edge, var(--line));
         border-radius: 8px;
         box-shadow:
           var(--lift),
@@ -3701,7 +3703,7 @@
         margin: 0 0 0.6rem;
         padding: 0.45rem 0.7rem;
         background: var(--card2);
-        border-left: 3px solid var(--primary);
+        border-inline-start: 3px solid var(--primary);
         border-radius: 8px;
         font-size: var(--t4);
         font-weight: var(--w1);
@@ -3789,7 +3791,7 @@
        * slice, because the remedy is to narrow the question rather than clear a chip.
        */
       #boardTruncated {
-        border-left-color: var(--pending);
+        border-inline-start-color: var(--pending);
       }
 
       /*
@@ -3806,7 +3808,7 @@
         margin: var(--s3) 0 0;
         padding: 0.4rem 0.7rem;
         background: var(--card2);
-        border-left: 3px solid var(--slate);
+        border-inline-start: 3px solid var(--slate);
         border-radius: 8px;
         font-size: var(--t4);
         font-weight: var(--w1);
@@ -4130,7 +4132,7 @@
         padding: 0.6rem 0.7rem;
         border-radius: 10px;
         background: var(--pending-wash);
-        border-left: 4px solid var(--pending);
+        border-inline-start: 4px solid var(--pending);
         font-size: var(--t4);
         font-weight: var(--w1);
       }
@@ -4138,7 +4140,7 @@
          same reason .withdrawn does above. */
       .cnote.wnote {
         background: var(--card2);
-        border-left-color: var(--slate);
+        border-inline-start-color: var(--slate);
       }
 
       /* M9-38. Said quietly, but never absent when it has something to say. */
@@ -4340,7 +4342,7 @@
         letter-spacing: var(--ls-caps);
         color: var(--slate);
       }
-      .smeta { text-align: right; }
+      .smeta { text-align: end; }
       .sage, .sseen, .suntil {
         display: block;
         font-size: var(--t1);
@@ -4476,7 +4478,7 @@
           U+FE70-FEFF;
       }
       .nrow[dir='rtl'] {
-        text-align: right;
+        text-align: end;
       }
       .nrow[dir='rtl'] .ntitle {
         font-family: 'Noto Nastaliq Urdu', 'Segoe UI', system-ui, sans-serif;
@@ -4676,7 +4678,7 @@
       .unheldflag {
         margin: 0 0 0.5rem;
         padding: 0.4rem 0.6rem;
-        border-left: 3px solid var(--unheld);
+        border-inline-start: 3px solid var(--unheld);
         background: var(--unheld-wash);
         color: var(--unheld);
         font-size: var(--t3);
@@ -4718,7 +4720,7 @@
         font-weight: var(--w2);
         min-height: 28px;
         padding: 0 0.5rem;
-        margin-left: 0.4rem;
+        margin-inline-start: 0.4rem;
         background: transparent;
         color: var(--slate);
         border: 1px solid var(--line);
@@ -4782,7 +4784,7 @@
         border-bottom: 1px dotted currentColor;
         color: var(--primary);
         cursor: pointer;
-        text-align: left;
+        text-align: start;
       }
       button.findinglink:hover {
         color: var(--ink);
@@ -5366,12 +5368,12 @@
         position: relative;
       }
       .pwd-wrap input {
-        padding-right: 2.6rem;
+        padding-inline-end: 2.6rem;
       }
       .pwd-eye {
         position: absolute;
         top: 50%;
-        right: 0.3rem;
+        inset-inline-end: 0.3rem;
         transform: translateY(-50%);
         width: 2rem;
         height: 2rem;
@@ -5397,7 +5399,7 @@
         margin-top: 1rem;
         padding: 0.8rem 1rem;
         background: var(--ok-wash);
-        border-left: 4px solid var(--ok);
+        border-inline-start: 4px solid var(--ok);
       }
       #sent h2 {
         margin: 0 0 0.2rem;
@@ -5458,7 +5460,7 @@
       .note {
         margin-top: 1.4rem;
         padding: 0.7rem 0.9rem;
-        border-left: 3px solid var(--line);
+        border-inline-start: 3px solid var(--line);
         font-size: var(--t3);
         color: var(--slate);
       }
@@ -5874,7 +5876,7 @@
         }
         .signin-facts li {
           position: relative;
-          padding-left: 1.15rem;
+          padding-inline-start: 1.15rem;
         }
         .signin-facts li::before {
           content: '';
@@ -6105,7 +6107,7 @@
         min-height: 38px;
         padding: 0 0.95rem;
         border: 0;
-        border-right: 1px solid var(--line);
+        border-inline-end: 1px solid var(--line);
         background: transparent;
         color: var(--slate);
         font: inherit;
@@ -6115,7 +6117,7 @@
         transition: background 0.15s ease, color 0.15s ease;
       }
       #boardScopePick button:last-child {
-        border-right: 0;
+        border-inline-end: 0;
       }
       #boardScopePick button:hover {
         background: var(--card);
@@ -6143,7 +6145,7 @@
         padding: var(--s4) var(--s5);
         background: var(--critical-wash);
         border: 1px solid var(--critical);
-        border-left-width: 4px;
+        border-inline-start-width: 4px;
         border-radius: 8px;
         color: var(--critical);
         font-size: var(--t3);
@@ -6338,7 +6340,7 @@
         /* `<button>`'s UA rule beats inheritance — the board's own headers were sentence case
            for exactly this reason until M11-10 restated it. */
         text-transform: none;
-        text-align: left;
+        text-align: start;
       }
       .facet b {
         font-weight: 800;
@@ -6464,7 +6466,7 @@
         font: inherit;
         font-size: var(--t3);
         font-weight: var(--w1);
-        text-align: left;
+        text-align: start;
         cursor: pointer;
         transition: all 0.15s ease;
       }
@@ -6656,7 +6658,7 @@
         background: var(--critical-wash);
         color: var(--critical);
         border: 1px solid var(--critical);
-        border-left-width: 4px;
+        border-inline-start-width: 4px;
         border-radius: 0 var(--r2) var(--r2) 0;
         font-size: var(--t4);
         font-weight: var(--w2);
@@ -6684,7 +6686,7 @@
         font-weight: var(--w1);
       }
       .row[data-unassigned='true'] {
-        border-left: 4px solid var(--critical);
+        border-inline-start: 4px solid var(--critical);
       }
 
       /* The administration console's styling moved to `office.css` on 2026-08-14 — `admin.ts` has been in the lazily-fetched `office.js` since 2026-08-04. */
@@ -6715,7 +6717,7 @@
         display: block;
         padding: var(--s4) var(--s5);
         background: var(--critical-wash);
-        border-left: 4px solid var(--critical);
+        border-inline-start: 4px solid var(--critical);
         border-radius: 0 var(--r2) var(--r2) 0;
         color: var(--critical);
         font-size: var(--t3);
@@ -6749,7 +6751,7 @@
       .work {
         background: var(--card);
         border: 1px solid var(--line);
-        border-left: 5px solid var(--unknown);
+        border-inline-start: 5px solid var(--unknown);
         border-radius: 12px;
         padding: 0.7rem 0.85rem;
         margin-bottom: 0.6rem;
@@ -6767,7 +6769,7 @@
         outline-offset: var(--focus-off);
       }
       .work[data-overdue='true'] {
-        border-left-color: var(--critical);
+        border-inline-start-color: var(--critical);
         background: linear-gradient(90deg, var(--critical-wash), var(--card) 55%);
       }
       .work header {
@@ -6990,7 +6992,7 @@
         background: var(--card);
         border: 1px solid var(--line);
         /* The bar is the state, before a word is read. Grey until somebody assesses it. */
-        border-left: 5px solid var(--unknown);
+        border-inline-start: 5px solid var(--unknown);
         border-radius: 12px;
         font-size: var(--t4);
       }
@@ -7043,7 +7045,7 @@
       }
       .row .state {
         grid-row: 1;
-        text-align: right;
+        text-align: end;
         font-size: var(--t1);
         color: var(--slate);
       }
@@ -7126,16 +7128,16 @@
         font-weight: var(--w2);
       }
       .row[data-ownerless='true'] {
-        border-left-color: var(--unheld);
+        border-inline-start-color: var(--unheld);
       }
       /* Past its deadline, and nobody has taken it. */
       .row[data-overdue='true'] {
-        border-left-color: var(--critical);
+        border-inline-start-color: var(--critical);
         background: linear-gradient(90deg, var(--critical-wash), var(--card) 55%);
       }
       /* With nobody at all — which outranks late, because late still has an owner. */
       .row[data-unassigned='true'] {
-        border-left-color: var(--critical);
+        border-inline-start-color: var(--critical);
         background: linear-gradient(90deg, var(--critical-wash), var(--card) 40%);
       }
       /*
@@ -7216,7 +7218,7 @@
             redesign dropped this and its horizontal padding drifted from the rows' by 0.05rem;
             both are reconciled here so head and row content share one left edge.
           */
-          border-left: 4px solid transparent;
+          border-inline-start: 4px solid transparent;
           border-radius: 10px;
           box-shadow: var(--lift);
           font-size: var(--t1);
@@ -7234,7 +7236,7 @@
           background: transparent;
           color: inherit;
           font: inherit;
-          text-align: left;
+          text-align: start;
           text-transform: uppercase;
         }
         #boardHead button.bh {
@@ -7262,7 +7264,7 @@
         #boardTable .row {
           padding: 1.1rem 1.25rem;
           border: 1px solid var(--line);
-          border-left: 4px solid var(--unknown);
+          border-inline-start: 4px solid var(--unknown);
           border-radius: 12px;
           background: var(--card);
           box-shadow: var(--lift);
@@ -7355,7 +7357,7 @@
         }
         #boardTable .row .state {
           grid-column: 6;
-          text-align: left;
+          text-align: start;
           font-size: 0.82rem;
           font-weight: 700;
           /* One line, clipped — a verbatim reply can be long; the whole of it is in the cell
@@ -7375,7 +7377,7 @@
           color: var(--primary);
           font-weight: 700;
           font-size: 0.84rem;
-          text-align: right;
+          text-align: end;
           white-space: nowrap;
         }
         /* Resolved rows have nothing to do — the cell says so, quietly. */
@@ -7422,7 +7424,7 @@
         */
         #boardTable .row[data-overdue='true'],
         #boardTable .row[data-unassigned='true'] {
-          border-left-color: var(--critical);
+          border-inline-start-color: var(--critical);
           background: linear-gradient(90deg, var(--critical-wash), var(--card) 55%);
         }
         #boardTable
@@ -7520,7 +7522,7 @@
       /* Its own line, never left for a full page of results to imply. */
       #searchNote {
         padding: var(--s3) var(--s4);
-        border-left: 3px solid var(--pending);
+        border-inline-start: 3px solid var(--pending);
         background: var(--card2);
         border-radius: var(--r1);
         font-size: var(--t3);
@@ -7561,7 +7563,7 @@
       .viewtools {
         display: inline-flex;
         gap: var(--s2);
-        margin-left: auto;
+        margin-inline-start: auto;
       }
       /* An author `display` beats `[hidden]` — see `.admin-split-layout[hidden]`. */
       .viewtools[hidden] {
@@ -7637,7 +7639,7 @@
            full-strength colour, because a border has no text on it to bury. */
         0% {
           background: var(--primary-wash);
-          border-left-color: var(--primary);
+          border-inline-start-color: var(--primary);
         }
         100% {
           background: var(--card);
@@ -7710,8 +7712,8 @@
       .value .was {
         display: block;
         margin-top: 0.35rem;
-        padding-left: 0.6rem;
-        border-left: 3px solid var(--pending);
+        padding-inline-start: 0.6rem;
+        border-inline-start: 3px solid var(--pending);
         font-size: var(--t3);
         color: var(--slate);
       }
@@ -7748,7 +7750,7 @@
         border-bottom: 1px solid var(--line);
         /* Transparent, so every row keeps the same left edge and only the marked ones show a
            colour. Without it the marked rows would sit 3px further right than the rest. */
-        border-left: 3px solid transparent;
+        border-inline-start: 3px solid transparent;
         font-size: var(--t4);
       }
       /*
@@ -7768,18 +7770,18 @@
        * going backwards, `--primary` is authority being used, `--ok` is the end of it.
        */
       .tl[data-type='escalated'] {
-        border-left-color: var(--pending);
+        border-inline-start-color: var(--pending);
       }
       .tl[data-type='overridden'] {
-        border-left-color: var(--primary);
+        border-inline-start-color: var(--primary);
       }
       .tl[data-type='reopened'],
       .tl[data-type='corrected'] {
-        border-left-color: var(--critical);
+        border-inline-start-color: var(--critical);
       }
       .tl[data-type='resolved'],
       .tl[data-type='closed'] {
-        border-left-color: var(--ok);
+        border-inline-start-color: var(--ok);
       }
       @media (max-width: 34rem) {
         .tl {

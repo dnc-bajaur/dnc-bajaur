@@ -94,7 +94,7 @@
 #settingsTabs button {
   appearance: none;
   width: 100%;
-  text-align: left;
+  text-align: start;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -129,12 +129,12 @@
   background: var(--primary-wash);
   color: var(--primary);
   font-weight: var(--w3, 800);
-  border-left: 3px solid var(--primary);
+  border-inline-start: 3px solid var(--primary);
   border-radius: 4px var(--r2, 8px) var(--r2, 8px) 4px;
 }
 @media (max-width: 60rem) {
   #settingsTabs button[aria-current='page'] {
-    border-left-color: transparent;
+    border-inline-start-color: transparent;
     border-radius: var(--r2, 8px);
   }
 }
@@ -174,7 +174,7 @@
   margin: 0 0 0.9rem;
   padding: 0.6rem 0.8rem;
   border-radius: var(--r2, 8px);
-  border-left: 4px solid var(--critical);
+  border-inline-start: 4px solid var(--critical);
   background: var(--card);
   color: var(--critical);
   font-weight: var(--w2, 700);
@@ -192,7 +192,7 @@
 
 .settings-card {
   appearance: none;
-  text-align: left;
+  text-align: start;
   font: inherit;
   display: flex;
   flex-direction: column;
@@ -252,7 +252,7 @@ button.settings-card:hover {
   margin: 0.6rem 0 1rem;
   padding: 0.55rem 0.8rem;
   border-radius: var(--r2, 8px);
-  border-left: 4px solid var(--ok);
+  border-inline-start: 4px solid var(--ok);
   background: var(--card2);
   color: var(--ink);
   font-size: var(--t3, 0.82rem);
@@ -260,7 +260,7 @@ button.settings-card:hover {
 }
 
 .settings-fit[data-overflows='true'] {
-  border-left-color: var(--pending);
+  border-inline-start-color: var(--pending);
 }
 
 #settingsLayout .sectionhead {
@@ -318,7 +318,7 @@ button.settings-card:hover {
 }
 
 .settings-table th {
-  text-align: left;
+  text-align: start;
   font-size: var(--t1, 0.68rem);
   font-weight: var(--w2, 700);
   letter-spacing: var(--ls-caps, 0.06em);
@@ -360,7 +360,7 @@ button.settings-card:hover {
 }
 .settings-rowchevron {
   width: 1.6rem;
-  text-align: right;
+  text-align: end;
   font-size: var(--t5, 1rem);
   color: var(--slate);
 }
@@ -610,7 +610,7 @@ button.settings-card:hover {
   flex-direction: column;
   transform: translateX(100%);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  border-left: 1px solid var(--line);
+  border-inline-start: 1px solid var(--line);
 }
 .settings-backdrop.open .settings-drawer {
   transform: translateX(0);
@@ -699,7 +699,7 @@ button.settings-card:hover {
 .settings-drawer-note {
   margin: 0 0 1rem;
   padding: 0.6rem 0.75rem;
-  border-left: 3px solid var(--pending);
+  border-inline-start: 3px solid var(--pending);
   background: var(--card2);
   border-radius: var(--r2, 8px);
   font-size: var(--t2, 0.75rem);
@@ -738,7 +738,7 @@ button.settings-card:hover {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  text-align: left;
+  text-align: start;
 }
 .settings-btn.danger {
   color: var(--critical);

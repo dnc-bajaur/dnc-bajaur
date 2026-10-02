@@ -92,7 +92,7 @@
 }
 #helpBody ul,
 #helpBody ol {
-  padding-left: 1.2rem;
+  padding-inline-start: 1.2rem;
   max-width: 40em;
 }
 #helpBody li {
@@ -122,18 +122,19 @@
 #helpBody ol.hjourney li {
   counter-increment: hstep;
   position: relative;
-  padding: 0 0 1.3rem 2.6rem;
+  padding-block: 0 1.3rem;
+  padding-inline: 2.6rem 0;
   margin: 0;
-  border-left: 1px solid var(--line);
+  border-inline-start: 1px solid var(--line);
 }
 #helpBody ol.hjourney li:last-child {
-  border-left-color: transparent;
+  border-inline-start-color: transparent;
   padding-bottom: 0;
 }
 #helpBody ol.hjourney li::before {
   content: counter(hstep);
   position: absolute;
-  left: -0.95rem;
+  inset-inline-start: -0.95rem;
   top: -0.1rem;
   width: 1.9rem;
   height: 1.9rem;
@@ -367,7 +368,7 @@
   color: var(--primary);
 }
 #helpBody .hcol ul {
-  padding-left: 1.05rem;
+  padding-inline-start: 1.05rem;
   margin: 0;
 }
 #helpBody .hcol li {
@@ -404,7 +405,7 @@
 /* -------------------------------------------------------------- notes + glossary */
 
 #helpBody .note.warn {
-  border-left-color: var(--pending);
+  border-inline-start-color: var(--pending);
   background: var(--pending-wash);
   color: var(--ink);
   padding: 0.75rem 0.95rem;
@@ -452,7 +453,7 @@
 }
 #helpBody table.htable th,
 #helpBody table.htable td {
-  text-align: left;
+  text-align: start;
   padding: 0.45rem 0.6rem;
   border-bottom: 1px solid var(--line);
   vertical-align: top;

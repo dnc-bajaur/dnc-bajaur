@@ -60,7 +60,7 @@
   min-height: 44px;
   padding: 0 0.9rem;
   border: 0;
-  border-right: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
   background: transparent;
   color: var(--slate);
   font: inherit;
@@ -71,7 +71,7 @@
 }
 
 #reportPresets button:last-child {
-  border-right: 0;
+  border-inline-end: 0;
 }
 
 #reportPresets button:hover {
@@ -169,7 +169,7 @@
   background: var(--critical-wash);
   color: var(--critical);
   border: 1px solid var(--critical);
-  border-left-width: 4px;
+  border-inline-start-width: 4px;
   border-radius: 8px;
   font-size: var(--t4);
   font-weight: var(--w2);
@@ -202,7 +202,7 @@
 button.rk {
   font: inherit;
   color: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 button.rk:hover {
@@ -529,7 +529,7 @@ button.rk:hover {
 .rdayout a {
   color: var(--primary);
   font-weight: var(--w2);
-  margin-right: 0.9rem;
+  margin-inline-end: 0.9rem;
   text-decoration: none;
 }
 

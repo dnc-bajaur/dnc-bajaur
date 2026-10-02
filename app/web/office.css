@@ -246,7 +246,7 @@ button.plain.small:hover { color: var(--critical); border-color: var(--critical)
 }
 #adminTabs button {
   width: 100%;
-  text-align: left;
+  text-align: start;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -270,7 +270,7 @@ button.plain.small:hover { color: var(--critical); border-color: var(--critical)
   background: var(--primary-wash);
   color: var(--primary);
   font-weight: var(--w3);
-  border-left: 3px solid var(--primary);
+  border-inline-start: 3px solid var(--primary);
   border-radius: 4px 8px 8px 4px;
 }
 #adminError {
@@ -377,7 +377,7 @@ button.plain.small:hover { color: var(--critical); border-color: var(--critical)
   justify-content: center;
   font-size: 10px;
   font-weight: bold;
-  margin-right: -6px;
+  margin-inline-end: -6px;
   border: 2px solid var(--card);
 }
 .avatar-sm.more {
@@ -389,7 +389,7 @@ button.plain.small:hover { color: var(--critical); border-color: var(--critical)
 img.avatar-sm.avatar-pic {
   object-fit: cover;
   background: var(--card2);
-  margin-right: 0;
+  margin-inline-end: 0;
 }
 /* The picture control in the group drawer. */
 .pic-row {
@@ -455,7 +455,7 @@ img.avatar-sm.avatar-pic {
   flex-direction: column;
   transform: translateX(100%);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  border-left: 1px solid var(--line);
+  border-inline-start: 1px solid var(--line);
   position: relative;
   z-index: 1001;
 }
@@ -690,14 +690,14 @@ img.avatar-sm.avatar-pic {
 #integrity { margin-bottom: 1rem; }
 #integrity .clear { font-size: var(--t4); color: var(--ok); font-weight: var(--w1); margin: 0; }
 .finding {
-  border-left: 4px solid var(--line);
+  border-inline-start: 4px solid var(--line);
   background: var(--card);
   padding: 0.4rem 0.7rem;
   margin-bottom: 0.35rem;
   font-size: var(--t4);
 }
-.finding[data-severity="blocking"] { border-left-color: var(--critical); }
-.finding[data-severity="serious"]  { border-left-color: var(--pending); }
+.finding[data-severity="blocking"] { border-inline-start-color: var(--critical); }
+.finding[data-severity="serious"]  { border-inline-start-color: var(--pending); }
 .finding summary { cursor: pointer; display: flex; gap: 0.6rem; align-items: baseline; }
 .finding .sev {
   font-size: var(--t1); font-weight: var(--w3); text-transform: uppercase; letter-spacing: var(--ls-caps);
@@ -729,7 +729,7 @@ img.avatar-sm.avatar-pic {
  */
 .dept {
   background: var(--card); border: 1px solid var(--line);
-  border-left: 5px solid var(--line); border-radius: 12px;
+  border-inline-start: 5px solid var(--line); border-radius: 12px;
   padding: 0.7rem 0.85rem; margin-bottom: 0.6rem;
 }
 /*
@@ -739,7 +739,7 @@ img.avatar-sm.avatar-pic {
   out against. The signals are gone with ADR-0022 and the lesson is not: an edge colour is
   spent on the row somebody can act on tonight, or it is spent on nothing.
 */
-.dept[data-administration="true"] { border-left-color: var(--primary); }
+.dept[data-administration="true"] { border-inline-start-color: var(--primary); }
 
 @media (min-width: 90rem) {
   #adminDepartments {
@@ -855,7 +855,7 @@ input.ack[data-set="true"] { border: 1px solid var(--ink); font-weight: var(--w2
 .unreachable {
   margin: 0 0 0.9rem; padding: 0.6rem 0.8rem;
   background: var(--critical-wash); color: var(--critical);
-  border-left: 4px solid var(--critical);
+  border-inline-start: 4px solid var(--critical);
   font-size: var(--t4); font-weight: var(--w2);
 }
 
@@ -868,11 +868,11 @@ input.ack[data-set="true"] { border: 1px solid var(--ink); font-weight: var(--w2
  */
 .post, .rosterperson {
   background: var(--card); border: 1px solid var(--line);
-  border-left: 5px solid var(--line); border-radius: 12px;
+  border-inline-start: 5px solid var(--line); border-radius: 12px;
   padding: 0.7rem 0.85rem; margin-bottom: 0.6rem;
 }
-.post:has(.nobody) { border-left-color: var(--pending); }
-.rosterperson { border-left-color: var(--primary); }
+.post:has(.nobody) { border-inline-start-color: var(--pending); }
+.rosterperson { border-inline-start-color: var(--primary); }
 
 /* Cards flow into columns once the screen has room, exactly like the board's. */
 @media (min-width: 56rem) {
@@ -924,11 +924,11 @@ select.assign { margin: 0; padding: 0.25rem; font: inherit; font-size: var(--t3)
 /* ------------------------------------------------------------- backups */
 #backups .state {
   margin: 0 0 0.7rem; padding: 0.6rem 0.8rem;
-  border-left: 4px solid var(--ok); background: var(--ok-wash); color: var(--ok);
+  border-inline-start: 4px solid var(--ok); background: var(--ok-wash); color: var(--ok);
   font-size: var(--t4); font-weight: var(--w2);
 }
 #backups .state[data-ok="false"] {
-  border-left-color: var(--critical); background: var(--critical-wash); color: var(--critical);
+  border-inline-start-color: var(--critical); background: var(--critical-wash); color: var(--critical);
 }
 #backups .run {
   display: grid; grid-template-columns: 11rem 5rem 1fr;
@@ -951,7 +951,7 @@ select.assign { margin: 0; padding: 0.25rem; font: inherit; font-size: var(--t3)
   margin: 0;
   font-size: var(--t2);
   color: var(--pending);
-  border-left: 3px solid var(--pending);
+  border-inline-start: 3px solid var(--pending);
   background: var(--pending-wash);
   padding: 0.4rem 0.55rem;
   border-radius: 0 4px 4px 0;
@@ -1066,7 +1066,7 @@ dialog.ask[data-danger='true'] .askyes {
   than the label it follows: the number is there to say whether the chip is worth clicking, not
   to be read across the room.
 */
-.deptchip .deptchipn { margin-left: 0.45rem; font-variant-numeric: tabular-nums; color: var(--slate); }
+.deptchip .deptchipn { margin-inline-start: 0.45rem; font-variant-numeric: tabular-nums; color: var(--slate); }
 .deptchip[aria-pressed='true'] .deptchipn { color: inherit; opacity: 0.8; }
 
 /*

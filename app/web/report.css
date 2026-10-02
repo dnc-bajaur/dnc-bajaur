@@ -16,10 +16,10 @@
 }
 .reportPairs dt { font-weight: var(--w1); opacity: 0.75; }
 .reportPairs dd { margin: 0; }
-.reportNarrative { margin: 0 0 1rem; padding-left: 1.2rem; }
+.reportNarrative { margin: 0 0 1rem; padding-inline-start: 1.2rem; }
 .reportNarrative li { margin-bottom: 0.5rem; }
-.reportGaps { margin: 0 0 1rem; padding-left: 1.2rem; }
-.reportRecipients { margin: 0 0 1rem; padding-left: 1.2rem; list-style: none; }
+.reportGaps { margin: 0 0 1rem; padding-inline-start: 1.2rem; }
+.reportRecipients { margin: 0 0 1rem; padding-inline-start: 1.2rem; list-style: none; }
 .reportRecipients li { margin-bottom: 0.5rem; }
 /* The group a dispatch expanded, heading its members — Case 3. A label between rows, not a
    container: expand() dissolves the group at send. Caps + muted, like the section heads. */
@@ -125,7 +125,7 @@
   #piReportBody, .reportPairs dd, .reportNarrative li, .reportRecipients li { font-size: 10pt; }
   .reportPairs dt { color: #444; opacity: 1; }
   .meta, .note { color: #333 !important; }
-  .note { border-left: 2px solid #666; padding-left: 0.5rem; }
+  .note { border-inline-start: 2px solid #666; padding-inline-start: 0.5rem; }
 
   /* An entry split across a page break reads as two half-events. */
   .reportNarrative li, .reportGaps li, .reportRecipients li {

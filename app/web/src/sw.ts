@@ -1273,7 +1273,9 @@ declare const self: ServiceWorkerGlobalScope;
 // and `ur.json`. `activities.html`, `index.html` and their scripts moved, so the bump.
 // v267: Bajaur E4b (ADR-0042) — the control room's words in `ur.json`, dates in Urdu on an Urdu
 // page, dialogs translated, right-to-left fixes (ticker direction, dashboard overflow).
-const CACHE = 'dnc-shell-v267';
+// v268: Bajaur E4c (ADR-0042) — the How-to-use guide in Urdu, paragraph by paragraph; every
+// stylesheet's left/right margins, paddings, borders and alignment made logical for right-to-left.
+const CACHE = 'dnc-shell-v268';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.

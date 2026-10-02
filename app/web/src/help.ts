@@ -198,7 +198,7 @@ const CONTENT = `
     <div class="hscreen">
       <div class="hbar">Who was told · 17 told · 9 confirmed · 8 silent</div>
       <div class="hbody">
-        <div class="hrow"><span>Rescue 1122 — Nawaz Khan</span><span class="hpill ok">Confirmed</span></div>
+        <div class="hrow"><span>Rescue 1122 — Duty Officer</span><span class="hpill ok">Confirmed</span></div>
         <div class="hrow"><span>TMO Bajaur</span><span class="hpill wait">Waiting</span></div>
         <div class="hrow"><span>Health Department</span><span class="hpill bad">No answer</span></div>
       </div>
@@ -512,7 +512,7 @@ const CONTENT = `
     </div>
 
     <h3>What the message looks like</h3>
-    <div class="htemplate">
+    <div class="htemplate" translate="no" dir="ltr">
       <b>District Nerve Center — Bajaur</b><br /><br />
       EMERGENCY · Fire · critical<br /><br />
       Two shops on fire near the bazaar road, a team is needed urgently.<br /><br />
@@ -522,7 +522,7 @@ const CONTENT = `
     <p>That button is the important part. Tapping it is what counts as confirmed — because many
     officers have no login to this system at all, but everybody has WhatsApp, and one tap is
     enough to create an attributed record of who confirmed and when.</p>
-    <div class="note" style="border-left-color: var(--pending)"><b>An attachment travels as a
+    <div class="note" style="border-inline-start-color: var(--pending)"><b>An attachment travels as a
     link, not as a file.</b> WhatsApp will only put a document on a message if the template was
     approved to carry one, and the district's template was not. So a PDF or photograph reaches
     the officer as a link inside the message — it opens with no account and lasts two weeks. The
@@ -561,6 +561,33 @@ const CONTENT = `
   </section>
 `;
 
+/**
+ * Marks the guide for Urdu (ADR-0042, E4c): each paragraph, list item, heading or table cell is
+ * translated as ONE piece — Urdu orders its words differently, so `<b>` inside a sentence cannot
+ * be translated around. Leaf blocks first; then any element holding loose text; then nested marks
+ * are dropped so a piece's key (its inner HTML) never contains another piece's marker.
+ *
+ * ⚠️ `ur.json`'s guide keys are this exact marking's output. Change it and they must be
+ * regenerated, or the guide quietly falls back to English.
+ */
+const BLOCKS = 'p, li, h2, h3, h4, dt, dd, th, td';
+
+function markForUrdu(root: DocumentFragment): void {
+  for (const el of Array.from(root.querySelectorAll(BLOCKS))) {
+    if (el.querySelector(BLOCKS) === null) el.setAttribute('data-i18n', 'html');
+  }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+    const parent = n.parentElement;
+    if (n.nodeValue?.trim() === '' || parent === null) continue;
+    if (parent.closest('[data-i18n]') !== null) continue;
+    parent.setAttribute('data-i18n', 'html');
+  }
+  for (const el of Array.from(root.querySelectorAll('[data-i18n] [data-i18n]'))) {
+    el.removeAttribute('data-i18n');
+  }
+}
+
 export function mountHelp(): HelpPanel {
   const body = document.getElementById('helpBody');
 
@@ -573,7 +600,10 @@ export function mountHelp(): HelpPanel {
       if (!built && body !== null) {
         // Authored constant markup, not user or server data — there is nothing here to
         // sanitise, and treating it as untrusted would just be theatre.
-        body.innerHTML = CONTENT;
+        const page = document.createElement('template');
+        page.innerHTML = CONTENT;
+        markForUrdu(page.content);
+        body.replaceChildren(page.content);
         built = true;
       }
     },
