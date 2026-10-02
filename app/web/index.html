@@ -42,6 +42,26 @@
       }
     </script>
     <!--
+      Urdu, chosen BEFORE the first paint (Bajaur E4, ADR-0042) — the same reasoning as the theme
+      above. The page is held invisible until the Urdu word list is applied (`web/src/i18n.ts`),
+      and never for more than four seconds: a blank control room is worse than an English one.
+    -->
+    <script>
+      try {
+        if (localStorage.getItem('dnc-bajaur.lang') === 'ur') {
+          var h = document.documentElement;
+          h.lang = 'ur';
+          h.dir = 'rtl';
+          h.classList.add('i18n-pending');
+          setTimeout(function () {
+            h.classList.remove('i18n-pending');
+          }, 4000);
+        }
+      } catch (e) {
+        /* Site data blocked. English. */
+      }
+    </script>
+    <!--
       The icons. Rendered from `web/icon.svg` by `scripts/make-icons.mjs`, not hand-drawn.
 
       `apple-touch-icon` is not decoration on this project. iOS ignores the manifest's icons
@@ -53,6 +73,17 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/icon-180.png" />
     <style>
+      /* Urdu (E4, ADR-0042): held until translated; a face with Urdu letters for the whole UI. */
+      html.i18n-pending body {
+        visibility: hidden;
+      }
+      :root[lang='ur'] body {
+        font-family: 'Segoe UI', 'Noto Naskh Arabic', 'Noto Sans Arabic', Tahoma, system-ui,
+          sans-serif;
+      }
+      #langSlot:empty {
+        display: none;
+      }
       /*
        * ==================================================================== the palette
        *
@@ -8010,6 +8041,7 @@
         account. The head script above is what applies it before the first paint; this button
         only writes it down.
       -->
+      <span id="langSlot"></span>
       <button type="button" id="theme" title="Dark theme" aria-label="Dark theme">
         <svg
           class="moon"

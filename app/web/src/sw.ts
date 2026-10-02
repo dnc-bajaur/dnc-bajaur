@@ -1268,7 +1268,10 @@ declare const self: ServiceWorkerGlobalScope;
 // `admin.ts` moved, so the bump.
 // v265: Bajaur E2 (ADR-0041 §9) — the Officers tab on `/activities.html`; Departments keeps only
 // the folder list. `activities.html` and its script moved, so the bump.
-const CACHE = 'dnc-shell-v265';
+// v266: Bajaur E3 — fewer Activities tabs: Departments under Officers, Log and Recycle bin under
+// History, Pending shows its count. With it, E4's start (ADR-0042): the Urdu switch on both pages
+// and `ur.json`. `activities.html`, `index.html` and their scripts moved, so the bump.
+const CACHE = 'dnc-shell-v266';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.

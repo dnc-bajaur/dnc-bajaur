@@ -57,6 +57,7 @@ import type { DashboardLinks, DashboardScreen } from './dashboard.js';
 import type { DispatchPanel, RecordOutcome, ToldEntry } from './dispatch.js';
 import { incidentRow, type IncidentRowData } from './incidentRow.js';
 import { offerInstall } from './install.js';
+import { drawLangSwitch, startUrdu } from './i18n.js';
 
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -6080,6 +6081,14 @@ function offlineReadiness(): void {
 
 offlineReadiness();
 offerInstall();
+
+// Urdu / English (E4, ADR-0042). Before `boot()`, so a page held invisible for the word list
+// is revealed by `startUrdu` whatever `boot` does — including when `boot` fails.
+{
+  const slot = document.getElementById('langSlot');
+  if (slot !== null) drawLangSwitch(slot);
+  void startUrdu();
+}
 
 /**
  * `boot()` opens IndexedDB, reads `localStorage` and wires every screen. If any of that

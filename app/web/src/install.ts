@@ -66,7 +66,7 @@ const STYLE = `
 #${BANNER_ID} {
   position: fixed; z-index: 50; left: 16px; right: 16px;
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  max-width: 420px; margin-left: auto;
+  max-width: 420px; margin-inline-start: auto;
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
   padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
   background: var(--card); color: var(--ink);
@@ -75,7 +75,7 @@ const STYLE = `
 #${BANNER_ID} .install-text { flex: 1 1 200px; margin: 0; }
 #${BANNER_ID} .install-text strong { display: block; }
 #${BANNER_ID} .install-text span { color: var(--muted); }
-#${BANNER_ID} .install-actions { display: flex; gap: 8px; margin-left: auto; }
+#${BANNER_ID} .install-actions { display: flex; gap: 8px; margin-inline-start: auto; }
 #${BANNER_ID} button {
   font: inherit; padding: 6px 12px; border-radius: 8px; cursor: pointer;
   border: 1px solid var(--line); background: transparent; color: var(--ink);

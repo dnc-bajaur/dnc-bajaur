@@ -81,9 +81,24 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 | D ✅ | **WhatsApp → Activities**, same number; open emergency → two buttons; unknown numbers → Pending list | [ADR-0040](docs/adr/ADR-0040-whatsapp-to-activities.md) | Bajaur's **new** Meta portfolio |
 | E1 ✅ | **Simpler:** any Directory contact posts by WhatsApp with no login; "General" department when none; no answer in an hour → the emergency; voice notes; an unknown number's words → Pending; "Add to Directory" and one-tap Approve on Pending; every account sees every post; Give login takes a department | [ADR-0041](docs/adr/ADR-0041-directory-contacts-post-activities.md) | Bajaur's **new** Meta portfolio |
 | E2 ✅ | **Officers tab** in Activities: every Directory contact — department, Activities on/off, Give login (always member) — and Departments becomes the folder list only | [ADR-0041 §9](docs/adr/ADR-0041-directory-contacts-post-activities.md) | — |
-| E3 | **Fewer tabs:** DC — Activities · New post · Pending (with count) · Officers · History (Log + Recycle bin) · My account; member — Activities · New post · My account | — | — |
-| E4 | **Urdu / English toggle**, across the whole app (control room too). Urdu wording checked by the owner; right-to-left layout | ADR (to write) | — |
+| E3 ✅ | **Fewer tabs:** DC — Activities · New post · Pending (with count) · Officers · History (Log + Recycle bin) · My account; member — Activities · New post · My account | — | — |
+| E4 ⏳ | **Urdu / English toggle**, across the whole app (control room too). Urdu wording checked by the owner; right-to-left layout. **E4a ✅** switch + engine + Activities in Urdu; **E4b** sign-in and control room screens, one by one | [ADR-0042](docs/adr/ADR-0042-urdu-english.md) | owner reads `app/web/ur.json` |
 | E5 | **Sign-in link on WhatsApp** when a login is given — the officer sets their own password | ADR (to write) | Meta account + an approved template |
+
+E4 notes (2026-10-03):
+- `web/src/i18n.ts` replaces whole known English phrases with Urdu from `web/ur.json` as they
+  reach the page; `translate="no"` marks people's words. Per device (`dnc-bajaur.lang`), set
+  before the first paint, page held ≤ 4 s for the word list. Pinned by `i18n.test.ts` and
+  `activitiesUrdu.e2e.test.ts`.
+- E4a: Activities is fully in the list. The control room has the switch and turns right-to-left,
+  but its words are still English until E4b adds them screen by screen.
+
+E3 notes (2026-10-03):
+- The Department list now sits under **Officers** (same permission, `activities.departments`).
+  **History** opens on the Log, with a switch to the Recycle bin. The Pending count is read when
+  the page opens and each time Pending is opened — it does not update live.
+- Activities' selected buttons now use `--on-accent` (the dark-mode faint-text note under A is fixed).
+- Pinned by `activitiesTabs.e2e.test.ts` (shell v266).
 
 E1 notes (2026-10-02):
 - Decided by the owner in conversation: Directory = known sender; unanswered → emergency; every
@@ -117,8 +132,6 @@ A notes (2026-10-02):
 - `web/src/install.ts`, on the shell and on Activities (which now links the manifest). Chrome/
   Edge show it only when they consider the page installable — over HTTPS, so not on a bare IP
   address. iPhone gets the Share steps. "Not now" is remembered in that browser for 14 days.
-- Activities' own selected-tab buttons still put white text on the dark-mode violet (faint);
-  `--on-accent` now exists on that page for when they are fixed.
 
 C3 notes (2026-10-02):
 - Resumable chunked upload (4 MB chunks; a drop carries on from what arrived), converted one at a

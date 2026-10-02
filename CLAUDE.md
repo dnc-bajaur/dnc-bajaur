@@ -115,7 +115,7 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   Never use the other district's cluster on this machine. Full suite runs locally (files run one
   at a time). Rarely a test process dies mid-run here ("Worker exited unexpectedly"; cause
   unknown, never seen in CI). The run's end now names the file (`testing/crashTrace.ts`,
-  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement`, `takeAction` —
+  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement`, `takeAction`, `contrast`, `authPassword` —
   different files, dying before any test runs, no exit code; not reproducible on demand.
 - **Built (ADR-0038/0039/0040/0041):** `member` role + one gate (`memberGate.test.ts`);
   Activities — photos, 30-day expiry + ZIP + media backup (no bucket yet), videos via ffmpeg
@@ -124,10 +124,13 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   Directory contact posts with no login, open emergency → two buttons, no answer in an hour →
   the emergency, voice notes, unknown numbers → Pending (*Add to Directory*), every account
   reads all posts. `WHATSAPP_ACTIVITIES=off` switches WhatsApp → Activities off. Officers tab
-  (E2, ADR-0041 §9): department, Activities on/off, Give login (always `member`). Shell v265.
+  (E2, ADR-0041 §9): department, Activities on/off, Give login (always `member`). E3 fewer tabs:
+  Departments under Officers, Log + Recycle bin under History, Pending count. E4a Urdu switch
+  (ADR-0042): `web/src/i18n.ts` + word list `web/ur.json`; Activities in Urdu. Shell v266.
   Tested with a stubbed Meta only. ⚠️ Any role other than `member` is the full control room.
-- **Next:** E3 fewer tabs, E4 Urdu/English toggle (whole app), E5 sign-in link on WhatsApp
-  (needs Meta) — `PLAN.md` §4.
+- **Next:** E4b Urdu for sign-in + control room screens (add phrases to `ur.json`, mark people's
+  words `translate="no"`), E5 sign-in link on WhatsApp (needs Meta) —
+  `PLAN.md` §4. Owner's open questions: `OWNER-QUESTIONS.md`.
 
 ## 6. Repository map
 

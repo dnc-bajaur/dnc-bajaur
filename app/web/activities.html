@@ -29,6 +29,21 @@
         }
       } catch (e) {}
     </script>
+    <script>
+      // Urdu, chosen BEFORE the first paint (E4, ADR-0042) — like the theme. The page is held
+      // invisible until the word list is applied, and never for more than four seconds.
+      try {
+        if (localStorage.getItem('dnc-bajaur.lang') === 'ur') {
+          var h = document.documentElement;
+          h.lang = 'ur';
+          h.dir = 'rtl';
+          h.classList.add('i18n-pending');
+          setTimeout(function () {
+            h.classList.remove('i18n-pending');
+          }, 4000);
+        }
+      } catch (e) {}
+    </script>
     <style>
       :root {
         color-scheme: light;
@@ -98,10 +113,14 @@
         border-bottom: 1px solid var(--line);
         background: var(--card);
       }
-      nav button[aria-current='page'] {
+      nav button[aria-current='page'],
+      #historyPick button[aria-pressed='true'] {
         background: var(--primary);
         border-color: var(--primary);
-        color: #fff;
+        color: var(--on-accent);
+      }
+      #historyPick {
+        margin-bottom: 12px;
       }
       main {
         max-width: 760px;
@@ -167,12 +186,12 @@
       a.button.primary {
         background: var(--primary);
         border-color: var(--primary);
-        color: #fff;
+        color: var(--on-accent);
       }
       /* A long label (who and which department) wraps instead of widening the page. */
       button.wrap {
         white-space: normal;
-        text-align: left;
+        text-align: start;
         max-width: 100%;
       }
       button.danger {
@@ -199,7 +218,7 @@
         margin-top: 8px;
       }
       section.warn {
-        border-left: 4px solid var(--warn);
+        border-inline-start: 4px solid var(--warn);
       }
       .expires {
         color: var(--warn);
@@ -217,7 +236,7 @@
       }
       .caption.message {
         padding: 8px 10px;
-        border-left: 3px solid var(--line);
+        border-inline-start: 3px solid var(--line);
         background: var(--paper);
         border-radius: 6px;
       }
@@ -261,7 +280,7 @@
       .pick button {
         position: absolute;
         top: 4px;
-        right: 4px;
+        inset-inline-end: 4px;
         padding: 0 7px;
         line-height: 1.6;
       }
@@ -377,15 +396,27 @@
       [hidden] {
         display: none !important;
       }
+      /* Urdu (E4, ADR-0042): held until translated, then a font with Urdu letters. */
+      html.i18n-pending body {
+        visibility: hidden;
+      }
+      :root[lang='ur'] body {
+        font-family: 'Segoe UI', 'Noto Naskh Arabic', 'Noto Sans Arabic', Tahoma, system-ui,
+          sans-serif;
+      }
+      #langSlot:empty {
+        display: none;
+      }
     </style>
   </head>
   <body>
     <header>
       <div>
         <h1>Activities · Bajaur</h1>
-        <div class="who" id="who"></div>
+        <div class="who" id="who" translate="no" dir="auto"></div>
       </div>
       <div class="row" style="margin-top: 0">
+        <span id="langSlot"></span>
         <button id="backToApp" type="button" hidden>Control room</button>
         <button id="signOut" type="button">Sign out</button>
       </div>
@@ -460,23 +491,8 @@
         </section>
       </div>
 
-      <!-- Departments (DC / DNC) -->
-      <div id="view-units" hidden>
-        <section>
-          <h2>Departments</h2>
-          <p class="muted">
-            Used to file and find activities. Retiring one keeps its old posts under its name.
-          </p>
-          <form id="unitForm" class="row">
-            <input id="unitName" maxlength="120" placeholder="New department name" required />
-            <button class="primary" type="submit">Add</button>
-          </form>
-          <p id="unitError" class="error" role="alert" hidden></p>
-          <div id="unitList" style="margin-top: 12px"></div>
-        </section>
-      </div>
-
-      <!-- Officers (DC / DNC) — everyone who posts: department, on/off, login (ADR-0041 §9) -->
+      <!-- Officers (DC / DNC) — everyone who posts: department, on/off, login (ADR-0041 §9);
+           the Department list below it (E3: one tab for both) -->
       <div id="view-officers" hidden>
         <section>
           <h2>Officers</h2>
@@ -488,6 +504,18 @@
           <input id="officerFind" type="search" placeholder="Find by name, post or number" />
           <p id="officerError" class="error" role="alert" hidden></p>
           <div id="officerList" style="margin-top: 12px"></div>
+        </section>
+        <section>
+          <h2 id="departments">Departments</h2>
+          <p class="muted">
+            Used to file and find activities. Retiring one keeps its old posts under its name.
+          </p>
+          <form id="unitForm" class="row">
+            <input id="unitName" maxlength="120" placeholder="New department name" required />
+            <button class="primary" type="submit">Add</button>
+          </form>
+          <p id="unitError" class="error" role="alert" hidden></p>
+          <div id="unitList" style="margin-top: 12px"></div>
         </section>
       </div>
 
@@ -504,24 +532,28 @@
         <div id="pendingList"></div>
       </div>
 
-      <!-- Recycle bin (DC / DNC) -->
-      <div id="view-bin" hidden>
-        <section>
-          <h2>Recycle bin</h2>
-          <p class="muted">
-            Hidden posts. Restore puts one back; Delete permanently removes it and its photos.
-          </p>
-        </section>
-        <div id="binFeed"></div>
-      </div>
-
-      <!-- Log (DC / DNC) -->
-      <div id="view-log" hidden>
-        <section>
-          <h2>Activities log</h2>
-          <p class="muted">Who posted, hid, restored or deleted what, and when. Latest first.</p>
-          <div id="logList"></div>
-        </section>
+      <!-- History (DC / DNC) — the log and the Recycle bin, one tab (E3) -->
+      <div id="view-history" hidden>
+        <div class="row" id="historyPick" role="group" aria-label="History">
+          <button type="button" data-part="log">Log</button>
+          <button type="button" data-part="bin">Recycle bin</button>
+        </div>
+        <div id="history-log">
+          <section>
+            <h2>Activities log</h2>
+            <p class="muted">Who posted, hid, restored or deleted what, and when. Latest first.</p>
+            <div id="logList"></div>
+          </section>
+        </div>
+        <div id="history-bin" hidden>
+          <section>
+            <h2>Recycle bin</h2>
+            <p class="muted">
+              Hidden posts. Restore puts one back; Delete permanently removes it and its photos.
+            </p>
+          </section>
+          <div id="binFeed"></div>
+        </div>
       </div>
 
       <!-- My account -->

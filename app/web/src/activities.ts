@@ -20,6 +20,7 @@
  */
 
 import { offerInstall } from './install.js';
+import { drawLangSwitch, startUrdu, t } from './i18n.js';
 
 interface Me {
   readonly personId: string;
@@ -167,6 +168,13 @@ function make<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/** What someone wrote — a caption, a name — stays as written in Urdu too (E4). */
+function untranslated<T extends HTMLElement>(node: T): T {
+  node.setAttribute('translate', 'no');
+  node.dir = 'auto'; // English words in an Urdu page, or Urdu in an English one, read the right way
+  return node;
+}
+
 function button(label: string, className?: string): HTMLButtonElement {
   const b = make('button', className, label);
   b.type = 'button';
@@ -237,16 +245,18 @@ const can = (p: string): boolean => me.permissions.includes(`activities.${p}`);
 // Tabs
 //------------------------------------------------------------------------------
 
-type Tab = 'posts' | 'new' | 'pending' | 'officers' | 'units' | 'bin' | 'log' | 'account';
+// E3: fewer tabs. The DC sees Activities · New post · Pending (with its count) · Officers (the
+// Department list sits under it) · History (Log and Recycle bin) · My account; a member sees
+// Activities · New post · My account. Which tabs exist still follows the permissions — the server
+// refuses everything else regardless.
+type Tab = 'posts' | 'new' | 'pending' | 'officers' | 'history' | 'account';
 
 const TAB_LABEL: Readonly<Record<Tab, string>> = {
   posts: 'Activities',
   new: 'New post',
   pending: 'Pending',
   officers: 'Officers',
-  units: 'Departments',
-  bin: 'Recycle bin',
-  log: 'Log',
+  history: 'History',
   account: 'My account',
 };
 
@@ -254,8 +264,8 @@ function tabsFor(): Tab[] {
   const tabs: Tab[] = ['posts'];
   if (can('upload')) tabs.push('new');
   if (can('pending')) tabs.push('pending');
-  if (can('departments')) tabs.push('officers', 'units');
-  if (can('moderate')) tabs.push('bin', 'log');
+  if (can('departments')) tabs.push('officers');
+  if (can('moderate')) tabs.push('history');
   tabs.push('account');
   return tabs;
 }
@@ -270,11 +280,47 @@ function show(tab: Tab): void {
     void loadFeed(false);
     void loadExpiring();
   }
-  if (tab === 'bin') void loadBin();
   if (tab === 'pending') void loadPending();
-  if (tab === 'log') void loadLog();
-  if (tab === 'officers') void loadOfficers();
-  if (tab === 'units') drawUnits();
+  if (tab === 'officers') {
+    void loadOfficers();
+    drawUnits();
+  }
+  if (tab === 'history') showHistory(historyPart);
+}
+
+/** History holds two lists; the log is shown first. */
+type HistoryPart = 'log' | 'bin';
+let historyPart: HistoryPart = 'log';
+
+function showHistory(part: HistoryPart): void {
+  historyPart = part;
+  el('history-log').hidden = part !== 'log';
+  el('history-bin').hidden = part !== 'bin';
+  for (const b of Array.from(el('historyPick').querySelectorAll('button'))) {
+    b.setAttribute('aria-pressed', String(b.dataset['part'] === part));
+  }
+  if (part === 'log') void loadLog();
+  else void loadBin();
+}
+
+for (const b of Array.from(el('historyPick').querySelectorAll('button'))) {
+  b.addEventListener('click', () => showHistory(b.dataset['part'] === 'bin' ? 'bin' : 'log'));
+}
+
+/** The Pending tab carries its count, so the DC sees there is something without opening it. */
+function setPendingCount(count: number): void {
+  const b = el('tabs').querySelector<HTMLButtonElement>('button[data-tab="pending"]');
+  if (b === null) return;
+  b.textContent = count > 0 ? `${TAB_LABEL.pending} (${count})` : TAB_LABEL.pending;
+}
+
+async function refreshPendingCount(): Promise<void> {
+  if (!can('pending')) return;
+  try {
+    setPendingCount((await api<PendingGroup[]>('GET', '/activities/pending')).length);
+  } catch {
+    // The count is a convenience; the tab itself still opens and shows any error.
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -419,7 +465,7 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
   if (Date.parse(post.expiresAt) - Date.now() < WARNING_MS) {
     card.append(make('div', 'meta expires', `Deleted automatically on ${when(post.expiresAt)}`));
   }
-  card.append(make('p', 'caption', post.caption));
+  card.append(untranslated(make('p', 'caption', post.caption)));
 
   if (post.photos.length > 0) {
     const grid = make('div', 'photos');
@@ -448,7 +494,7 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
   error.hidden = true;
   const act = (b: HTMLButtonElement, run: () => Promise<unknown>, ask?: string): void => {
     b.addEventListener('click', () => {
-      if (ask !== undefined && !confirm(ask)) return;
+      if (ask !== undefined && !confirm(t(ask))) return;
       void (async () => {
         b.disabled = true;
         error.hidden = true;
@@ -671,8 +717,10 @@ function pendingCard(g: PendingGroup): HTMLElement {
   card.append(make('div', 'meta', `+${g.fromPhone} · ${who} · sent ${when(g.receivedAt)}`));
   card.append(make('div', 'meta', whyPending(g)));
   card.append(make('div', 'meta expires', `Deleted automatically on ${when(g.expiresAt)}`));
-  if (g.captions.length > 0) card.append(make('p', 'caption', g.captions.join('\n')));
-  for (const m of g.messages) card.append(make('p', 'caption message', m));
+  if (g.captions.length > 0) {
+    card.append(untranslated(make('p', 'caption', g.captions.join('\n'))));
+  }
+  for (const m of g.messages) card.append(untranslated(make('p', 'caption message', m)));
 
   const src = (mediaId: string): string => `/activities/pending/media/${mediaId}`;
   const photos = g.media.filter((m) => m.kind === 'photo');
@@ -746,7 +794,7 @@ function pendingCard(g: PendingGroup): HTMLElement {
   };
   const reject = button(hasFiles ? 'Reject' : 'Delete', 'danger');
   reject.addEventListener('click', () => {
-    if (!confirm('Delete this for good? This cannot be undone.')) return;
+    if (!confirm(t('Delete this for good? This cannot be undone.'))) return;
     run(() => api('POST', `/activities/pending/${g.inboundId}/reject`));
   });
 
@@ -887,6 +935,7 @@ async function loadPending(): Promise<void> {
   try {
     if (people.length === 0) await loadPeople();
     const groups = await api<PendingGroup[]>('GET', '/activities/pending');
+    setPendingCount(groups.length);
     list.replaceChildren(...groups.map(pendingCard));
     if (groups.length === 0) list.append(make('p', 'muted', 'Nothing is waiting.'));
   } catch (e) {
@@ -935,22 +984,33 @@ async function loadLog(): Promise<void> {
           l.type === 'expired' || l.type === 'video_failed' || l.type === 'pending_expired'
             ? 'The app'
             : (l.actorName ?? 'Someone');
-        const what = [who, LOG_TEXT[l.type] ?? l.type];
-        if (l.unitName !== null) what.push(`— ${l.unitName}`);
+        // Who, what and the details as their own pieces, so each can be put into Urdu on its
+        // own (E4) — a name is never translated, the words around it are.
+        const name = make('span', undefined, who);
+        if (l.actorName !== null && who === l.actorName) name.setAttribute('translate', 'no');
+        const extra: string[] = [];
+        if (l.unitName !== null) extra.push(`— ${l.unitName}`);
         const d = l.detail ?? {};
         if ((l.type === 'deleted' || l.type === 'expired') && typeof d['author'] === 'string') {
-          what.push(`(by ${d['author']}, ${String(d['activityDate'] ?? '')})`);
+          extra.push(`(by ${d['author']}, ${String(d['activityDate'] ?? '')})`);
         }
-        if (l.type === 'unit_renamed') what.push(`(was ${String(d['from'] ?? '')})`);
-        if (l.type === 'video_failed') what.push(`(${String(d['reason'] ?? '')})`);
+        if (l.type === 'unit_renamed') extra.push(`(was ${String(d['from'] ?? '')})`);
+        if (l.type === 'video_failed') extra.push(`(${String(d['reason'] ?? '')})`);
         if (l.type === 'date_changed') {
-          what.push(`(${String(d['from'] ?? '')} to ${String(d['to'] ?? '')})`);
+          extra.push(`(${String(d['from'] ?? '')} to ${String(d['to'] ?? '')})`);
         }
         if (l.type.startsWith('pending_') && typeof d['fromPhone'] === 'string') {
-          what.push(`(from +${d['fromPhone']})`);
+          extra.push(`(from +${d['fromPhone']})`);
+        }
+        const line = make('span');
+        line.append(name, ' ', make('span', undefined, LOG_TEXT[l.type] ?? l.type));
+        if (extra.length > 0) {
+          const details = make('span', undefined, extra.join(' '));
+          details.setAttribute('translate', 'no');
+          line.append(' ', details);
         }
         row.append(
-          make('span', undefined, what.join(' ')),
+          line,
           make('span', 'meta', when(l.recordedAt)),
         );
         return row;
@@ -982,7 +1042,7 @@ function drawUnits(): void {
       buttons.style.marginTop = '0';
       const rename = button('Rename');
       rename.addEventListener('click', () => {
-        const name = prompt('New name for this department', u.name);
+        const name = prompt(t('New name for this department'), u.name);
         if (name === null || name.trim() === '' || name.trim() === u.name) return;
         void api('PATCH', `/activities/units/${u.unitId}`, { name: name.trim() })
           .then(() => loadUnits().then(drawUnits))
@@ -990,7 +1050,7 @@ function drawUnits(): void {
       });
       const retire = button('Retire', 'danger');
       retire.addEventListener('click', () => {
-        if (!confirm(`Retire "${u.name}"? Its old posts keep its name.`)) return;
+        if (!confirm(t(`Retire "${u.name}"? Its old posts keep its name.`))) return;
         void api('POST', `/activities/units/${u.unitId}/retire`)
           .then(() => loadUnits().then(drawUnits))
           .catch((e: unknown) => showError(error, e));
@@ -1054,7 +1114,9 @@ function officerRow(o: Officer): HTMLElement {
   };
 
   row.append(
-    make('div', 'officer-name', o.designation ? `${o.fullName} — ${o.designation}` : o.fullName),
+    untranslated(
+      make('div', 'officer-name', o.designation ? `${o.fullName} — ${o.designation}` : o.fullName),
+    ),
   );
   const facts = [o.phone, loginText(o)];
   if (!o.inDirectory) facts.push('not in the Directory');
@@ -1684,6 +1746,7 @@ function drawTabs(): void {
   );
   nav.hidden = false;
   show(tabs[0]!);
+  void refreshPendingCount();
 }
 
 async function load(): Promise<void> {
@@ -1713,5 +1776,7 @@ async function load(): Promise<void> {
   drawTabs();
 }
 
+drawLangSwitch(el('langSlot'));
+void startUrdu();
 offerInstall();
 void load();

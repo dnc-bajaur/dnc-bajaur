@@ -523,6 +523,17 @@ export async function buildWeb(out = dist) {
    * and a district on a bad line does not get to wait for Google's CDN.
    */
   await cp(join(web, 'fonts'), join(out, 'fonts'), { recursive: true });
+
+  /**
+   * The Urdu word list (Bajaur E4, ADR-0042) — fetched only by a device that chose Urdu, so it
+   * costs an English device nothing. At the top level on purpose: the shell digest below hashes
+   * top-level files, so a corrected word is a new shell version and reaches cached browsers.
+   * Parsed here so a broken file fails the build, not a district handset.
+   */
+  await writeFile(
+    join(out, 'ur.json'),
+    JSON.stringify(JSON.parse(await readFile(join(web, 'ur.json'), 'utf8'))),
+  );
   await writeFile(join(out, 'manifest.webmanifest'), JSON.stringify(manifest, null, 2));
 
   /**
