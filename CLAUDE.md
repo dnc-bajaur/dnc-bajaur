@@ -115,7 +115,7 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   Never use the other district's cluster on this machine. Full suite runs locally (files run one
   at a time). Rarely a test process dies mid-run here ("Worker exited unexpectedly"; cause
   unknown, never seen in CI). The run's end now names the file (`testing/crashTrace.ts`,
-  trace in `app/var/test-trace.log`). Seen so far: `groups.test.ts`, `integrity.test.ts`, `wall.test.ts` —
+  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement` —
   different files, dying before any test runs, no exit code; not reproducible on demand.
 - **Built (ADR-0038):** B1 `member` role + deny-by-default gate (gated `resolveSession` in
   `api/server.ts`, pinned by `memberGate.test.ts`; members land on `/activities.html`). B2
@@ -128,10 +128,14 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
 - **Built (ADR-0039) C2:** migration 0051; hourly housekeeping `jobs/activitiesRetention.ts`
   (30-day expiry → bucket deletes → encrypted copy to `ACTIVITIES_S3_BUCKET`); DC warning +
   ZIP (`/activities/expiring[.zip]`, `ops/zip.ts`). No media bucket exists yet.
-- **Fixed:** installer `first-run.mjs` / cloud `grant-login.mjs` no longer use the dropped
-  `department` table; first account = `owner` + administration tick. Admin cards escape names.
 - **Built A:** "Install this app" banner (`web/src/install.ts`) on the shell and Activities.
-- **Next:** C3 — Activities videos (needs ffmpeg on the server; `PLAN.md` §4).
+- **Built (ADR-0039) C3:** videos — migration 0052, chunked resumable upload
+  (`/activities/posts/:id/videos`, `/activities/uploads/:id`), converter `jobs/activitiesVideo.ts`
+  (ffmpeg → 720p + poster; missing ffmpeg = wait, not fail), Range playback. Local ffmpeg:
+  `D:\dnc-bajaur-ffmpeg` via `FFMPEG_PATH`/`FFPROBE_PATH` in `app/.env`. `/activities` never
+  cached by the service worker (v263).
+- **Next:** D — WhatsApp → Activities (ADR-0040; buildable locally, go-live needs Bajaur's Meta
+  account). Small open items in `PLAN.md` §4 (C3 notes, known bugs).
 
 ## 6. Repository map
 

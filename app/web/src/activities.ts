@@ -1,7 +1,7 @@
 /**
- * Activities — the page a `member` account lives on (ADR-0038 / ADR-0039, Bajaur — phase C1).
+ * Activities — the page a `member` account lives on (ADR-0038 / ADR-0039, Bajaur — C1–C3).
  *
- * Posts with photos, filtered by department, person and date; the Department list; the Recycle
+ * Posts with photos and videos, filtered by department, person and date; the Department list; the Recycle
  * bin; the log; and the account's own password and default department.
  *
  * Nothing here enforces anything. The server decides what this account may do (INV-05): this
@@ -12,6 +12,10 @@
  * Photos are shrunk on the phone before they leave it (ADR-0039 §4): long edge 2048 px, JPEG
  * at high quality, plus a 480 px copy for the list. Re-encoding through a canvas also drops the
  * photo's embedded location and camera data, which nobody asked to publish.
+ *
+ * Videos are not touched on the phone (ADR-0039 rejects it: slow, heavy on the battery, and
+ * unreliable across browsers). They go as they are, in chunks, and a dropped connection carries
+ * on from the last chunk that arrived. The server converts them to 720p.
  */
 
 import { offerInstall } from './install.js';
@@ -51,8 +55,25 @@ interface Post {
   readonly hiddenAt: string | null;
   readonly expiresAt: string;
   readonly photos: readonly { readonly mediaId: string; readonly hasThumb: boolean }[];
+  readonly videos: readonly Video[];
   readonly mayDelete: boolean;
   readonly mayModerate: boolean;
+}
+
+interface Video {
+  readonly mediaId: string;
+  readonly status: 'uploading' | 'processing' | 'ready' | 'failed';
+  readonly durationSeconds: number | null;
+  readonly failure: string | null;
+  readonly hasPoster: boolean;
+}
+
+interface UploadState {
+  readonly mediaId: string;
+  readonly status: Video['status'];
+  readonly received: number;
+  readonly bytes: number;
+  readonly chunkBytes: number;
 }
 
 interface Expiring {
@@ -60,9 +81,11 @@ interface Expiring {
   readonly warningDays: number;
   readonly posts: number;
   readonly photos: number;
+  readonly videos: number;
   readonly bytes: number;
   readonly firstExpiresAt: string | null;
   readonly zipFits: boolean;
+  readonly conversion: { readonly waiting: number; readonly failed: number };
   readonly backup: {
     readonly configured: boolean;
     readonly why: string | null;
@@ -81,6 +104,9 @@ interface LogLine {
 }
 
 const MAX_PHOTOS = 10;
+const MAX_VIDEOS = 3;
+const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
+const MAX_VIDEO_SECONDS = 180;
 const LONG_EDGE = 2048;
 const THUMB_EDGE = 480;
 
@@ -274,15 +300,66 @@ async function loadPeople(): Promise<void> {
 // The feed
 //------------------------------------------------------------------------------
 
-function openViewer(src: string): void {
-  el<HTMLImageElement>('viewerImg').src = src;
+function openViewer(src: string, kind: 'photo' | 'video' = 'photo'): void {
+  const img = el<HTMLImageElement>('viewerImg');
+  const video = el<HTMLVideoElement>('viewerVideo');
+  img.hidden = kind !== 'photo';
+  video.hidden = kind !== 'video';
+  if (kind === 'photo') img.src = src;
+  else {
+    video.src = src;
+    void video.play().catch(() => {});
+  }
   el('viewer').hidden = false;
 }
 
-el('viewer').addEventListener('click', () => {
+el('viewer').addEventListener('click', (e) => {
+  // A tap on the player's own controls must not close it; a tap anywhere else does.
+  if (e.target === el('viewerVideo')) return;
+  const video = el<HTMLVideoElement>('viewerVideo');
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
   el('viewer').hidden = true;
   el<HTMLImageElement>('viewerImg').removeAttribute('src');
 });
+
+function clock(seconds: number): string {
+  const s = Math.round(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+const VIDEO_STATE: Readonly<Record<Exclude<Video['status'], 'ready'>, string>> = {
+  uploading: 'Still being sent from the phone…',
+  processing: 'Being prepared — ready in a few minutes. Refresh to see it.',
+  failed: 'This video could not be used',
+};
+
+function videoTile(video: Video): HTMLElement {
+  const tile = make('div', 'video');
+  if (video.status !== 'ready') {
+    const why = video.status === 'failed' && video.failure !== null ? `: ${video.failure}` : '';
+    tile.append(make('div', 'state', `${VIDEO_STATE[video.status]}${why}`));
+    return tile;
+  }
+  const src = `/activities/media/${video.mediaId}`;
+  if (video.hasPoster) {
+    const poster = make('img');
+    poster.loading = 'lazy';
+    poster.alt = 'Activity video';
+    poster.src = `${src}?size=thumb`;
+    poster.addEventListener('click', () => openViewer(src, 'video'));
+    tile.append(poster);
+  }
+  const play = button('▶', 'play');
+  play.setAttribute('aria-label', 'Play video');
+  play.addEventListener('click', () => openViewer(src, 'video'));
+  tile.append(play);
+  if (video.durationSeconds !== null) {
+    tile.append(make('span', 'length', clock(video.durationSeconds)));
+  }
+  return tile;
+}
 
 function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement {
   const card = make('article');
@@ -309,8 +386,14 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
       grid.append(img);
     }
     card.append(grid);
-  } else {
-    card.append(make('p', 'meta', 'No photos.'));
+  }
+  if (post.videos.length > 0) {
+    const grid = make('div', 'videos');
+    grid.append(...post.videos.map(videoTile));
+    card.append(grid);
+  }
+  if (post.photos.length === 0 && post.videos.length === 0) {
+    card.append(make('p', 'meta', 'No photos or videos.'));
   }
 
   const actions = make('div', 'row');
@@ -344,7 +427,7 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
     act(
       del,
       () => api('DELETE', `/activities/posts/${post.postId}`),
-      'Delete this post and its photos for good? This cannot be undone.',
+      'Delete this post, its photos and its videos for good? This cannot be undone.',
     );
   }
   if (actions.childElementCount > 0) card.append(actions, error);
@@ -383,7 +466,9 @@ async function loadExpiring(): Promise<void> {
         undefined,
         `Posts are kept for ${x.retentionDays} days after upload. ${x.photos} photo${
           x.photos === 1 ? '' : 's'
-        } (${megabytes(x.bytes)}) will be deleted from ${when(x.firstExpiresAt)} onwards, ` +
+        }${x.videos > 0 ? ` and ${x.videos} video${x.videos === 1 ? '' : 's'}` : ''} (${megabytes(
+          x.bytes,
+        )}) will be deleted from ${when(x.firstExpiresAt)} onwards, ` +
           'Recycle bin included. Download them now to keep a copy.',
       ),
     );
@@ -401,13 +486,28 @@ async function loadExpiring(): Promise<void> {
   const b = x.backup;
   let backupNote: string | null = null;
   if (!b.configured) {
-    backupNote = 'Media backup is not set up: these photos exist only on the server.';
+    backupNote = 'Media backup is not set up: photos and videos exist only on the server.';
   } else if (b.notCopied > 0 || b.removalsWaiting > 0) {
     backupNote =
-      `Media backup is behind: ${b.notCopied} photo(s) not copied, ` +
+      `Media backup is behind: ${b.notCopied} file(s) not copied, ` +
       `${b.removalsWaiting} delete(s) waiting${b.lastError === null ? '' : ` (${b.lastError})`}.`;
   }
   if (backupNote !== null) parts.push(make('p', 'meta expires', backupNote));
+  // Videos the server has not converted: waiting means ffmpeg is missing or stuck (ADR-0039 §4).
+  const v = x.conversion;
+  if (v.waiting > 0) {
+    parts.push(
+      make(
+        'p',
+        'meta expires',
+        `${v.waiting} video(s) have waited over an hour to be prepared. Ask the server ` +
+          'administrator to run "npm run doctor".',
+      ),
+    );
+  }
+  if (v.failed > 0) {
+    parts.push(make('p', 'meta', `${v.failed} video(s) could not be used; their posts say why.`));
+  }
   box.replaceChildren(...parts);
   box.hidden = parts.length === 0;
 }
@@ -476,6 +576,8 @@ async function loadBin(): Promise<void> {
 const LOG_TEXT: Readonly<Record<string, string>> = {
   posted: 'posted an activity',
   photo_added: 'added a photo',
+  video_added: 'added a video',
+  video_failed: 'could not prepare a video',
   hidden: 'moved a post to the Recycle bin',
   restored: 'restored a post',
   deleted: 'deleted a post permanently',
@@ -496,7 +598,10 @@ async function loadLog(): Promise<void> {
       ...lines.map((l) => {
         const row = make('div', 'list-row');
         // An expiry has no person: the 30-day rule did it.
-        const who = l.type === 'expired' ? 'The app' : (l.actorName ?? 'Someone');
+        const who =
+          l.type === 'expired' || l.type === 'video_failed'
+            ? 'The app'
+            : (l.actorName ?? 'Someone');
         const what = [who, LOG_TEXT[l.type] ?? l.type];
         if (l.unitName !== null) what.push(`— ${l.unitName}`);
         const d = l.detail ?? {};
@@ -504,6 +609,7 @@ async function loadLog(): Promise<void> {
           what.push(`(by ${d['author']}, ${String(d['activityDate'] ?? '')})`);
         }
         if (l.type === 'unit_renamed') what.push(`(was ${String(d['from'] ?? '')})`);
+        if (l.type === 'video_failed') what.push(`(${String(d['reason'] ?? '')})`);
         row.append(
           make('span', undefined, what.join(' ')),
           make('span', 'meta', when(l.recordedAt)),
@@ -677,8 +783,21 @@ async function sendPhoto(postId: string, file: File): Promise<void> {
 }
 
 let picked: File[] = [];
-/** The post whose photos are still being sent, and the ones that failed — for "try again". */
-let pending: { postId: string; failed: File[] } | null = null;
+
+/**
+ * A video chosen for a post. `mediaId` is set once the server has given it a place, so "try
+ * again" carries on with the same upload — from the last chunk that arrived — rather than taking
+ * a second place on the post.
+ */
+interface PickedVideo {
+  readonly file: File;
+  readonly seconds: number | null;
+  mediaId?: string | undefined;
+}
+let pickedVideos: PickedVideo[] = [];
+
+/** The post whose files are still being sent, and the ones that failed — for "try again". */
+let pending: { postId: string; photos: File[]; videos: PickedVideo[] } | null = null;
 
 function drawPicked(): void {
   const grid = el('picked');
@@ -716,29 +835,232 @@ el<HTMLInputElement>('pPhotos').addEventListener('change', (e) => {
   drawPicked();
 });
 
-async function sendAll(postId: string, files: readonly File[]): Promise<File[]> {
+/** How long a video is, read by the browser from the file; null when it cannot say. */
+function videoSeconds(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    const url = URL.createObjectURL(file);
+    let settled = false;
+    const done = (seconds: number | null): void => {
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      video.removeAttribute('src');
+      resolve(seconds);
+    };
+    video.preload = 'metadata';
+    video.muted = true;
+    video.addEventListener('loadedmetadata', () =>
+      done(Number.isFinite(video.duration) ? video.duration : null),
+    );
+    video.addEventListener('error', () => done(null));
+    setTimeout(() => done(null), 10_000);
+    video.src = url;
+  });
+}
+
+/** The type a camera file is, when the phone does not say: by its name, as a last resort. */
+function videoType(file: File): string {
+  if (file.type !== '') return file.type;
+  return /\.mov$/i.test(file.name) ? 'video/quicktime' : 'video/mp4';
+}
+
+function drawPickedVideos(): void {
+  const list = el('pickedVideos');
+  list.replaceChildren(
+    ...pickedVideos.map((v, i) => {
+      const row = make('div', 'list-row');
+      const length = v.seconds === null ? '' : ` · ${clock(v.seconds)}`;
+      row.append(make('span', undefined, `${v.file.name} · ${megabytes(v.file.size)}${length}`));
+      const remove = button('×');
+      remove.setAttribute('aria-label', `Remove ${v.file.name}`);
+      remove.addEventListener('click', () => {
+        pickedVideos.splice(i, 1);
+        drawPickedVideos();
+      });
+      row.append(remove);
+      return row;
+    }),
+  );
+}
+
+el<HTMLInputElement>('pVideos').addEventListener('change', (e) => {
+  const input = e.currentTarget as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = '';
+  const error = el('postError');
+  error.hidden = true;
+  void (async () => {
+    const refused: string[] = [];
+    for (const file of files) {
+      if (pickedVideos.length >= MAX_VIDEOS) {
+        refused.push(`a post holds at most ${MAX_VIDEOS} videos`);
+        break;
+      }
+      if (file.size > MAX_VIDEO_BYTES) {
+        refused.push(`${file.name} is larger than 300 MB`);
+        continue;
+      }
+      // Checked here so an officer is not left sending a long video only to have it refused.
+      // The server checks again from the file itself.
+      const seconds = await videoSeconds(file);
+      if (seconds !== null && seconds > MAX_VIDEO_SECONDS + 1) {
+        refused.push(`${file.name} is ${clock(seconds)} long — videos may be at most 3 minutes`);
+        continue;
+      }
+      pickedVideos.push({ file, seconds });
+    }
+    drawPickedVideos();
+    if (refused.length > 0) showError(error, new Error(`Not added: ${refused.join('; ')}.`));
+  })();
+});
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** A refusal from the server that sending again will not change. */
+class Refused extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+async function errorOf(res: Response): Promise<string> {
+  const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+  return typeof body?.error === 'string' ? body.error : `the server refused (${res.status})`;
+}
+
+/**
+ * Send one video, chunk by chunk. A dropped connection is retried with a growing pause, each
+ * time asking the server how much arrived — so nothing already sent is sent twice. Gives up
+ * after several drops in a row; "try again" then carries on from where it stopped.
+ */
+async function sendVideo(
+  postId: string,
+  video: PickedVideo,
+  progress: (fraction: number) => void,
+): Promise<void> {
+  const name = video.file.name;
+  const call = async (method: string, path: string, init: RequestInit = {}): Promise<Response> => {
+    const res = await fetch(path, { method, cache: 'no-store', ...init });
+    if (res.status === 401) {
+      location.replace('/');
+      throw new Refused('Signed out.', 401);
+    }
+    return res;
+  };
+  const state = async (res: Response): Promise<UploadState> => {
+    if (!res.ok) throw new Refused(`${name}: ${await errorOf(res)}`, res.status);
+    return (await res.json()) as UploadState;
+  };
+
+  let current: UploadState | null = null;
+  if (video.mediaId !== undefined) {
+    const res = await call('GET', `/activities/uploads/${video.mediaId}`);
+    // Gone (given up after a day, or refused): start again with a fresh place.
+    if (res.status === 404) video.mediaId = undefined;
+    else current = await state(res);
+  }
+  if (current === null) {
+    current = await state(
+      await call('POST', `/activities/posts/${postId}/videos`, {
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          bytes: video.file.size,
+          contentType: videoType(video.file),
+          ...(video.seconds === null ? {} : { durationSeconds: video.seconds }),
+        }),
+      }),
+    );
+    video.mediaId = current.mediaId;
+  }
+
+  let drops = 0;
+  while (current.status === 'uploading') {
+    progress(current.received / current.bytes);
+    const chunk = video.file.slice(current.received, current.received + current.chunkBytes);
+    let res: Response;
+    try {
+      res = await call('PUT', `/activities/uploads/${current.mediaId}`, {
+        headers: {
+          'content-type': 'application/octet-stream',
+          'x-upload-offset': String(current.received),
+        },
+        body: chunk,
+      });
+    } catch (e) {
+      if (e instanceof Refused) throw e;
+      drops += 1;
+      if (drops > 6) throw new Error(`${name}: the connection keeps dropping`);
+      await sleep(Math.min(30_000, 2_000 * drops));
+      try {
+        current = await state(await call('GET', `/activities/uploads/${current.mediaId}`));
+      } catch (again) {
+        if (again instanceof Refused) throw again;
+        // Still offline: the next round sends the same chunk, and counts another drop.
+      }
+      continue;
+    }
+    if (res.status === 409) {
+      // Out of step (a chunk that did arrive although its answer did not): ask where to go on.
+      current = await state(await call('GET', `/activities/uploads/${current.mediaId}`));
+      continue;
+    }
+    if (res.status === 415 || res.status === 404) video.mediaId = undefined;
+    current = await state(res);
+    drops = 0;
+  }
+  progress(1);
+}
+
+async function sendAll(
+  postId: string,
+  photos: readonly File[],
+  videos: readonly PickedVideo[],
+): Promise<{ photos: File[]; videos: PickedVideo[] }> {
   const progress = el('postProgress');
-  const failed: File[] = [];
+  const failedPhotos: File[] = [];
+  const failedVideos: PickedVideo[] = [];
   const reasons: string[] = [];
-  for (const [i, file] of files.entries()) {
-    progress.textContent = `Sending photo ${i + 1} of ${files.length}…`;
+  for (const [i, file] of photos.entries()) {
+    progress.textContent = `Sending photo ${i + 1} of ${photos.length}…`;
     try {
       await sendPhoto(postId, file);
     } catch (e) {
-      failed.push(file);
+      failedPhotos.push(file);
+      reasons.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+  for (const [i, video] of videos.entries()) {
+    const label = `Sending video ${i + 1} of ${videos.length}`;
+    progress.textContent = `${label}…`;
+    try {
+      await sendVideo(postId, video, (f) => {
+        progress.textContent = `${label} — ${Math.floor(f * 100)}%`;
+      });
+    } catch (e) {
+      // A refusal (too long, not a video) will not change by trying again; a drop will.
+      if (!(e instanceof Refused) || e.status >= 500) failedVideos.push(video);
       reasons.push(e instanceof Error ? e.message : String(e));
     }
   }
   progress.textContent = '';
-  if (failed.length > 0) {
+  const failed = failedPhotos.length + failedVideos.length;
+  if (reasons.length > 0) {
     showError(
       el('postError'),
       new Error(
-        `The post is saved, but ${failed.length} photo(s) did not go: ${reasons.join('; ')}`,
+        `The post is saved, but ${reasons.length} file(s) did not go: ${reasons.join('; ')}`,
       ),
     );
   }
-  return failed;
+  if (failed === 0 && videos.length > 0 && reasons.length === 0) {
+    // Said once, so nobody waits on the page for a conversion that happens on the server.
+    progress.textContent = 'Sent. Videos are being prepared and appear on the post shortly.';
+  }
+  return { photos: failedPhotos, videos: failedVideos };
 }
 
 function resetForm(): void {
@@ -746,7 +1068,24 @@ function resetForm(): void {
   el<HTMLSelectElement>('pUnit').value = me.defaultUnitId ?? '';
   el<HTMLInputElement>('pDate').value = me.today;
   picked = [];
+  pickedVideos = [];
   drawPicked();
+  drawPickedVideos();
+}
+
+function afterSending(
+  postId: string,
+  failed: { photos: File[]; videos: PickedVideo[] },
+  anyRefused: boolean,
+): void {
+  if (failed.photos.length + failed.videos.length > 0) {
+    pending = { postId, photos: failed.photos, videos: failed.videos };
+    el('retryPhotos').hidden = false;
+  } else {
+    pending = null;
+    // Stay on the form when something was refused, so the officer reads why.
+    if (!anyRefused) show('posts');
+  }
 }
 
 el<HTMLFormElement>('postForm').addEventListener('submit', (e) => {
@@ -766,14 +1105,9 @@ el<HTMLFormElement>('postForm').addEventListener('submit', (e) => {
         caption: el<HTMLTextAreaElement>('pCaption').value,
         place: el<HTMLInputElement>('pPlace').value,
       });
-      const failed = await sendAll(post.postId, picked);
+      const failed = await sendAll(post.postId, picked, pickedVideos);
       resetForm();
-      if (failed.length > 0) {
-        pending = { postId: post.postId, failed };
-        retry.hidden = false;
-      } else {
-        show('posts');
-      }
+      afterSending(post.postId, failed, !error.hidden);
     } catch (err) {
       el('postProgress').textContent = '';
       showError(error, err);
@@ -785,18 +1119,12 @@ el<HTMLFormElement>('postForm').addEventListener('submit', (e) => {
 
 el('retryPhotos').addEventListener('click', () => {
   if (pending === null) return;
-  const { postId, failed } = pending;
+  const { postId, photos, videos } = pending;
   el('postError').hidden = true;
   el('retryPhotos').hidden = true;
-  void sendAll(postId, failed).then((stillFailed) => {
-    if (stillFailed.length > 0) {
-      pending = { postId, failed: stillFailed };
-      el('retryPhotos').hidden = false;
-    } else {
-      pending = null;
-      show('posts');
-    }
-  });
+  void sendAll(postId, photos, videos).then((failed) =>
+    afterSending(postId, failed, !el('postError').hidden),
+  );
 });
 
 //------------------------------------------------------------------------------

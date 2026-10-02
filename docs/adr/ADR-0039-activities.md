@@ -82,6 +82,37 @@ logs `zip_downloaded`. The ZIP is written by `ops/zip.ts` (stored, no ZIP64, no 
 Every post card shows its automatic delete date in its last 3 days. `npm run doctor` reports
 whether the media bucket is configured.
 
+### Implementation note (2026-10-02, C3 — videos)
+
+Migration `0052_activities_videos.sql`: a video is an `activity_media` row of kind `video` with a
+`status` — `uploading` → `processing` → `ready`, or `failed` with a `failure` reason. Photos are
+`ready` from the start.
+
+- **Upload, resumable.** `POST /activities/posts/:id/videos` (JSON: size, type, and the length
+  when the phone can read it) gives a place; `PUT /activities/uploads/:id` with
+  `x-upload-offset` sends the next chunk (4 MB from the page, 8 MB cap); `GET` on the same path
+  says how much arrived. A chunk at the wrong offset is refused with 409 and the page asks where
+  to carry on. The first chunk is checked by its bytes (MP4 / QuickTime only); a non-video is
+  refused and its place given back. Limits: 300 MB, 3 per post (a failed video gives its place
+  back), 3 minutes (the phone checks first; the converter checks the file). An upload with no
+  chunk for 24 hours is given up by the hourly housekeeping.
+- **Conversion.** `jobs/activitiesVideo.ts`, one video at a time under its own advisory lock,
+  woken by the last chunk and on a one-minute timer: ffprobe for the length, ffmpeg to 720p
+  (short edge, never enlarged) H.264 + AAC with `+faststart`, a 480 px poster frame, then the
+  original is deleted. Written as `.part` and renamed, so a half-made file is never served; a
+  restart converts the video again. A refusal or a video over 3 minutes is `failed`, logged as
+  `video_failed` (no actor) and listed by `npm run doctor`. **ffmpeg missing is not a failure:**
+  the video waits as `processing`, and `doctor` and the DC's Activities warning (after an hour)
+  say so. `FFMPEG_PATH` / `FFPROBE_PATH` point at a copy that is not on the PATH.
+- **Playback.** `GET /activities/media/:id` serves the converted MP4 with byte ranges (iPhone
+  will not play a video without them); `?size=thumb` is the poster. Never before `ready`.
+- **Backup, ZIP, warning:** only `ready` videos are copied to the bucket, counted in the 30-day
+  warning, and put in the ZIP (`video-01.mp4`, …).
+- **Service worker:** `/activities` joined `NEVER_CACHE` (shell v263). Since C1 the list after a
+  post had been answered from the shell's cache — the post looked lost.
+- Server-side HEIC conversion (§4) is **not** part of C3: the phone still converts HEIC where the
+  browser can, and otherwise asks for a JPEG/PNG.
+
 ## Rationale
 
 A separate module keeps the emergency system exactly as it is: no new meaning for evidence, no

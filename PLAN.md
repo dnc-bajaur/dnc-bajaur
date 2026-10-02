@@ -77,7 +77,7 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 | C1 ✅ | Activities, **photos**: tables, Department list (DC), post (date, caption, place, ≤10 photos, compressed on the phone), views by department / person / date, soft + hard delete, Recycle bin, log | [ADR-0039](docs/adr/ADR-0039-activities.md) | server disk |
 | C2 ✅ | 30-day auto-delete + 3-day warning + ZIP download; media backup | ADR-0039 | Bajaur's media bucket (`ACTIVITIES_S3_BUCKET`, 30-day lifecycle rule) |
 | A ✅ | **"Install this app" banner** — one tap on Android/Windows (Chrome, Edge); "Share → Add to Home Screen" steps on iPhone | — | domain + HTTPS (D-04) |
-| C3 | Activities, **videos**: resumable chunks, ≤3 min, server → 720p (ffmpeg), processing/ready/failed, `doctor` lists failures | ADR-0039 | ffmpeg on server |
+| C3 ✅ | Activities, **videos**: resumable chunks, ≤3 min, server → 720p (ffmpeg), processing/ready/failed, `doctor` lists failures | ADR-0039 | ffmpeg on server |
 | D | **WhatsApp → Activities**, same number; open emergency → two buttons; unknown numbers → Pending list | [ADR-0040](docs/adr/ADR-0040-whatsapp-to-activities.md) | Bajaur's **new** Meta portfolio |
 
 C1 notes (2026-10-02):
@@ -94,6 +94,18 @@ A notes (2026-10-02):
   address. iPhone gets the Share steps. "Not now" is remembered in that browser for 14 days.
 - Activities' own selected-tab buttons still put white text on the dark-mode violet (faint);
   `--on-accent` now exists on that page for when they are fixed.
+
+C3 notes (2026-10-02):
+- Resumable chunked upload (4 MB chunks; a drop carries on from what arrived), converted one at a
+  time by `jobs/activitiesVideo.ts` to 720p H.264 + a poster frame; the original is deleted.
+  `setup.sh` installs ffmpeg. Without ffmpeg, videos **wait** (not *failed*); `doctor` and the
+  DC's warning say so. Local dev: portable copy in `D:\dnc-bajaur-ffmpeg`, `FFMPEG_PATH` /
+  `FFPROBE_PATH` in `app/.env`.
+- Fixed on the way: the service worker answered `/activities/…` reads from its cache since C1
+  (a new post did not appear in the list). `/activities` is now never cached (shell v263).
+- Open: the **Windows installer** does not ship ffmpeg yet; server-side **HEIC** conversion
+  (ADR-0039 §4) is not built; no "remove this failed video" button — a failed video stays on
+  its post (shown as failed) until the post is deleted or expires.
 
 C2 notes (2026-10-02):
 - Housekeeping runs **hourly** (expire → bucket deletes → copy), not once a night; see the

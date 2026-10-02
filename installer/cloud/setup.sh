@@ -120,8 +120,9 @@ curl -fsS https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt \
   > /etc/apt/sources.list.d/caddy-stable.list
 
 apt-get update -qq
-apt-get install -y -qq postgresql-17 nodejs caddy
-ok "postgres $(psql --version | awk '{print $3}') · node $(node -v) · caddy $(caddy version | head -n1)"
+# ffmpeg converts Activities videos to 720p (ADR-0039 §4). The distribution's own package.
+apt-get install -y -qq postgresql-17 nodejs caddy ffmpeg
+ok "postgres $(psql --version | awk '{print $3}') · node $(node -v) · caddy $(caddy version | head -n1) · ffmpeg $(ffmpeg -version | head -n1 | awk '{print $3}')"
 
 #-------------------------------------------------------------------------------------------
 # The clock. S3 refuses anything signed more than 15 minutes out and its error says nothing

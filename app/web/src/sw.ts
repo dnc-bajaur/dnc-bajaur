@@ -1260,7 +1260,11 @@ declare const self: ServiceWorkerGlobalScope;
 // v262: the "Install this app" banner (`install.ts`, Bajaur PLAN §4 A), and the Directory and
 // Groups cards built with `textContent` instead of unescaped `innerHTML` — that fix (923ea6d)
 // moved `admin.ts` without this bump, so it reaches cached browsers only now.
-const CACHE = 'dnc-shell-v262';
+// v263: Bajaur C3 (ADR-0039) — `/activities` joins NEVER_CACHE. Since C1 every Activities read
+// went through the cache-first branch: an officer posted, and the list that followed was the
+// one from before the post (found by the C3 browser test). Videos made it worse — a byte-range
+// request cannot be answered from this cache at all.
+const CACHE = 'dnc-shell-v263';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.
@@ -1421,6 +1425,17 @@ const NEVER_CACHE = [
    * access log and the security policy are live state for the same reason.
    */
   '/settings',
+  /**
+   * `/activities` — Bajaur's Activities (ADR-0039), and missing from here from C1 until C3.
+   *
+   * The `/settings` failure again: the page re-reads `/activities/posts` after a post, and the
+   * cached answer was the list from before it — a post that looked lost. And the photos and
+   * videos are behind a permission and a 30-day delete: a cached copy outlives both. A video is
+   * also fetched in byte ranges, which this cache cannot answer. The browser's own HTTP cache
+   * still keeps a photo or video with its ETag (`private, no-cache`), so nothing is
+   * downloaded twice.
+   */
+  '/activities',
 ];
 
 function isNeverCache(url: URL): boolean {

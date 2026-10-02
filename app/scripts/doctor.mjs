@@ -24,6 +24,7 @@
  * system that looked installed and did not work on the handsets that mattered.
  */
 
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -838,16 +839,96 @@ function checkOffsite(env) {
 function checkActivitiesBackup(env) {
   const s3 = set(env.S3_ENDPOINT) && set(env.S3_ACCESS_KEY_ID) && set(env.S3_SECRET_ACCESS_KEY);
   if (s3 && set(env.ACTIVITIES_S3_BUCKET) && set(env.BACKUP_PASSPHRASE)) {
-    ok('Activities media backup', 'Configured. New photos are copied, encrypted, every hour.');
+    ok(
+      'Activities media backup',
+      'Configured. New photos and videos are copied, encrypted, every hour.',
+    );
     return;
   }
   todo(
     'Activities media backup (ADR-0039 §8)',
-    'Activities photos exist only on this server.',
+    'Activities photos and videos exist only on this server.',
     'Needs ACTIVITIES_S3_BUCKET — a bucket of its own, with a 30-day lifecycle rule — plus ' +
       'the S3 keys and BACKUP_PASSPHRASE the database backup uses. Posts are still deleted ' +
       'after 30 days either way.',
   );
+}
+
+/**
+ * Activities videos (ADR-0039 §4, Bajaur — C3). Two questions: is ffmpeg here to convert them,
+ * and has any video failed? Failures are read from the database — read only, like everything
+ * else this script does — because the ADR promises they are listed here, not only in a journal.
+ */
+function version(file) {
+  return new Promise((resolve) => {
+    execFile(file, ['-version'], { timeout: 15_000, windowsHide: true }, (error, stdout) => {
+      resolve(error === null ? (stdout.split(/\r?\n/)[0] ?? '').trim() : null);
+    });
+  });
+}
+
+async function checkVideos(env) {
+  const ffmpeg = set(env.FFMPEG_PATH) ? env.FFMPEG_PATH.trim() : 'ffmpeg';
+  const ffprobe = set(env.FFPROBE_PATH) ? env.FFPROBE_PATH.trim() : 'ffprobe';
+  const [mpeg, probe] = await Promise.all([version(ffmpeg), version(ffprobe)]);
+  if (mpeg !== null && probe !== null) {
+    ok('Activities videos — ffmpeg', mpeg);
+  } else {
+    bad(
+      'Activities videos — ffmpeg (ADR-0039 §4)',
+      `${mpeg === null ? ffmpeg : ffprobe} cannot be run. Uploaded videos wait as "processing" ` +
+        'and are never shown.',
+      'Install ffmpeg (on the cloud server: apt-get install ffmpeg — setup.sh does this), or ' +
+        'set FFMPEG_PATH and FFPROBE_PATH in .env to where they are. Waiting videos convert ' +
+        'by themselves once it is there.',
+    );
+  }
+
+  if (!set(env.DATABASE_URL)) return;
+  let pool;
+  try {
+    const { default: pg } = await import('pg');
+    pool = new pg.Pool({ connectionString: env.DATABASE_URL, max: 1, connectionTimeoutMillis: 8_000 });
+    const { rows } = await pool.query(
+      `SELECT m.failure, m.status_at, u.name AS unit, a.full_name AS author
+         FROM activity_media m
+         JOIN activity_post p ON p.post_id = m.post_id
+         JOIN activity_unit u ON u.unit_id = p.unit_id
+         JOIN person a ON a.person_id = p.author_person_id
+        WHERE m.kind = 'video' AND m.status = 'failed'
+        ORDER BY m.status_at DESC LIMIT 10`,
+    );
+    const waiting = await pool.query(
+      `SELECT count(*)::int AS n FROM activity_media
+        WHERE kind = 'video' AND status = 'processing' AND status_at < now() - interval '1 hour'`,
+    );
+    const n = waiting.rows[0]?.n ?? 0;
+    if (rows.length === 0 && n === 0) {
+      ok('Activities videos — conversions', 'No video has failed, and none is waiting.');
+      return;
+    }
+    const lines = rows.map(
+      (r) =>
+        `${new Date(r.status_at).toISOString().slice(0, 16).replace('T', ' ')} · ${r.unit} · ` +
+        `${r.author ?? ''}: ${r.failure ?? 'no reason recorded'}`,
+    );
+    bad(
+      'Activities videos — conversions',
+      [
+        ...(n > 0 ? [`${String(n)} video(s) waiting more than an hour to be converted.`] : []),
+        ...(rows.length > 0 ? [`Failed (latest ${String(rows.length)}):`, ...lines] : []),
+      ].join('\n        '),
+      'A failed video is shown as failed on its post; the officer can send it again. Videos ' +
+        'that wait mean ffmpeg is missing or stuck — see the line above and the server journal.',
+    );
+  } catch (err) {
+    todo(
+      'Activities videos — conversions',
+      `Could not read the database to list failed videos: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  } finally {
+    await pool?.end().catch(() => {});
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -865,6 +946,7 @@ async function main() {
   await checkWhatsApp(env, origin);
   checkOffsite(env);
   checkActivitiesBackup(env);
+  await checkVideos(env);
 
   for (const f of findings) {
     const mark =

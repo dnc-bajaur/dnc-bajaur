@@ -263,10 +263,68 @@
         background: rgba(0, 0, 0, 0.88);
         cursor: zoom-out;
       }
-      .viewer img {
+      .viewer img,
+      .viewer video {
         max-width: 100%;
         max-height: 100%;
         object-fit: contain;
+      }
+      .videos {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .video {
+        position: relative;
+        aspect-ratio: 16 / 9;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: #000;
+        overflow: hidden;
+      }
+      .video img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        cursor: pointer;
+      }
+      .video .play {
+        position: absolute;
+        inset: 0;
+        margin: auto;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 0;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        font-size: 1.2rem;
+        padding: 0;
+      }
+      .video .state {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+        text-align: center;
+        font-size: 0.85rem;
+        color: #fff;
+      }
+      .video .length {
+        position: absolute;
+        right: 6px;
+        bottom: 6px;
+        padding: 0 5px;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        font-size: 0.8rem;
+      }
+      .picked-videos .list-row button {
+        padding: 0 9px;
       }
       [hidden] {
         display: none !important;
@@ -341,9 +399,12 @@
             <label for="pPhotos">Photos (up to 10)</label>
             <input id="pPhotos" type="file" accept="image/*" multiple />
             <div class="photos" id="picked"></div>
+            <label for="pVideos">Videos (up to 3, each at most 3 minutes)</label>
+            <input id="pVideos" type="file" accept="video/mp4,video/quicktime,video/*" multiple />
+            <div class="picked-videos" id="pickedVideos"></div>
             <div class="row">
               <button class="primary" id="postSubmit" type="submit">Post</button>
-              <button id="retryPhotos" type="button" hidden>Try the failed photos again</button>
+              <button id="retryPhotos" type="button" hidden>Try the failed ones again</button>
             </div>
             <p id="postProgress" class="meta" role="status"></p>
             <p id="postError" class="error" role="alert" hidden></p>
@@ -427,7 +488,10 @@
         </section>
       </div>
     </main>
-    <div class="viewer" id="viewer" hidden><img id="viewerImg" alt="" /></div>
+    <div class="viewer" id="viewer" hidden>
+      <img id="viewerImg" alt="" />
+      <video id="viewerVideo" controls playsinline preload="metadata" hidden></video>
+    </div>
     <script src="/activities.js"></script>
   </body>
 </html>

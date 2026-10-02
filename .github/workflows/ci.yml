@@ -115,6 +115,12 @@ jobs:
           "$PG_BIN/pg_dump" --version | grep -q ' 17\.' \
             || { echo "::error::pg_dump at \$PG_BIN is not version 17"; exit 1; }
 
+      # The Activities video converter's own test runs the real ffmpeg (ADR-0039 §4): the
+      # arguments are the part most likely to be wrong, and only ffmpeg can say so.
+      # `activitiesVideoTools.test.ts` refuses to skip in CI, so this cannot quietly go missing.
+      - name: Install ffmpeg
+        run: sudo apt-get install -y ffmpeg
+
       - name: Install dependencies
         working-directory: app
         run: npm ci

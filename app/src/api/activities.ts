@@ -1,5 +1,6 @@
 /**
- * Activities — departments' daily pictures, inside the app (ADR-0039, Bajaur — phase C1).
+ * Activities — departments' daily pictures and videos, inside the app (ADR-0039, Bajaur —
+ * phases C1–C3).
  *
  * A **separate module**. It writes nothing to the incident event log or to `evidence`, reads
  * no seat, and knows nothing of the removed operational department layer. Its "Department" is
@@ -24,10 +25,17 @@
  * photos are served **inline** so the page can show them — safe only because nothing but JPEG,
  * PNG and WebP is ever stored, each checked by its magic number, and each served with its sniffed
  * type, `nosniff` and a sandboxing CSP.
+ *
+ * **Videos** (C3) arrive in chunks, so a weak connection resumes instead of starting again: the
+ * phone asks for a slot (`startVideo`), sends the bytes in order (`receiveChunk`), and after a
+ * drop asks how much arrived (`uploadState`). Only MP4 and QuickTime are accepted, checked by the
+ * bytes of the first chunk. The original is never served: the converter
+ * (`jobs/activitiesVideo.ts`) turns it into 720p H.264 and deletes it, and only that MP4 is shown.
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
@@ -77,11 +85,32 @@ export const RETENTION_DAYS = 30;
 /** How many days before that the DC is warned and offered the ZIP. */
 export const WARNING_DAYS = 3;
 
+/** Up to three videos on one post (ADR-0039 §3). A failed one does not take a place. */
+export const MAX_VIDEOS_PER_POST = 3;
+
+/** The largest original accepted (ADR-0039 §4). Three minutes from a phone fits easily. */
+export const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
+
+/** The longest video kept (ADR-0039 §4). Checked by the phone first, and by ffprobe for real. */
+export const MAX_VIDEO_SECONDS = 180;
+
+/**
+ * The largest chunk of a video accepted in one request. The phone sends 4 MB: small enough that
+ * a dropped connection costs little, large enough that 300 MB is under a hundred requests.
+ */
+export const MAX_CHUNK_BYTES = 8 * 1024 * 1024;
+
+/** An upload with no chunk for this long is given up, and its bytes removed. */
+export const ABANDONED_UPLOAD_HOURS = 24;
+
 const PHOTO_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png', 'image/webp']);
+/** What a phone's camera writes: MP4 (Android) and QuickTime (iPhone). Both by their bytes. */
+const VIDEO_TYPES: ReadonlySet<string> = new Set(['video/mp4', 'video/quicktime']);
 const EXT: Readonly<Record<string, string>> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  'video/mp4': 'mp4',
 };
 
 /** Where Activities files live unless told otherwise — beside evidence, never in the web root. */
@@ -89,7 +118,8 @@ export function defaultActivitiesRoot(): string {
   return join(process.cwd(), 'var', 'activities');
 }
 
-function inside(root: string, relative: string): string {
+/** An Activities path, refused if it would leave the root. Shared with the video converter. */
+export function inside(root: string, relative: string): string {
   const absolute = resolve(root, relative);
   if (!absolute.startsWith(resolve(root) + sep)) {
     throw new Error('refusing to touch a file outside the Activities root');
@@ -407,10 +437,25 @@ export interface PostView {
   /** When the 30-day rule deletes it (ADR-0039 §7). */
   readonly expiresAt: string;
   readonly photos: readonly { readonly mediaId: string; readonly hasThumb: boolean }[];
+  readonly videos: readonly VideoView[];
   /** What the caller may do with it — drawn by the page, enforced again by each action. */
   readonly mayDelete: boolean;
   readonly mayModerate: boolean;
   readonly mayAddPhotos: boolean;
+  readonly mayAddVideos: boolean;
+}
+
+export type VideoStatus = 'uploading' | 'processing' | 'ready' | 'failed';
+
+export interface VideoView {
+  readonly mediaId: string;
+  readonly status: VideoStatus;
+  /** Known once converted. */
+  readonly durationSeconds: number | null;
+  /** Why it failed, when it did. */
+  readonly failure: string | null;
+  /** A poster frame, for the list, at `?size=thumb`. */
+  readonly hasPoster: boolean;
 }
 
 interface PostRow {
@@ -427,6 +472,7 @@ interface PostRow {
   hidden_at: string | null;
   expires_at: string;
   photos: { mediaId: string; hasThumb: boolean }[] | null;
+  videos: VideoView[] | null;
 }
 
 const POST_SELECT = `
@@ -438,7 +484,13 @@ const POST_SELECT = `
          (SELECT json_agg(json_build_object('mediaId', m.media_id,
                                             'hasThumb', m.thumb_path IS NOT NULL)
                           ORDER BY m.created_at, m.media_id)
-            FROM activity_media m WHERE m.post_id = p.post_id) AS photos
+            FROM activity_media m WHERE m.post_id = p.post_id AND m.kind = 'photo') AS photos,
+         (SELECT json_agg(json_build_object('mediaId', m.media_id, 'status', m.status,
+                                            'durationSeconds', m.duration_seconds,
+                                            'failure', m.failure,
+                                            'hasPoster', m.thumb_path IS NOT NULL)
+                          ORDER BY m.created_at, m.media_id)
+            FROM activity_media m WHERE m.post_id = p.post_id AND m.kind = 'video') AS videos
     FROM activity_post p
     JOIN activity_unit u ON u.unit_id = p.unit_id
     JOIN person a        ON a.person_id = p.author_person_id`;
@@ -446,6 +498,9 @@ const POST_SELECT = `
 function toView(c: Caller, r: PostRow): PostView {
   const own = r.author_person_id === c.identity.personId;
   const photos = r.photos ?? [];
+  const videos = r.videos ?? [];
+  const mayPost =
+    own && r.hidden_at === null && c.can.has('activities.upload') && !c.identity.mustChangePassword;
   return {
     postId: r.post_id,
     unitId: r.unit_id,
@@ -460,14 +515,12 @@ function toView(c: Caller, r: PostRow): PostView {
     hiddenAt: r.hidden_at,
     expiresAt: r.expires_at,
     photos,
+    videos,
     mayDelete: c.can.has('activities.moderate') || (own && c.can.has('activities.delete_own')),
     mayModerate: c.can.has('activities.moderate'),
-    mayAddPhotos:
-      own &&
-      r.hidden_at === null &&
-      photos.length < MAX_PHOTOS_PER_POST &&
-      c.can.has('activities.upload') &&
-      !c.identity.mustChangePassword,
+    mayAddPhotos: mayPost && photos.length < MAX_PHOTOS_PER_POST,
+    mayAddVideos:
+      mayPost && videos.filter((v) => v.status !== 'failed').length < MAX_VIDEOS_PER_POST,
   };
 }
 
@@ -644,7 +697,8 @@ export async function addPhoto(
 
   const post = await pool.query<{ author_person_id: string; hidden_at: string | null; n: string }>(
     `SELECT p.author_person_id, p.hidden_at,
-            (SELECT count(*) FROM activity_media m WHERE m.post_id = p.post_id) AS n
+            (SELECT count(*) FROM activity_media m
+              WHERE m.post_id = p.post_id AND m.kind = 'photo') AS n
        FROM activity_post p WHERE p.post_id = $1`,
     [postId],
   );
@@ -706,7 +760,7 @@ export async function addPhoto(
     `INSERT INTO activity_media
        (media_id, post_id, kind, content_type, byte_size, sha256, stored_path, thumb_path)
      SELECT $1, $2, 'photo', $3, $4, $5, $6, $7
-      WHERE (SELECT count(*) FROM activity_media WHERE post_id = $2) < $8`,
+      WHERE (SELECT count(*) FROM activity_media WHERE post_id = $2 AND kind = 'photo') < $8`,
     [
       mediaId,
       postId,
@@ -730,6 +784,286 @@ export async function addPhoto(
     detail: { mediaId },
   });
   return { ok: true, value: { mediaId } };
+}
+
+//------------------------------------------------------------------------------
+// Videos — sent in chunks, converted on the server (ADR-0039 §4, phase C3)
+//------------------------------------------------------------------------------
+
+export interface UploadState {
+  readonly mediaId: string;
+  readonly status: VideoStatus;
+  /** How many bytes have arrived. The next chunk starts here. */
+  readonly received: number;
+  readonly bytes: number;
+  /** The size of chunk the phone should send. */
+  readonly chunkBytes: number;
+}
+
+/** The phone's chunk size: half the cap, so a chunk never brushes against it. */
+const CHUNK_BYTES = MAX_CHUNK_BYTES / 2;
+
+/**
+ * Ask for a place for one video on one's own post. The body is JSON — `bytes` (the original's
+ * size) and `contentType` — and, when the phone could read it, `durationSeconds`, so a video
+ * that is too long is refused before a single byte of it is sent. The converter checks the
+ * length again from the file itself; the phone's word is only a courtesy.
+ */
+export async function startVideo(
+  pool: Pool,
+  root: string,
+  identity: Identity,
+  postId: string,
+  input: Record<string, unknown>,
+): Promise<ActivitiesResult<UploadState>> {
+  const c = await caller(pool, identity);
+  const denied = mayUpload<UploadState>(c);
+  if (denied !== null) return denied;
+
+  const post = await pool.query<{ author_person_id: string; hidden_at: string | null }>(
+    'SELECT author_person_id, hidden_at FROM activity_post WHERE post_id = $1',
+    [postId],
+  );
+  const found = post.rows[0];
+  if (found === undefined || !maySee(c, found.author_person_id, found.hidden_at)) {
+    return refuse(404, 'no such post');
+  }
+  if (found.author_person_id !== identity.personId) {
+    return refuse(403, 'videos can be added only to your own post');
+  }
+  if (found.hidden_at !== null) return refuse(409, 'this post is in the Recycle bin');
+
+  const bytes = input['bytes'];
+  if (typeof bytes !== 'number' || !Number.isInteger(bytes) || bytes <= 0) {
+    return refuse(400, 'bytes must be the size of the video');
+  }
+  if (bytes > MAX_VIDEO_BYTES) return refuse(413, 'that video is larger than 300 MB');
+  const declared = text(input['contentType']).split(';')[0]!.toLowerCase();
+  if (!VIDEO_TYPES.has(declared)) {
+    return refuse(415, 'only MP4 and MOV videos, as a phone camera records them, are accepted');
+  }
+  const seconds = input['durationSeconds'];
+  if (typeof seconds === 'number' && seconds > MAX_VIDEO_SECONDS + 1) {
+    return refuse(400, 'that video is longer than 3 minutes');
+  }
+
+  const mediaId = randomUUID();
+  const uploadPath = join(postId, `${mediaId}.upload`);
+  const storedPath = join(postId, `${mediaId}.mp4`);
+  const absolute = inside(root, uploadPath);
+  await mkdir(dirname(absolute), { recursive: true });
+  await writeFile(absolute, Buffer.alloc(0), { flag: 'wx' });
+
+  // The count is checked in the insert itself, so two videos racing for the third place cannot
+  // both win. A failed video gives its place back.
+  const inserted = await pool.query(
+    `INSERT INTO activity_media
+       (media_id, post_id, kind, status, content_type, byte_size, received_bytes,
+        stored_path, upload_path)
+     SELECT $1, $2, 'video', 'uploading', $3, $4, 0, $5, $6
+      WHERE (SELECT count(*) FROM activity_media
+              WHERE post_id = $2 AND kind = 'video' AND status <> 'failed') < $7`,
+    [mediaId, postId, declared, bytes, storedPath, uploadPath, MAX_VIDEOS_PER_POST],
+  );
+  if (inserted.rowCount === 0) {
+    await removeFiles(root, [uploadPath]);
+    return refuse(409, `a post holds at most ${MAX_VIDEOS_PER_POST} videos`);
+  }
+  return {
+    ok: true,
+    value: { mediaId, status: 'uploading', received: 0, bytes, chunkBytes: CHUNK_BYTES },
+  };
+}
+
+interface UploadRow {
+  post_id: string;
+  kind: string;
+  status: VideoStatus;
+  content_type: string;
+  byte_size: string;
+  received_bytes: string | null;
+  upload_path: string | null;
+  author_person_id: string;
+  hidden_at: string | null;
+}
+
+const UPLOAD_SELECT = `
+  SELECT m.post_id, m.kind, m.status, m.content_type, m.byte_size, m.received_bytes,
+         m.upload_path, p.author_person_id, p.hidden_at
+    FROM activity_media m JOIN activity_post p ON p.post_id = m.post_id
+   WHERE m.media_id = $1`;
+
+function stateOf(mediaId: string, row: UploadRow): UploadState {
+  const bytes = Number(row.byte_size);
+  return {
+    mediaId,
+    status: row.status,
+    received: row.status === 'uploading' ? Number(row.received_bytes ?? 0) : bytes,
+    bytes,
+    chunkBytes: CHUNK_BYTES,
+  };
+}
+
+/** One's own upload, or a refusal that says nothing about anybody else's. */
+async function ownUpload(
+  pool: Pool,
+  identity: Identity,
+  mediaId: string,
+): Promise<UploadRow | ActivitiesResult<never>> {
+  const found = await pool.query<UploadRow>(UPLOAD_SELECT, [mediaId]);
+  const row = found.rows[0];
+  if (row === undefined || row.kind !== 'video' || row.author_person_id !== identity.personId) {
+    return refuse(404, 'no such upload');
+  }
+  return row;
+}
+
+/** How much of a video has arrived — what the phone asks after a dropped connection. */
+export async function uploadState(
+  pool: Pool,
+  identity: Identity,
+  mediaId: string,
+): Promise<ActivitiesResult<UploadState>> {
+  const row = await ownUpload(pool, identity, mediaId);
+  if ('ok' in row) return row;
+  return { ok: true, value: stateOf(mediaId, row) };
+}
+
+/**
+ * Receive the next chunk of a video. The body is raw bytes; `x-upload-offset` says where they
+ * start, and must be exactly how much has already arrived — a chunk sent twice, or one that
+ * skips ahead, is refused with 409 and the phone asks `uploadState` where to carry on.
+ *
+ * The first chunk is checked by its bytes: an upload that is not a video is refused, and its
+ * place given back, before the rest is sent.
+ *
+ * The body is read (capped) **before** the row is locked, so a slow connection never holds a
+ * database lock; the offset is then checked again under the lock, and the bytes written at it.
+ * When the last byte arrives the video becomes `processing` and `onComplete` wakes the converter.
+ */
+export async function receiveChunk(
+  pool: Pool,
+  root: string,
+  req: IncomingMessage,
+  identity: Identity,
+  mediaId: string,
+  onComplete?: () => void,
+): Promise<ActivitiesResult<UploadState>> {
+  const c = await caller(pool, identity);
+  const denied = mayUpload<UploadState>(c);
+  if (denied !== null) return denied;
+
+  const row = await ownUpload(pool, identity, mediaId);
+  if ('ok' in row) return row;
+  if (row.status !== 'uploading') return refuse(409, 'this video has already arrived');
+  if (row.hidden_at !== null) return refuse(409, 'this post is in the Recycle bin');
+
+  const header = req.headers['x-upload-offset'];
+  const offset = typeof header === 'string' && /^\d+$/.test(header) ? Number(header) : NaN;
+  if (!Number.isSafeInteger(offset)) return refuse(400, 'x-upload-offset is required');
+  const total = Number(row.byte_size);
+  if (offset !== Number(row.received_bytes ?? 0)) {
+    return refuse(409, `expected the chunk at ${row.received_bytes ?? 0}`);
+  }
+
+  const body = await readCapped(req, Math.min(MAX_CHUNK_BYTES, total - offset));
+  if (body === null) return refuse(413, 'that chunk is larger than this video has left');
+  if (body.length === 0) return refuse(400, 'the chunk is empty');
+
+  if (offset === 0) {
+    const verdict = decideType(row.content_type, body, VIDEO_TYPES);
+    if (!verdict.ok) {
+      await pool.query("DELETE FROM activity_media WHERE media_id = $1 AND status = 'uploading'", [
+        mediaId,
+      ]);
+      await removeFiles(root, [row.upload_path]);
+      return refuse(415, verdict.why);
+    }
+  }
+
+  const client = await pool.connect();
+  let received: number;
+  try {
+    await client.query('BEGIN');
+    const locked = await client.query<{
+      status: string;
+      received_bytes: string | null;
+      upload_path: string;
+    }>(
+      `SELECT status, received_bytes, upload_path FROM activity_media
+        WHERE media_id = $1 FOR UPDATE`,
+      [mediaId],
+    );
+    const now = locked.rows[0];
+    if (
+      now === undefined ||
+      now.status !== 'uploading' ||
+      Number(now.received_bytes ?? 0) !== offset
+    ) {
+      await client.query('ROLLBACK');
+      return refuse(409, 'another copy of this chunk arrived first');
+    }
+    const file = await open(inside(root, now.upload_path), 'r+');
+    try {
+      await file.write(body, 0, body.length, offset);
+    } finally {
+      await file.close();
+    }
+    received = offset + body.length;
+    await client.query(
+      `UPDATE activity_media
+          SET received_bytes = $2, status_at = now(),
+              status = CASE WHEN $2 >= byte_size THEN 'processing' ELSE status END
+        WHERE media_id = $1`,
+      [mediaId, received],
+    );
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  const complete = received >= total;
+  if (complete) {
+    await writeLog(pool, {
+      type: 'video_added',
+      actor: identity.personId,
+      postId: row.post_id,
+      detail: { mediaId, bytes: total },
+    });
+    onComplete?.();
+  }
+  return {
+    ok: true,
+    value: {
+      mediaId,
+      status: complete ? 'processing' : 'uploading',
+      received,
+      bytes: total,
+      chunkBytes: CHUNK_BYTES,
+    },
+  };
+}
+
+/**
+ * Give up uploads nobody has sent a chunk to for a day — the phone was closed, or the officer
+ * changed their mind. Row and bytes removed; nothing is logged, because nothing was posted.
+ * Run by the hourly housekeeping (`jobs/activitiesRetention.ts`).
+ */
+export async function dropAbandonedUploads(pool: Pool, root: string): Promise<number> {
+  const { rows } = await pool.query<{ upload_path: string | null }>(
+    `DELETE FROM activity_media
+      WHERE status = 'uploading' AND status_at < now() - make_interval(hours => $1)
+      RETURNING upload_path`,
+    [ABANDONED_UPLOAD_HOURS],
+  );
+  await removeFiles(
+    root,
+    rows.map((r) => r.upload_path),
+  );
+  return rows.length;
 }
 
 async function removeFiles(root: string, paths: readonly (string | null)[]): Promise<void> {
@@ -797,7 +1131,7 @@ export async function removePost(
   actorPersonId: string | null,
 ): Promise<boolean> {
   const client = await pool.connect();
-  let files: { stored_path: string; thumb_path: string | null }[];
+  let files: { stored_path: string; thumb_path: string | null; upload_path: string | null }[];
   try {
     await client.query('BEGIN');
     // Locked first, so two removals of one post cannot both write a log line.
@@ -826,13 +1160,15 @@ export async function removePost(
       return false;
     }
     const media = await client.query<{
+      kind: string;
       stored_path: string;
       thumb_path: string | null;
+      upload_path: string | null;
       backup_key: string | null;
       thumb_backup_key: string | null;
     }>(
       `DELETE FROM activity_media WHERE post_id = $1
-       RETURNING stored_path, thumb_path, backup_key, thumb_backup_key`,
+       RETURNING kind, stored_path, thumb_path, upload_path, backup_key, thumb_backup_key`,
       [postId],
     );
     files = media.rows;
@@ -860,7 +1196,8 @@ export async function removePost(
           author: post.author_name,
           authorPersonId: post.author_person_id,
           activityDate: post.activity_date,
-          photos: media.rowCount,
+          photos: media.rows.filter((m) => m.kind === 'photo').length,
+          videos: media.rows.filter((m) => m.kind === 'video').length,
           fromRecycleBin: post.hidden_at !== null,
           ...(type === 'expired' ? { postedAt: post.created_at } : {}),
         }),
@@ -876,7 +1213,7 @@ export async function removePost(
 
   await removeFiles(
     root,
-    files.flatMap((f) => [f.stored_path, f.thumb_path]),
+    files.flatMap((f) => [f.stored_path, f.thumb_path, f.upload_path]),
   );
   await rm(inside(root, postId), { recursive: true, force: true }).catch(() => {});
   return true;
@@ -921,20 +1258,26 @@ export async function moderatePost(
 }
 
 //------------------------------------------------------------------------------
-// Serving a photo
+// Serving a photo or a video
 //------------------------------------------------------------------------------
 
 /**
- * Hand a photo back, **inline**, for the page to show.
+ * Hand a photo or a converted video back, **inline**, for the page to show.
  *
- * Safe to render because only JPEG, PNG and WebP are ever stored (checked by their bytes), the
- * type sent is the sniffed one, `nosniff` stops the browser guessing, and the CSP sandbox means
- * that even opened on its own the response can run nothing. `no-cache` with an ETag: the
- * permission is asked on every view, and an unchanged photo costs a 304, not a download.
+ * Safe to render because only JPEG, PNG and WebP photos and ffmpeg's own MP4 are ever served
+ * (photos checked by their bytes; a video's original is never served at all), the type sent is
+ * the stored one, `nosniff` stops the browser guessing, and the CSP sandbox means that even
+ * opened on its own the response can run nothing. `no-cache` with an ETag: the permission is
+ * asked on every view, and an unchanged file costs a 304, not a download.
+ *
+ * `thumb` asks for the small copy: a photo's thumbnail, or a video's poster frame.
+ *
+ * A video answers **byte ranges** (RFC 9110 §14): an iPhone will not play a video from a server
+ * that does not, and every phone uses them to start playing before the whole file has arrived.
  *
  * Answers the request itself on success; returns a refusal otherwise.
  */
-export async function servePhoto(
+export async function serveMedia(
   pool: Pool,
   root: string,
   req: IncomingMessage,
@@ -947,19 +1290,26 @@ export async function servePhoto(
   const found = await pool.query<{
     author_person_id: string;
     hidden_at: string | null;
+    kind: string;
+    status: string;
     content_type: string;
-    sha256: string;
+    sha256: string | null;
     stored_path: string;
     thumb_path: string | null;
   }>(
-    `SELECT p.author_person_id, p.hidden_at, m.content_type, m.sha256, m.stored_path, m.thumb_path
+    `SELECT p.author_person_id, p.hidden_at, m.kind, m.status, m.content_type, m.sha256,
+            m.stored_path, m.thumb_path
        FROM activity_media m JOIN activity_post p ON p.post_id = m.post_id
       WHERE m.media_id = $1`,
     [mediaId],
   );
   const row = found.rows[0];
+  const noun = row?.kind === 'video' ? 'video' : 'photo';
   if (row === undefined || !maySee(c, row.author_person_id, row.hidden_at)) {
-    return refuse(404, 'no such photo');
+    return refuse(404, `no such ${noun}`);
+  }
+  if (row.status !== 'ready' || row.sha256 === null) {
+    return refuse(409, 'this video is not ready to play yet');
   }
 
   const useThumb = thumb && row.thumb_path !== null;
@@ -976,14 +1326,74 @@ export async function servePhoto(
     return null;
   }
 
+  const path = inside(root, useThumb ? row.thumb_path! : row.stored_path);
+  if (row.kind === 'video' && !useThumb) return streamVideo(req, res, path, headers);
+
   let bytes: Buffer;
   try {
-    bytes = await readFile(inside(root, useThumb ? row.thumb_path! : row.stored_path));
+    bytes = await readFile(path);
   } catch {
-    return refuse(410, 'the photo is recorded but missing from disk');
+    return refuse(410, `the ${noun} is recorded but missing from disk`);
   }
   res.writeHead(200, { ...headers, 'content-length': bytes.length });
   res.end(bytes);
+  return null;
+}
+
+/**
+ * One byte range, as a browser's video player asks for it: `bytes=a-b`, `bytes=a-` or the last
+ * `bytes=-n`. Anything else — several ranges, units other than bytes — is answered with the
+ * whole file, which RFC 9110 permits; `null` means the range lies past the end (416).
+ */
+export function parseRange(
+  header: string | undefined,
+  size: number,
+): { readonly start: number; readonly end: number } | 'whole' | null {
+  if (header === undefined) return 'whole';
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (m === null || (m[1] === '' && m[2] === '')) return 'whole';
+  if (m[1] === '') {
+    const suffix = Number(m[2]);
+    if (suffix === 0) return null;
+    return { start: Math.max(0, size - suffix), end: size - 1 };
+  }
+  const start = Number(m[1]);
+  const end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
+  if (start >= size || end < start) return null;
+  return { start, end };
+}
+
+async function streamVideo(
+  req: IncomingMessage,
+  res: ServerResponse,
+  path: string,
+  headers: Record<string, string>,
+): Promise<ActivitiesResult<null> | null> {
+  let size: number;
+  try {
+    size = (await stat(path)).size;
+  } catch {
+    return refuse(410, 'the video is recorded but missing from disk');
+  }
+  const range = parseRange(req.headers.range, size);
+  if (range === null) {
+    res.writeHead(416, { ...headers, 'content-range': `bytes */${size}` }).end();
+    return null;
+  }
+  const { start, end } = range === 'whole' ? { start: 0, end: size - 1 } : range;
+  res.writeHead(range === 'whole' ? 200 : 206, {
+    ...headers,
+    'accept-ranges': 'bytes',
+    'content-length': end - start + 1,
+    ...(range === 'whole' ? {} : { 'content-range': `bytes ${start}-${end}/${size}` }),
+  });
+  const stream = createReadStream(path, { start, end });
+  stream.on('error', (e) => {
+    log('error', 'an Activities video could not be read from disk', { error: String(e) });
+    res.destroy();
+  });
+  res.on('close', () => stream.destroy());
+  stream.pipe(res);
   return null;
 }
 
@@ -1044,7 +1454,7 @@ export async function readLog(
 
 /** What the media backup has not done yet — read by the DC's warning and by `doctor`. */
 export interface BackupBacklog {
-  /** Photos uploaded more than a day ago and still not in the media bucket. */
+  /** Photos and videos ready more than a day ago and still not in the media bucket. */
   readonly notCopied: number;
   /** Bucket objects whose delete has been waiting more than a day. */
   readonly removalsWaiting: number;
@@ -1059,7 +1469,8 @@ export async function backupBacklog(pool: Pool): Promise<BackupBacklog> {
     last_error: string | null;
   }>(
     `SELECT (SELECT count(*) FROM activity_media
-              WHERE backed_up_at IS NULL AND created_at < now() - interval '1 day')::int AS not_copied,
+              WHERE backed_up_at IS NULL AND status = 'ready'
+                AND status_at < now() - interval '1 day')::int AS not_copied,
             (SELECT count(*) FROM activity_backup_removal
               WHERE queued_at < now() - interval '1 day')::int AS removals,
             (SELECT last_error FROM activity_backup_removal
@@ -1069,12 +1480,34 @@ export async function backupBacklog(pool: Pool): Promise<BackupBacklog> {
   return { notCopied: r.not_copied, removalsWaiting: r.removals, lastError: r.last_error };
 }
 
+/**
+ * Videos the converter has not managed — read by the DC's warning and by `doctor`.
+ *
+ * Waiting is counted only past an hour: a video converting right now is normal, one still
+ * waiting an hour later means ffmpeg is missing or stuck.
+ */
+export interface VideoBacklog {
+  readonly waiting: number;
+  readonly failed: number;
+}
+
+export async function videoBacklog(pool: Pool): Promise<VideoBacklog> {
+  const { rows } = await pool.query<{ waiting: number; failed: number }>(
+    `SELECT count(*) FILTER (WHERE status = 'processing'
+                               AND status_at < now() - interval '1 hour')::int AS waiting,
+            count(*) FILTER (WHERE status = 'failed')::int AS failed
+       FROM activity_media WHERE kind = 'video' AND status IN ('processing', 'failed')`,
+  );
+  return rows[0] ?? { waiting: 0, failed: 0 };
+}
+
 export interface ExpiringView {
   readonly retentionDays: number;
   readonly warningDays: number;
   /** Posts the 30-day rule deletes within the warning window — Recycle bin included. */
   readonly posts: number;
   readonly photos: number;
+  readonly videos: number;
   readonly bytes: number;
   readonly firstExpiresAt: string | null;
   /** False when the ZIP would be too large to make; the page then says so instead of offering it. */
@@ -1083,6 +1516,7 @@ export interface ExpiringView {
     readonly configured: boolean;
     readonly why: string | null;
   } & BackupBacklog;
+  readonly conversion: VideoBacklog;
 }
 
 /** `created_at` on or before this is inside the warning window. */
@@ -1102,18 +1536,21 @@ export async function expiring(
   if (!c.can.has('activities.moderate')) {
     return refuse(403, 'you do not have permission to see what is about to be deleted');
   }
+  // Only what is ready: an unfinished or failed video is not in the ZIP, so it is not counted.
   const { rows } = await pool.query<{
     posts: number;
     photos: number;
+    videos: number;
     bytes: string;
     first_expires_at: string | null;
   }>(
     `SELECT count(DISTINCT p.post_id)::int AS posts,
-            count(m.media_id)::int AS photos,
+            count(m.media_id) FILTER (WHERE m.kind = 'photo')::int AS photos,
+            count(m.media_id) FILTER (WHERE m.kind = 'video')::int AS videos,
             coalesce(sum(m.byte_size), 0)::text AS bytes,
             min(p.created_at) + make_interval(days => ${RETENTION_DAYS}) AS first_expires_at
        FROM activity_post p
-       LEFT JOIN activity_media m ON m.post_id = p.post_id
+       LEFT JOIN activity_media m ON m.post_id = p.post_id AND m.status = 'ready'
       WHERE ${IN_WARNING}`,
   );
   const r = rows[0]!;
@@ -1125,11 +1562,13 @@ export async function expiring(
       warningDays: WARNING_DAYS,
       posts: r.posts,
       photos: r.photos,
+      videos: r.videos,
       bytes,
       firstExpiresAt: r.first_expires_at,
       // One more entry for the index; its size is a rounding error against 4 GB.
-      zipFits: fits(r.photos + 1, bytes),
+      zipFits: fits(r.photos + r.videos + 1, bytes),
       backup: { ...backup, ...(await backupBacklog(pool)) },
+      conversion: await videoBacklog(pool),
     },
   };
 }
@@ -1173,7 +1612,7 @@ async function writeOut(res: ServerResponse, bytes: Buffer): Promise<void> {
 
 /**
  * The ZIP: every post the 30-day rule is about to delete, a folder each, with its photos and
- * one `activities.csv` describing them all. The way to keep something past thirty days
+ * converted videos, and one `activities.csv` describing them all. The way to keep something past thirty days
  * (ADR-0039 "We give up").
  *
  * Moderators only. Logged as `zip_downloaded` before the first byte is sent, so a copy of the
@@ -1203,17 +1642,18 @@ export async function downloadExpiring(
     created_at: string;
     expires_at: string;
     hidden_at: string | null;
-    media: { path: string; type: string; bytes: number }[] | null;
+    media: { path: string; kind: string; type: string; bytes: number }[] | null;
   }>(
     `SELECT p.post_id, u.name AS unit_name, a.full_name AS author_name,
             a.designation AS author_designation,
             to_char(p.activity_date, 'YYYY-MM-DD') AS activity_date,
             p.caption, p.place, p.created_at, p.hidden_at,
             p.created_at + make_interval(days => ${RETENTION_DAYS}) AS expires_at,
-            (SELECT json_agg(json_build_object('path', m.stored_path, 'type', m.content_type,
-                                               'bytes', m.byte_size)
-                             ORDER BY m.created_at, m.media_id)
-               FROM activity_media m WHERE m.post_id = p.post_id) AS media
+            (SELECT json_agg(json_build_object('path', m.stored_path, 'kind', m.kind,
+                                               'type', m.content_type, 'bytes', m.byte_size)
+                             ORDER BY m.kind, m.created_at, m.media_id)
+               FROM activity_media m
+              WHERE m.post_id = p.post_id AND m.status = 'ready') AS media
        FROM activity_post p
        JOIN activity_unit u ON u.unit_id = p.unit_id
        JOIN person a        ON a.person_id = p.author_person_id
@@ -1222,16 +1662,16 @@ export async function downloadExpiring(
   );
   if (rows.length === 0) return refuse(404, 'nothing is due to be deleted in the next few days');
 
-  const photos = rows.reduce((n, r) => n + (r.media?.length ?? 0), 0);
+  const files = rows.reduce((n, r) => n + (r.media?.length ?? 0), 0);
   const bytes = rows.reduce((n, r) => n + (r.media ?? []).reduce((b, m) => b + m.bytes, 0), 0);
-  if (!fits(photos + 1, bytes)) {
+  if (!fits(files + 1, bytes)) {
     return refuse(413, 'too much to put in one ZIP — ask for a copy from the server instead');
   }
 
   await writeLog(pool, {
     type: 'zip_downloaded',
     actor: identity.personId,
-    detail: { posts: rows.length, photos, bytes },
+    detail: { posts: rows.length, files, bytes },
   });
 
   const zip = zipWriter();
@@ -1256,7 +1696,7 @@ export async function downloadExpiring(
         'Place',
         'Posted at',
         'Deleted from the app on',
-        'Photos',
+        'Photos and videos',
         'In Recycle bin',
       ]
         .map(csvCell)
@@ -1269,20 +1709,23 @@ export async function downloadExpiring(
         `${r.activity_date} ${r.unit_name} - ${r.author_name ?? ''} - ${r.post_id.slice(0, 8)}`,
       );
       let n = 0;
+      const numbered = { photo: 0, video: 0 };
       for (const m of r.media ?? []) {
         let data: Buffer;
         try {
           data = await readFile(inside(root, m.path));
         } catch {
           // Recorded but missing from disk: said in the index rather than failing the whole ZIP.
-          log('error', 'an Activities photo is recorded but missing from disk', { path: m.path });
+          log('error', 'an Activities file is recorded but missing from disk', { path: m.path });
           continue;
         }
         n += 1;
+        const kind = m.kind === 'video' ? 'video' : 'photo';
+        numbered[kind] += 1;
         await writeOut(
           res,
           zip.add({
-            name: `${folder}/photo-${String(n).padStart(2, '0')}.${EXT[m.type] ?? 'bin'}`,
+            name: `${folder}/${kind}-${String(numbered[kind]).padStart(2, '0')}.${EXT[m.type] ?? 'bin'}`,
             bytes: data,
             modified: new Date(r.created_at),
           }),

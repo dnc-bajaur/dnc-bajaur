@@ -22,6 +22,7 @@ import { refreshWhatsAppNumber } from './ops/whatsappNumber.js';
 import { defaultEvidenceRoot } from './ops/evidence.js';
 import { createNightly } from './jobs/nightly.js';
 import { createActivitiesHousekeeping } from './jobs/activitiesRetention.js';
+import { createVideoConverter, ffmpegTools } from './jobs/activitiesVideo.js';
 import { defaultActivitiesRoot } from './api/activities.js';
 import { mediaStore, type MediaEnv } from './ops/offsite.js';
 import { refreshWeather } from './ops/weather.js';
@@ -104,6 +105,15 @@ async function start(): Promise<void> {
   // the other expires and copies.
   const activitiesRoot = defaultActivitiesRoot();
   const activitiesMedia = mediaStore(process.env as MediaEnv);
+  /**
+   * Activities videos → 720p with ffmpeg (ADR-0039 §4, Bajaur). Created before the server so an
+   * upload's last chunk can wake it; started with the other jobs below.
+   */
+  const videoConverter = createVideoConverter({
+    pool,
+    root: activitiesRoot,
+    tools: ffmpegTools(process.env),
+  });
 
   /**
    * The district's WhatsApp account, if it has one — ADR-0014.
@@ -207,6 +217,7 @@ async function start(): Promise<void> {
     backupDirectory,
     activitiesRoot,
     activitiesBackup: { configured: activitiesMedia.configured, why: activitiesMedia.why },
+    onVideoUploaded: () => videoConverter.kick(),
     // Late-bound on purpose: the server is created before the job, and the console's
     // "back up now" button needs the job rather than a copy of its options.
     get nightly() {
@@ -436,6 +447,7 @@ async function start(): Promise<void> {
   scheduler.start();
   nightly.start();
   activitiesHousekeeping.start();
+  videoConverter.start();
   log('info', 'started', { port, nodeEnv });
 
   let shuttingDown = false;
@@ -449,6 +461,7 @@ async function start(): Promise<void> {
       // Reversing this could leave a pass writing to a closed pool mid-escalation.
       nightly.stop();
       activitiesHousekeeping.stop();
+      videoConverter.stop();
       clearInterval(weatherTimer);
       await scheduler.stop();
       /**

@@ -162,8 +162,11 @@ import {
   downloadExpiring as downloadExpiringActivities,
   renameUnit,
   retireUnit,
-  servePhoto,
+  receiveChunk,
+  serveMedia,
   setDefaultUnit,
+  startVideo,
+  uploadState,
   type ActivitiesResult,
 } from './activities.js';
 
@@ -196,8 +199,13 @@ export interface ServerOptions {
    * where an uploaded file becomes a URL somebody's browser will open.
    */
   readonly evidenceRoot?: string;
-  /** Where Activities photos are written (ADR-0039). Outside the web root, like evidence. */
+  /** Where Activities photos and videos are written (ADR-0039). Outside the web root. */
   readonly activitiesRoot?: string;
+  /**
+   * Called when the last byte of an Activities video arrives, so the converter starts now rather
+   * than at its next timed pass (`jobs/activitiesVideo.ts`). Absent: the timed pass finds it.
+   */
+  readonly onVideoUploaded?: () => void;
   /**
    * Whether Bajaur's media bucket is set up (ADR-0039 §8), for the DC's warning to say so.
    * Absent means not set up — the honest default.
@@ -1063,6 +1071,7 @@ async function handleActivities(
   identity: Identity,
   root: string,
   backup: { readonly configured: boolean; readonly why: string | null },
+  onVideoUploaded: (() => void) | undefined,
 ): Promise<void> {
   const pathname = url.pathname;
   const send = <T>(result: ActivitiesResult<T>, okStatus = 200): void => {
@@ -1141,7 +1150,7 @@ async function handleActivities(
     return notAllowed();
   }
 
-  const post = /^\/activities\/posts\/([^/]+)(?:\/(photos|hide|restore))?$/.exec(pathname);
+  const post = /^\/activities\/posts\/([^/]+)(?:\/(photos|videos|hide|restore))?$/.exec(pathname);
   if (post !== null) {
     const postId = post[1]!;
     const action = post[2];
@@ -1152,8 +1161,24 @@ async function handleActivities(
     if (req.method === 'POST' && action === 'photos') {
       return send(await addPhoto(pool, root, req, identity, postId), 201);
     }
+    if (req.method === 'POST' && action === 'videos') {
+      const input = await bodyOf(req);
+      if (input === null) return bad();
+      return send(await startVideo(pool, root, identity, postId, input), 201);
+    }
     if (req.method === 'POST' && (action === 'hide' || action === 'restore')) {
       return send(await moderatePost(pool, identity, postId, action));
+    }
+    return notAllowed();
+  }
+
+  // A video arriving in chunks (ADR-0039 §4): GET says how much arrived, PUT sends the next.
+  const upload = /^\/activities\/uploads\/([^/]+)$/.exec(pathname);
+  if (upload !== null) {
+    if (!UUID_RE.test(upload[1]!)) return void json(res, 404, { error: 'no such upload' });
+    if (req.method === 'GET') return send(await uploadState(pool, identity, upload[1]!));
+    if (req.method === 'PUT') {
+      return send(await receiveChunk(pool, root, req, identity, upload[1]!, onVideoUploaded));
     }
     return notAllowed();
   }
@@ -1162,7 +1187,7 @@ async function handleActivities(
   if (media !== null) {
     if (req.method !== 'GET') return notAllowed();
     if (!UUID_RE.test(media[1]!)) return void json(res, 404, { error: 'no such photo' });
-    const reply = await servePhoto(
+    const reply = await serveMedia(
       pool,
       root,
       req,
@@ -3265,7 +3290,16 @@ export function createSyncServer(options: ServerOptions): Server {
             return;
           }
 
-          await handleActivities(pool, req, res, url, identity, activitiesRoot, activitiesBackup);
+          await handleActivities(
+            pool,
+            req,
+            res,
+            url,
+            identity,
+            activitiesRoot,
+            activitiesBackup,
+            options.onVideoUploaded,
+          );
           return;
         }
 

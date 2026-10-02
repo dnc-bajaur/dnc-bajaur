@@ -1,14 +1,16 @@
 /**
  * Activities housekeeping — the 30-day rule and the media backup (ADR-0039 §7–8, Bajaur — C2).
  *
- * One pass does three things, in this order, and the order is the design:
+ * One pass does four things, in this order, and the order is the design:
  *
  *   1. **Expire.** Every post uploaded more than 30 days ago is hard-deleted — Recycle bin
  *      included — through the same `removePost` a person's delete uses, logged as `expired`.
+ *      Video uploads nobody has sent a chunk to for a day are given up (`dropAbandonedUploads`).
  *   2. **Remove from the bucket.** Every object queued by a delete (a person's or the rule's)
  *      is deleted from Bajaur's media bucket. A refusal leaves it queued for the next pass and
  *      records why; the bucket's own 30-day lifecycle rule is the safety net under that.
- *   3. **Copy.** Every photo not yet in the bucket is encrypted and sent.
+ *   3. **Copy.** Every photo and converted video not yet in the bucket is encrypted and sent.
+ *      A video still uploading or converting waits; a failed one is never sent.
  *
  * Expiring before copying means nothing is uploaded only to be deleted a moment later.
  *
@@ -29,7 +31,7 @@ import { resolve, sep } from 'node:path';
 
 import type { Pool } from '../db/pool.js';
 import { log } from '../obs/log.js';
-import { RETENTION_DAYS, removePost } from '../api/activities.js';
+import { RETENTION_DAYS, dropAbandonedUploads, removePost } from '../api/activities.js';
 import { encryptDump, type MediaStore } from '../ops/offsite.js';
 
 /** Fixed, and distinct from the escalation scheduler's (`scheduler.ts`). */
@@ -44,6 +46,8 @@ export interface HousekeepingOutcome {
   /** False when another process held the lock — a normal outcome. */
   readonly ran: boolean;
   readonly expired: number;
+  /** Video uploads given up after a day without a chunk. */
+  readonly abandoned?: number;
   readonly removed: number;
   readonly removeFailed: number;
   readonly copied: number;
@@ -128,7 +132,7 @@ async function copyToBucket(
     thumb_path: string | null;
   }>(
     `SELECT media_id, stored_path, thumb_path FROM activity_media
-      WHERE backed_up_at IS NULL ORDER BY created_at LIMIT $1`,
+      WHERE backed_up_at IS NULL AND status = 'ready' ORDER BY created_at LIMIT $1`,
     [BATCH],
   );
   let copied = 0;
@@ -186,6 +190,7 @@ export async function runHousekeeping(options: HousekeepingOptions): Promise<Hou
     }
     try {
       const expired = await expire(options);
+      const abandoned = await dropAbandonedUploads(options.pool, options.root);
 
       let copySkipped: string | undefined;
       if (!options.store.configured) {
@@ -210,6 +215,7 @@ export async function runHousekeeping(options: HousekeepingOptions): Promise<Hou
       return {
         ran: true,
         expired,
+        abandoned,
         removed,
         removeFailed,
         copied,
@@ -243,7 +249,7 @@ export function createActivitiesHousekeeping(
     running = true;
     try {
       const o = await runHousekeeping(options);
-      if (o.ran && (o.expired > 0 || o.removed > 0 || o.copied > 0)) {
+      if (o.ran && (o.expired > 0 || (o.abandoned ?? 0) > 0 || o.removed > 0 || o.copied > 0)) {
         log('info', 'Activities housekeeping', { ...o });
       }
       if (o.removeFailed > 0 || o.copyFailed > 0) {
