@@ -39,10 +39,10 @@ set -euo pipefail
 
 DOMAIN="${1:-}"
 EMAIL="${2:-}"
-APP_USER="dnc"
-APP_DIR="/opt/dnc"
-DB_NAME="dnc"
-DB_USER="dnc"
+APP_USER="dnc-bajaur"
+APP_DIR="/opt/dnc-bajaur"
+DB_NAME="dnc_bajaur"
+DB_USER="dnc_bajaur"
 
 say()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 ok()   { printf '    \033[32mok\033[0m  %s\n' "$*"; }
@@ -237,7 +237,7 @@ ok "schema up to date"
 #-------------------------------------------------------------------------------------------
 
 say "Registering the service"
-cat > /etc/systemd/system/dnc.service <<UNITEOF
+cat > /etc/systemd/system/dnc-bajaur.service <<UNITEOF
 [Unit]
 Description=District Nerve Center — Bajaur
 After=network.target postgresql.service
@@ -260,8 +260,8 @@ WantedBy=multi-user.target
 UNITEOF
 
 systemctl daemon-reload
-systemctl enable --now dnc
-ok "dnc.service enabled and started"
+systemctl enable --now dnc-bajaur
+ok "dnc-bajaur.service enabled and started"
 
 #-------------------------------------------------------------------------------------------
 # Caddy — two lines, and the certificate looks after itself
@@ -299,7 +299,7 @@ $DOMAIN {
 	# can quote (M0-03). This is the proxy's own view, in the same shape, so a bad night reads
 	# as one format rather than two.
 	log {
-		output file /var/log/caddy/dnc.log {
+		output file /var/log/caddy/dnc-bajaur.log {
 			roll_size 20MiB
 			roll_keep 10
 		}
@@ -334,15 +334,15 @@ ok "postgres is not reachable from outside"
 
 say "Checking it actually works"
 for i in $(seq 1 30); do
-  if curl -fsS --max-time 5 "https://$DOMAIN/health" >/tmp/dnc-health.json 2>/dev/null; then break; fi
+  if curl -fsS --max-time 5 "https://$DOMAIN/health" >/tmp/dnc-bajaur-health.json 2>/dev/null; then break; fi
   sleep 2
 done
 
-grep -q '"ok":true' /tmp/dnc-health.json 2>/dev/null \
-  || die "https://$DOMAIN/health did not answer. Look at:  journalctl -u dnc -n 50  and  journalctl -u caddy -n 50"
+grep -q '"ok":true' /tmp/dnc-bajaur-health.json 2>/dev/null \
+  || die "https://$DOMAIN/health did not answer. Look at:  journalctl -u dnc-bajaur -n 50  and  journalctl -u caddy -n 50"
 
 ok "https://$DOMAIN/health answered"
-cat /tmp/dnc-health.json | head -c 400; echo
+cat /tmp/dnc-bajaur-health.json | head -c 400; echo
 
 cat <<DONEEOF
 
@@ -354,7 +354,7 @@ cat <<DONEEOF
     3.  the five S3_/BACKUP_ values in .env                    — R-06
     4.  npm run doctor                                         — says what is still missing
 
-  Logs:      journalctl -u dnc -f
-  Restart:   systemctl restart dnc
+  Logs:      journalctl -u dnc-bajaur -f
+  Restart:   systemctl restart dnc-bajaur
 
 DONEEOF

@@ -14,7 +14,7 @@ directory is the **server**.
 
 ```bash
 # On a bare Ubuntu 24.04 server, as root:
-mkdir -p /opt/dnc && cd /opt/dnc
+mkdir -p /opt/dnc-bajaur && cd /opt/dnc-bajaur
 git clone <the repository> .          # or scp the folder up
 sudo ./installer/cloud/setup.sh dnc.example.com admin@example.com
 ```
@@ -94,9 +94,9 @@ is a dump, a restore and a DNS change.
 cd app && npm run backup            # a verified dump; see ops/backup.ts
 
 # On the server, after setup.sh has run:
-systemctl stop dnc
-sudo -u postgres psql -v ON_ERROR_STOP=1 -d dnc -f /path/to/dump.sql
-systemctl start dnc
+systemctl stop dnc-bajaur
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d dnc_bajaur -f /path/to/dump.sql
+systemctl start dnc-bajaur
 ```
 
 **`ON_ERROR_STOP=1` is not optional.** Without it `psql` reports success after replaying a dump

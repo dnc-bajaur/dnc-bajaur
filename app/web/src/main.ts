@@ -116,7 +116,7 @@ interface Identity {
 }
 
 function deviceId(): string {
-  const KEY = 'dnc-device-id';
+  const KEY = 'dnc-bajaur-device-id';
   // `localStorage` is not merely empty in a browser with site data blocked — the accessor
   // itself THROWS, and this runs synchronously inside `boot()`, so an unguarded read takes
   // the whole bundle down before the intake form is wired: an officer at a scene cannot
@@ -630,7 +630,7 @@ async function boot(): Promise<void> {
 
   async function trySync(): Promise<void> {
     // `runSync` catches every transport error internally, so the only way `outbox.sync()`
-    // throws is an unguarded IndexedDB store op — a wedged or blocked `dnc-outbox`. If that
+    // throws is an unguarded IndexedDB store op — a wedged or blocked `dnc-bajaur-outbox`. If that
     // escapes here, `reachability` never advances past `'unknown'` and the status line stays
     // on "Checking connection…" for good. Swallow it, keep the last known reachability, and
     // still repaint so the rest of the screen is not frozen mid-update.
@@ -5908,7 +5908,7 @@ async function boot(): Promise<void> {
       if (dark) root.dataset['theme'] = 'dark';
       else delete root.dataset['theme'];
       try {
-        localStorage.setItem('dnc.theme', dark ? 'dark' : 'light');
+        localStorage.setItem('dnc-bajaur.theme', dark ? 'dark' : 'light');
       } catch {
         // Site data blocked. The theme holds for this session and is forgotten on reload.
       }
@@ -6037,7 +6037,7 @@ offlineReadiness();
 
 /**
  * `boot()` opens IndexedDB, reads `localStorage` and wires every screen. If any of that
- * throws — site data blocked, a wedged `dnc-outbox`, a private-window storage denial — an
+ * throws — site data blocked, a wedged `dnc-bajaur-outbox`, a private-window storage denial — an
  * unhandled rejection leaves the shell frozen on "Checking connection…" with nothing said.
  * Catch it, log it, and replace that line with something an operator can act on.
  */

@@ -80,13 +80,13 @@ the first time one was performed.
 ## Runtime layout
 
 ```
-C:\Program Files\District Nerve Center\     the program
+C:\Program Files\District Nerve Center Bajaur\  the program
   app\        dist, web\dist, db\migrations, db\seed, node_modules, .env
   node\       node.exe
   pgsql\      the PostgreSQL server
   runtime\    dnc.ps1, first-run.mjs, open.vbs, register.ps1, app.ico
 
-C:\ProgramData\District Nerve Center\       the record — NOT removed on uninstall
+C:\ProgramData\District Nerve Center Bajaur\    the record — NOT removed on uninstall
   pgdata\     the cluster
   backups\    nightly dumps
   logs\

@@ -1,16 +1,16 @@
 # Local development database.
 #
-# A portable PostgreSQL 17 under %LOCALAPPDATA%\dnc-postgres — not a Windows service, not
-# installed system-wide, no elevation required. Nothing runs until you start it, and
-# deleting that folder removes it completely.
+# A portable PostgreSQL 17 under D:\dnc-bajaur-postgres (data in D:\dnc-bajaur-pgdata, port
+# 5434) — not a Windows service, not installed system-wide, no elevation required. Nothing runs
+# until you start it, and deleting those two folders removes it completely.
 #
 #   .\scripts\dev-db.ps1 start
 #   .\scripts\dev-db.ps1 stop
 #   .\scripts\dev-db.ps1 status
 #   .\scripts\dev-db.ps1 psql
 #
-# Connection strings live in app/.env, which is gitignored. The password here is a
-# local-development value with no production equivalent.
+# Connection strings live in app/.env, which is gitignored. The password is the one chosen
+# at initdb; it is never written in this repository.
 
 param(
     [Parameter(Position = 0)]
@@ -20,21 +20,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Root = Join-Path $env:LOCALAPPDATA 'dnc-postgres'
+# Bajaur's own cluster, and nothing else. The development machine may also hold another
+# district's portable cluster; this script must never point anywhere but the paths below
+# (CLAUDE.md, isolation rules 1-3). Binaries, data and port are all Bajaur's own.
+$Root = 'D:\dnc-bajaur-postgres'
 $Bin = Join-Path $Root 'pgsql\bin'
-# The data directory lives on D: when it is there, and beside the binaries otherwise.
-#
-# Moved on 2026-08-13, and the reason is worth keeping: C: is 96 GB, it is chronically full,
-# and it reached ZERO free during a test run. PostgreSQL was mid-recovery at the time and died
-# with `could not create file ... No space left on device` — a crashed cluster caused by a disk
-# that has nothing to do with this project.
-#
-# Auto-detected rather than set by an environment variable, so it needs no shell setup and says
-# where it is by existing. Move the folder back and this script follows it.
-$MovedData = 'D:\dnc-postgres-data'
-$Data = if (Test-Path (Join-Path $MovedData 'PG_VERSION')) { $MovedData } else { Join-Path $Root 'data' }
+$Data = 'D:\dnc-bajaur-pgdata'
 $Log = Join-Path $Root 'pg.log'
-$Port = 5433
+$Port = 5434
 
 if (-not (Test-Path $Bin)) {
     Write-Host "PostgreSQL not found at $Root." -ForegroundColor Red
@@ -104,8 +97,7 @@ switch ($Command) {
         & "$Bin\pg_isready.exe" -h 127.0.0.1 -p $Port
     }
     'psql' {
-        $env:PGPASSWORD = 'devonly_localpg'
-        & "$Bin\psql.exe" -h 127.0.0.1 -p $Port -U postgres -d dnc_dev
+        & "$Bin\psql.exe" -h 127.0.0.1 -p $Port -U postgres -d dnc_bajaur_dev
     }
     'logs' {
         if (Test-Path $Log) { Get-Content $Log -Tail 40 } else { Write-Host 'No log yet.' }

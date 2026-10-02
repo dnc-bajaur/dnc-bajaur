@@ -34,7 +34,7 @@
 	# One access log, in the same JSON shape the application already logs in, so an operator
 	# reading a bad night has one format rather than two.
 	log {
-		output file C:\ProgramData\District Nerve Center\proxy.log {
+		output file C:\ProgramData\District Nerve Center Bajaur\proxy.log {
 			roll_size 20MiB
 			roll_keep 10
 		}

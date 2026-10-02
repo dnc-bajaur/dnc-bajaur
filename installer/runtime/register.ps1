@@ -31,8 +31,8 @@ param(
 
 $ErrorActionPreference = 'Continue'
 
-$TaskName = 'District Nerve Center'
-$RuleName = 'District Nerve Center'
+$TaskName = 'District Nerve Center Bajaur'
+$RuleName = 'District Nerve Center Bajaur'
 
 if ($Uninstall) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -45,7 +45,7 @@ if (-not $Install) { exit 0 }
 if (-not $InstallDir) { $InstallDir = Split-Path -Parent $PSScriptRoot }
 
 $Script   = Join-Path $InstallDir 'runtime\dnc.ps1'
-$DataDir  = Join-Path $env:ProgramData 'District Nerve Center'
+$DataDir  = Join-Path $env:ProgramData 'District Nerve Center Bajaur'
 $State    = Join-Path $DataDir 'install.json'
 
 #---------------------------------------------------------------------------------------------

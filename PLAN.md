@@ -88,5 +88,16 @@ Rules that hold until these ship:
   DC office before publishing.
 - `docs/06-open-questions.md` still holds the original deployment's questions; go through it
   and keep only what applies to Bajaur.
-- Local database for development: not set up yet. Until then the full test suite runs only in
-  GitHub Actions. (A portable PostgreSQL could be placed inside `D:\VIBE CODING\DNC Bajaur`.)
+- [ ] **Local database (owner builds it):** Bajaur's own portable PostgreSQL 17 — binaries in
+      `D:\dnc-bajaur-postgres`, data in `D:\dnc-bajaur-pgdata`, port 5434, databases
+      `dnc_bajaur_dev` / `dnc_bajaur_test`. Never the other district's cluster on this machine.
+      Then `app/.env` (with `PG_BIN`) and the app on `localhost:3100`.
+
+## 6. Kept apart from the other district (2026-10-02)
+
+Names that would collide if both districts ever met on one machine, server or browser are now
+Bajaur's own: local dev cluster (path + port 5434), dev port 3100, browser keys
+(`dnc_bajaur_session` cookie, `dnc-bajaur-outbox`, device-id, theme), Windows installer (new
+AppId, `District Nerve Center Bajaur` folders / task / firewall rule, `DNCBajaurProxy`), cloud
+server (`/opt/dnc-bajaur`, user `dnc-bajaur`, database `dnc_bajaur`, `dnc-bajaur.service`).
+Still the owner's to keep separate: new server, domain, Meta/WhatsApp account, backup bucket.

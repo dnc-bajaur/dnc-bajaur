@@ -16,30 +16,26 @@ by its design diagram. Every choice below is defensible on those grounds.
 
 ## Local development cluster
 
-PostgreSQL 17.10, portable binaries under `%LOCALAPPDATA%\dnc-postgres`, listening on
-**port 5433**.
+Bajaur's own PostgreSQL 17, portable binaries in `D:\dnc-bajaur-postgres`, data in
+`D:\dnc-bajaur-pgdata`, listening on **port 5434**.
+
+**It is Bajaur's alone.** The development machine may also hold another district's cluster; it
+is never started, read or reused from this repository (CLAUDE.md, isolation rules 1-3). Not even
+its binaries: Bajaur's are a separate download.
 
 Deliberately **not** a Windows service and not a system-wide install: it needs no
-elevation, starts only when asked, and deleting that one folder removes it completely.
-Port 5433 rather than 5432 so it cannot collide with anything installed later.
+elevation, starts only when asked, and deleting those two folders removes it completely.
 
 ```
 .\scripts\dev-db.ps1 start | stop | status | psql | logs
 ```
 
-Databases `dnc_dev` and `dnc_test`. Connection strings live in `app/.env`, which is
-gitignored; the password there is a local-development value with no production equivalent.
+Databases `dnc_bajaur_dev` and `dnc_bajaur_test`. Connection strings live in `app/.env`, which
+is gitignored; the password is the one chosen at `initdb` and is never written in the repository.
+Tests find `pg_dump` through `PG_BIN` in `app/.env` (falling back to the path above on Windows).
 
-**The data directory is no longer beside the binaries.** Since 2026-08-13 it lives at
-`D:\dnc-postgres-data`, and `dev-db.ps1` **auto-detects** it — no environment variable, no shell
-setup; move the folder back and the script follows it.
-
-The reason is worth keeping rather than filing as trivia. The development machine's `C:` is
-96 GB and chronically full, and it reached **zero free during a test run**. PostgreSQL was
-mid-recovery and died with `could not create file … No space left on device` — **a crashed
-cluster caused by a disk that has nothing to do with this project.** The per-file schema rebuild
-(below) writes more WAL than the old harness did, so it did not create that problem, it made an
-existing one fatal.
+The data directory is on `D:` rather than `C:` on purpose: a full system disk mid-test can crash
+a recovering cluster, and the per-file schema rebuild (below) writes a lot of WAL.
 
 ### Every test file starts with an empty district
 

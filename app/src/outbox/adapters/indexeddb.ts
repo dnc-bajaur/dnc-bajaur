@@ -13,7 +13,7 @@
 import type { OutboxEntry, OutboxStore } from '../outbox.js';
 import type { Uuid } from '../../domain/events.js';
 
-const DB_NAME = 'dnc-outbox';
+const DB_NAME = 'dnc-bajaur-outbox';
 const DB_VERSION = 1;
 const ENTRIES = 'entries';
 const META = 'meta';

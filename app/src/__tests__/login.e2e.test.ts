@@ -288,9 +288,9 @@ describe.skipIf(dbUrl === undefined)('signing in', () => {
     it('12. the old session is genuinely dead server-side, not just hidden', async () => {
       // INV-05 again: hiding the UI is not the control. The cookie must be refused.
       const cookies = await context.cookies();
-      const session = cookies.find((c) => c.name === 'dnc_session');
+      const session = cookies.find((c) => c.name === 'dnc_bajaur_session');
       const res = await fetch(`${origin}/auth/me`, {
-        headers: session === undefined ? {} : { cookie: `dnc_session=${session.value}` },
+        headers: session === undefined ? {} : { cookie: `dnc_bajaur_session=${session.value}` },
       });
       expect(res.status).toBe(401);
     });

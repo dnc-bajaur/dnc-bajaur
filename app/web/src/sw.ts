@@ -603,7 +603,7 @@ declare const self: ServiceWorkerGlobalScope;
 //
 // v158: Move 7 KPI metrics strip into Left Sidebar.
 // v159: connection-status hardening so a browser with site data blocked or a wedged
-// `dnc-outbox` IndexedDB no longer sits stuck on "Checking connection…" after a clean
+// `dnc-bajaur-outbox` IndexedDB no longer sits stuck on "Checking connection…" after a clean
 // sign-in. `deviceId()` wraps its `localStorage` read in try/catch — an unguarded read
 // THROWS and killed `boot()` before the intake form was wired (INV-01); `loadIdentity()`
 // marks the link reachable on a 200 from `/auth/me`, the earliest completed round-trip;

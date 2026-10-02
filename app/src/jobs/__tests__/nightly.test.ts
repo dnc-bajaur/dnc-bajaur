@@ -32,9 +32,7 @@ const PASSPHRASE = 'a-passphrase-long-enough-to-be-accepted';
  */
 const pgBin =
   process.env['PG_BIN'] ??
-  (process.env['LOCALAPPDATA'] === undefined
-    ? undefined
-    : join(process.env['LOCALAPPDATA'], 'dnc-postgres', 'pgsql', 'bin'));
+  (process.platform === 'win32' ? 'D:\\dnc-bajaur-postgres\\pgsql\\bin' : undefined);
 
 function fakeStore(): OffsiteStore & { puts: Map<string, Buffer> } {
   const puts = new Map<string, Buffer>();

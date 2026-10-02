@@ -112,7 +112,11 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
 - ⚠️ **Until ADR-0038 ships, every account of any role acts as the full control room.** Create
   no account except the control room's.
 - **Not deployed.** No server, domain, WhatsApp number or backup bucket exists for Bajaur yet.
-- **Next:** collect Bajaur's facts (`PLAN.md` §2); build phases A–D only with the owner's go-ahead.
+- **2026-10-02** — Every name that could collide with the other district on a shared machine,
+  server or browser is now Bajaur's own (`PLAN.md` §6). Dev: own cluster `D:\dnc-bajaur-*`,
+  port 5434; app on `localhost:3100`. Never use the other cluster on this machine.
+- **Next:** owner builds the local database (`PLAN.md` §5); then `.env` + run on localhost.
+  Collect Bajaur's facts (§2); build phases A–D only with the owner's go-ahead.
 
 ## 6. Repository map
 

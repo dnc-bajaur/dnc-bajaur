@@ -2,7 +2,7 @@
  * Load Bajaur's directory into a cloud installation, and repair the two things the migration
  * order leaves wrong afterwards.
  *
- *   cd /opt/dnc/app && node ../installer/cloud/load-directory.mjs
+ *   cd /opt/dnc-bajaur/app && node ../installer/cloud/load-directory.mjs
  *
  * ------------------------------------------------------------------------------------------
  * Why this file exists
@@ -39,7 +39,7 @@ const die = (m) => {
 process.loadEnvFile('.env');
 
 const url = process.env['DATABASE_URL'];
-if (url === undefined) die('DATABASE_URL is not set — run this from /opt/dnc/app');
+if (url === undefined) die('DATABASE_URL is not set — run this from /opt/dnc-bajaur/app');
 
 const seedFile = join(process.cwd(), 'db', 'seed', 'directory.json');
 if (!existsSync(seedFile)) {
@@ -47,7 +47,7 @@ if (!existsSync(seedFile)) {
     `${seedFile} does not exist.\n` +
       '    It is gitignored on purpose — real mobile numbers do not go in a repository — so it\n' +
       '    has to be copied up separately:\n' +
-      '        scp app/db/seed/directory.json root@<server>:/opt/dnc/app/db/seed/',
+      '        scp app/db/seed/directory.json root@<server>:/opt/dnc-bajaur/app/db/seed/',
   );
 }
 

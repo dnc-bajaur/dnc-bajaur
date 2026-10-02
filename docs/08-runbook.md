@@ -156,7 +156,7 @@ alone: an **S3-compatible** bucket (`S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_I
 > wrong about the district's actual deployment — the kind of error that costs an hour at 02:00,
 > looking in an empty bucket. Verified on 2026-08-12 by listing the bucket itself rather than by
 > reading the ledger: one object, `dnc-2026-08-12T21-57-10-685Z.sql.enc`, 160,676 bytes.
-> **Check `/opt/dnc/app/.env` before trusting any sentence here about where the copy is.**
+> **Check `/opt/dnc-bajaur/app/.env` before trusting any sentence here about where the copy is.**
 
 - **AES-256-GCM**, key derived from `BACKUP_PASSPHRASE` by scrypt. GCM authenticates, so a
   file altered in the bucket refuses to decrypt rather than restoring quietly wrong.

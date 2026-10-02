@@ -37,9 +37,7 @@ const migrationsDir = join(here, '..', '..', '..', 'db', 'migrations');
  */
 const pgBin =
   process.env['PG_BIN'] ??
-  (process.env['LOCALAPPDATA'] === undefined
-    ? undefined
-    : join(process.env['LOCALAPPDATA'], 'dnc-postgres', 'pgsql', 'bin'));
+  (process.platform === 'win32' ? 'D:\\dnc-bajaur-postgres\\pgsql\\bin' : undefined);
 
 describe.skipIf(dbUrl === undefined)('backup and restore (M0-37)', () => {
   let pool: Pool;

@@ -5,7 +5,7 @@ Version 1.0.0
 WHAT IS IN THIS FOLDER
 ================================================================================
 
-  DistrictNerveCenter-Setup-1.0.0.exe   The installer. Run this on the office
+  DNC-Bajaur-Setup-1.0.0.exe   The installer. Run this on the office
                                         machine that will hold the record.
 
   Install Guide.html                    How to install it, what to do first,

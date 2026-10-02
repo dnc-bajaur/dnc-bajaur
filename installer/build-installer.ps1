@@ -18,7 +18,7 @@
 param(
     # Where PostgreSQL 17 is unpacked. The default is the portable cluster `scripts/dev-db.ps1`
     # uses, so a machine set up for development can build a release with no extra arguments.
-    [string]$PostgresDir = (Join-Path $env:LOCALAPPDATA 'dnc-postgres\pgsql'),
+    [string]$PostgresDir = 'D:\dnc-bajaur-postgres\pgsql',
     [string]$NodeExe     = (Get-Command node -ErrorAction SilentlyContinue).Source,
     [string]$Version     = '1.0.0',
     [switch]$SkipBuild
@@ -268,7 +268,7 @@ Step 'Packaging for the district'
     A single named folder inside means it unpacks as one thing, which is also what makes it
     obvious that the guide belongs with the installer.
 #>
-$release = Join-Path $Out "District Nerve Center $Version"
+$release = Join-Path $Out "District Nerve Center Bajaur $Version"
 New-Item -ItemType Directory -Force -Path $release | Out-Null
 
 Copy-Item $setup.FullName $release

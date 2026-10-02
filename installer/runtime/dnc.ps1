@@ -26,7 +26,7 @@ param(
     # parameter exists so a release can be exercised end to end against a throwaway folder
     # without touching the real one, and so a district that wants the record on a different
     # drive has somewhere to say so.
-    [string]$DataDir = (Join-Path $env:ProgramData 'District Nerve Center')
+    [string]$DataDir = (Join-Path $env:ProgramData 'District Nerve Center Bajaur')
 )
 
 $ErrorActionPreference = 'Stop'

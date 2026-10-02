@@ -86,7 +86,7 @@ describe.skipIf(dbUrl === undefined)('the theme is the officer’s choice', () =
     const ctx = await browser.newContext({ serviceWorkers: 'block' });
     if (stored !== undefined) {
       await ctx.addInitScript(
-        `try { localStorage.setItem('dnc.theme', '${stored}'); } catch (e) {}`,
+        `try { localStorage.setItem('dnc-bajaur.theme', '${stored}'); } catch (e) {}`,
       );
     }
     return { ctx, page: await ctx.newPage() };

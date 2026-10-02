@@ -350,7 +350,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-const SESSION_COOKIE = 'dnc_session';
+const SESSION_COOKIE = 'dnc_bajaur_session';
 
 function readCookie(req: IncomingMessage, name: string): string | null {
   const header = req.headers.cookie;

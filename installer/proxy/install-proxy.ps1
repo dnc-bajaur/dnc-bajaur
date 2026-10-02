@@ -39,8 +39,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$InstallDir = Join-Path ${env:ProgramFiles} 'District Nerve Center'
-$DataDir    = Join-Path ${env:ProgramData} 'District Nerve Center'
+$InstallDir = Join-Path ${env:ProgramFiles} 'District Nerve Center Bajaur'
+$DataDir    = Join-Path ${env:ProgramData} 'District Nerve Center Bajaur'
 $EnvFile    = Join-Path $InstallDir 'app\.env'
 
 function Step($text) { Write-Host "  $text" }
@@ -148,7 +148,7 @@ if ($LASTEXITCODE -ne 0) { Fail 'The proxy configuration is not valid. Nothing w
 
 Step 'Registering the proxy as a service…'
 
-$serviceName = 'DistrictNerveCenterProxy'
+$serviceName = 'DNCBajaurProxy'
 $existing = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 if ($null -ne $existing) {
     Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
@@ -157,7 +157,7 @@ if ($null -ne $existing) {
 }
 
 $binPath = "`"$CaddyExe`" run --config `"$caddyFile`" --adapter caddyfile"
-& sc.exe create $serviceName binPath= $binPath start= auto DisplayName= 'District Nerve Center — web address' | Out-Null
+& sc.exe create $serviceName binPath= $binPath start= auto DisplayName= 'District Nerve Center Bajaur — web address' | Out-Null
 # Restart on failure, three times, then keep trying every minute. A proxy that stays down after
 # one bad moment takes the district's whole web address with it.
 & sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/10000/restart/60000 | Out-Null
@@ -166,7 +166,7 @@ Start-Service -Name $serviceName
 Step "  $serviceName started"
 
 Step 'Restarting the application on its new port…'
-Restart-Service -Name 'DistrictNerveCenter' -ErrorAction SilentlyContinue
+Restart-Service -Name 'DNCBajaur' -ErrorAction SilentlyContinue
 
 #-------------------------------------------------------------------------------
 # 4. Prove it, rather than announcing it

@@ -1,8 +1,8 @@
 /**
  * Give somebody who is already in the district's directory a sign-in.
  *
- *   cd /opt/dnc/app && node ../installer/cloud/grant-login.mjs 03000000558
- *   cd /opt/dnc/app && node ../installer/cloud/grant-login.mjs 03000000558 --reset
+ *   cd /opt/dnc-bajaur/app && node ../installer/cloud/grant-login.mjs 03000000558
+ *   cd /opt/dnc-bajaur/app && node ../installer/cloud/grant-login.mjs 03000000558 --reset
  *
  * ------------------------------------------------------------------------------------------
  * Why this is not `npm run dev:account`
@@ -49,7 +49,7 @@ const die = (m) => {
 process.loadEnvFile('.env');
 
 const url = process.env['DATABASE_URL'];
-if (url === undefined) die('DATABASE_URL is not set — run this from /opt/dnc/app');
+if (url === undefined) die('DATABASE_URL is not set — run this from /opt/dnc-bajaur/app');
 
 const phone = process.argv[2];
 const reset = process.argv.includes('--reset');

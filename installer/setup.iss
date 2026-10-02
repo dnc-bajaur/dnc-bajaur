@@ -19,19 +19,19 @@
   #define AppVersion "1.0.0"
 #endif
 
-#define AppName    "District Nerve Center"
+#define AppName    "District Nerve Center Bajaur"
 #define AppFull    "District Nerve Center — Bajaur"
 #define Publisher  "District Administration, Bajaur"
 
 [Setup]
-AppId={{7B3E2C41-9D6A-4F58-A0E7-2C5B8D14F903}
+AppId={{7957F1B7-7C08-4A14-AA48-B7AB525C84F4}
 AppName={#AppFull}
 AppVersion={#AppVersion}
 AppVerName={#AppFull} {#AppVersion}
 AppPublisher={#Publisher}
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
-OutputBaseFilename=DistrictNerveCenter-Setup-{#AppVersion}
+OutputBaseFilename=DNC-Bajaur-Setup-{#AppVersion}
 SetupIconFile=stage\runtime\app.ico
 UninstallDisplayIcon={app}\runtime\app.ico
 UninstallDisplayName={#AppFull}
@@ -312,7 +312,7 @@ begin
   Command := '/C ""' + ExpandConstant('{app}\node\node.exe') + '" ' +
              '"' + ExpandConstant('{app}\runtime\first-run.mjs') + '" ' +
              '--install-dir "' + ExpandConstant('{app}') + '" ' +
-             '--data-dir "' + ExpandConstant('{commonappdata}\District Nerve Center') + '"' +
+             '--data-dir "' + ExpandConstant('{commonappdata}\District Nerve Center Bajaur') + '"' +
              ' > "' + LogPath + '" 2>&1"';
 
   WizardForm.StatusLabel.Caption := 'Setting up the district record. This takes about a minute.';
@@ -353,7 +353,7 @@ begin
   }
   { `CopyFile`, not `FileCopy` — the compiler emits a rename hint for the older name, and a
     deprecated alias is a thing that works until the release it does not. }
-  CopyFile(LogPath, ExpandConstant('{commonappdata}\District Nerve Center\setup.log'), False);
+  CopyFile(LogPath, ExpandConstant('{commonappdata}\District Nerve Center Bajaur\setup.log'), False);
 
   if LoadStringFromFile(LogPath, Output) then
   begin
@@ -386,7 +386,7 @@ end;
 {
   On removal, the record stays.
 
-  `C:\ProgramData\District Nerve Center` holds every emergency the district has ever recorded,
+  `C:\ProgramData\District Nerve Center Bajaur` holds every emergency the district has ever recorded,
   and the event log is append-only precisely so that nobody can quietly erase it (ADR-0001).
   An uninstaller that deletes it would be the one supported way to destroy the district's own
   history, one wrong click away, with the confirmation dialog reading "Uninstall".
@@ -400,7 +400,7 @@ var
 begin
   if CurUninstallStep <> usPostUninstall then Exit;
 
-  DataDir := ExpandConstant('{commonappdata}\District Nerve Center');
+  DataDir := ExpandConstant('{commonappdata}\District Nerve Center Bajaur');
   if not DirExists(DataDir) then Exit;
 
   SuppressibleMsgBox('The district''s record has been left in place:' + #13#10 + #13#10 +

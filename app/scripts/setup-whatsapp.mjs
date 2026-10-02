@@ -177,7 +177,7 @@ async function main() {
    */
   const restarted = spawnSync(
     'powershell',
-    ['-NoProfile', '-Command', 'Restart-Service -Name DistrictNerveCenter -ErrorAction SilentlyContinue'],
+    ['-NoProfile', '-Command', 'Restart-Service -Name DNCBajaur -ErrorAction SilentlyContinue'],
     { stdio: 'ignore' },
   );
   if (restarted.error !== undefined) {
