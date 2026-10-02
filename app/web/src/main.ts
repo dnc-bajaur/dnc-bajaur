@@ -2351,6 +2351,27 @@ async function boot(): Promise<void> {
    * The shape now is: decide *which node* represents this incident, then **place it at its index
    * unconditionally**. Position is no longer one branch's responsibility.
    */
+  /**
+   * **A list the operator opened stays open across a refresh** — 2026-10-02.
+   *
+   * The `N told` disclosure keeps its state in the DOM only (`more.hidden`). A refresh builds a
+   * fresh row, which is always closed, and an open row's `outerHTML` therefore never matches it —
+   * so every poll (ten seconds), every push, and every minute's "ago" tick replaced the open row
+   * with a closed one. The operator pressed `3 told`, started reading, and the names vanished.
+   * The board e2e test caught it as a "flaky" red whenever a refresh landed between its click and
+   * its check.
+   *
+   * Carried before any comparison, so an open row that has not otherwise changed compares equal
+   * and is kept as it is, and one that has changed is redrawn already open.
+   */
+  function carryOpenDisclosure(from: HTMLElement, to: HTMLElement): void {
+    const was = from.querySelector<HTMLElement>('.rowmore');
+    const now = to.querySelector<HTMLElement>('.rowmore');
+    if (was === null || now === null || was.hidden) return;
+    now.hidden = false;
+    to.querySelector('.toldmore')?.setAttribute('aria-expanded', 'true');
+  }
+
   function applyBoardRows(
     container: HTMLElement,
     incidents: readonly IncidentRowData[],
@@ -2382,6 +2403,7 @@ async function boot(): Promise<void> {
         node = incidentRow(rowData, at);
         node.classList.add('updated');
         node.dataset['sig'] = signature;
+        carryOpenDisclosure(existing, node);
         existing.replaceWith(node);
       } else {
         const fresh = incidentRow(rowData, at);
@@ -2392,6 +2414,7 @@ async function boot(): Promise<void> {
          * was replaced on every poll, and node identity was never preserved at all.
          */
         fresh.dataset['sig'] = signature;
+        carryOpenDisclosure(existing, fresh);
         if (existing.outerHTML !== fresh.outerHTML) {
           // Nothing meaningful changed, but the rendered text did — the "ago" clock, or an
           // overdue counter ticking. Swapped in quietly: correct on screen, no flash to justify.

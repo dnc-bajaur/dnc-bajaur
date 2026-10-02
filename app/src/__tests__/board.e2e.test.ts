@@ -249,6 +249,47 @@ describe.skipIf(dbUrl === undefined)('M0-33: the central board', () => {
     const all = (await page.textContent(`${row} .toldall`)) ?? '';
     for (const full of names) expect(all).toContain(full);
 
+    /**
+     * ⚠️ **And it stays open through a refresh — 2026-10-02.** The board redraws every ten
+     * seconds, and every redraw used to put back a closed row: the names vanished while the
+     * operator was reading them. This test was "flaky" for exactly that reason — red whenever a
+     * poll landed between the click above and the check after it. Waited for, not slept for.
+     */
+    await page.waitForResponse(
+      (r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/incidents',
+      { timeout: 15_000 },
+    );
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+    expect(await page.isVisible(`${row} .rowmore`)).toBe(true);
+    expect(await page.getAttribute(`${row} .toldmore`, 'aria-expanded')).toBe('true');
+
+    // A real change redraws the row (the count moves to 4); it must come back open too.
+    const fourth = await pool.query<{ person_id: string }>(
+      `INSERT INTO person (full_name, phone, password_hash)
+       VALUES ('Told Four', $1, 'not-a-login') RETURNING person_id`,
+      [
+        `+92300${Math.floor(Math.random() * 9e9)
+          .toString()
+          .padStart(10, '0')}`,
+      ],
+    );
+    const again = await fetch(`${origin}/incidents/${created.incidentId}/dispatch-to`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${controlRoom.token}`,
+      },
+      body: JSON.stringify({ targets: [{ kind: 'person', id: fourth.rows[0]!.person_id }] }),
+    });
+    expect(again.status).toBe(200);
+    await page.waitForFunction(
+      (sel) => document.querySelector(sel)?.textContent === '4 told',
+      `${row} .toldmore`,
+      { timeout: 15_000 },
+    );
+    expect(await page.isVisible(`${row} .rowmore`)).toBe(true);
+    expect(await page.textContent(`${row} .toldall`)).toContain('Told Four');
+
     // The whole point: still on the board, not on the incident.
     expect(await page.isVisible('#boardView')).toBe(true);
     expect(await page.isVisible('#detailView')).toBe(false);
@@ -1688,10 +1729,29 @@ describe.skipIf(dbUrl === undefined)('M0-33: the central board', () => {
       for (const { view, loads, wholeBoard } of crafted) {
         const fresh = await context.newPage();
         try {
+          /**
+           * ⚠️ **Waited for, not slept for — 2026-10-02.** This slept 1200 ms and assumed the
+           * board had painted by then. On a loaded machine it had not, the "loads" case saw zero
+           * rows, and the test went red on a commit that changed only a Markdown file. Now it
+           * waits for the board's own fetch to answer, then for the outcome that answer must
+           * produce: rows when it loads, the stale mark when the server refuses.
+           */
+          const answered = fresh.waitForResponse(
+            (r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/incidents',
+            { timeout: 20_000 },
+          );
           await fresh.goto(`${origin}/${view}`);
           await fresh.waitForSelector('#boardView:not([hidden])', { timeout: 20_000 });
-          // Long enough for the fetch to land and the board to paint, whichever way it goes.
-          await fresh.waitForTimeout(1200);
+          await answered;
+          await fresh.waitForFunction(
+            (expectRows) =>
+              expectRows
+                ? document.querySelectorAll('#boardRows .row').length > 0
+                : document.getElementById('boardAsOf')?.dataset['stale'] === 'true',
+            loads,
+            { timeout: 15_000 },
+          );
+          await fresh.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
 
           const seen = await fresh.evaluate(() => ({
             rows: document.querySelectorAll('#boardRows .row').length,
