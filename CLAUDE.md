@@ -104,24 +104,24 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
 > At the end of every task: rewrite these lines (what is done, what is next), tick `PLAN.md`,
 > commit and push. Keep it **under ~20 lines** — replace, never append history.
 
-- **2026-10-01** — Repository created from the original codebase. All other-district data
-  removed; neutral placeholders in its place (listed in `PLAN.md` §2). CI green: all 148 test
-  files, database suites included (they run only in GitHub Actions; no local database yet).
-- **Decided, not built:** Bajaur's three requirements — install banner, `member` accounts,
-  Activities (+ WhatsApp route). ADR-0038/0039/0040; phases A–D in `PLAN.md` §4.
-- **B1 done (2026-10-02):** `member` role + deny-by-default gate (gated `resolveSession` in
-  `api/server.ts`, pinned by `memberGate.test.ts`); members land on `/activities.html`.
-  ⚠️ Any role other than `member` still acts as the full control room.
-- **Not deployed.** No server, domain, WhatsApp number or backup bucket exists for Bajaur yet.
+- **2026-10-01** — Repository created from the original codebase; all other-district data
+  removed, neutral placeholders in its place (`PLAN.md` §2). **Not deployed:** no server,
+  domain, WhatsApp number or backup bucket for Bajaur yet.
 - **2026-10-02** — Every name that could collide with the other district on a shared machine,
-  server or browser is now Bajaur's own (`PLAN.md` §6). Dev: own cluster `D:\dnc-bajaur-*`,
-  port 5434; app on `localhost:3100`. Never use the other cluster on this machine.
-- Local DB + app on `localhost:3100` work (`PLAN.md` §5). Full suite passes locally; on this
-  machine a worker occasionally crashes under parallel load — re-run that file alone.
-- **B2/B3 done (2026-10-02):** Activities permissions (`domain/roles.ts`); accounts with Post,
-  `member` by default; "Give login" on a contact (`POST /settings/accounts/:id/grant`).
-- **Next:** C1 — Activities with photos (tables, Department list, upload, views, delete,
-  Recycle bin) per ADR-0039; order in `PLAN.md` §4. Collect Bajaur's facts (§2) in parallel.
+  server or browser is Bajaur's own (`PLAN.md` §6).
+- **Local dev works:** Bajaur's own PostgreSQL 17 (`D:\dnc-bajaur-postgres`, data
+  `D:\dnc-bajaur-pgdata`, port 5434, `scripts/dev-db.ps1 start`), `app/.env` (gitignored),
+  app via `npm start` on `localhost:3100`; `npm run dev:account` / `npm run demo` for dev data.
+  Never use the other district's cluster on this machine. Full suite runs locally; a worker
+  occasionally crashes under parallel load here — re-run that file alone.
+- **Built (ADR-0038):** B1 `member` role + deny-by-default gate (gated `resolveSession` in
+  `api/server.ts`, pinned by `memberGate.test.ts`; members land on `/activities.html`). B2
+  Activities permissions (`domain/roles.ts`). B3 accounts with Post, `member` by default,
+  "Give login" on a contact (`POST /settings/accounts/:id/grant`). CI green on `25dae9b`.
+  ⚠️ Any role other than `member` still acts as the full control room.
+- **Next:** C1 — Activities with photos per ADR-0039 (tables, Department list + default
+  department per account, upload with on-phone compression, views, delete, Recycle bin; block
+  uploads until a forced password change is done). Order in `PLAN.md` §4. Open bugs in §4.
 
 ## 6. Repository map
 
