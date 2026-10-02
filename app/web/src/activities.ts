@@ -769,6 +769,8 @@ el<HTMLFormElement>('password').addEventListener('submit', (e) => {
   })();
 });
 
+el('backToApp').addEventListener('click', () => location.assign('/'));
+
 el('signOut').addEventListener('click', () => {
   void (async () => {
     try {
@@ -813,6 +815,8 @@ async function load(): Promise<void> {
   }
 
   el('who').textContent = me.fullName;
+  // Anyone but a member came here from the control room; give them the way back.
+  el('backToApp').hidden = me.role === 'member';
   el('mustChange').hidden = !me.mustChangePassword;
   el('fPersonWrap').hidden = !can('read_all');
   el('scopeNote').textContent = can('read_all')

@@ -433,6 +433,8 @@ async function boot(): Promise<void> {
     // `role === 'owner' || 'admin'` since phase 2b, so it is the same gate as Administration; the
     // server refuses every /settings call without the permission regardless (INV-05).
     navSettings.hidden = !signedIn || identity?.isAdministration !== true;
+    // Activities (ADR-0039) — every signed-in account; the server decides what each may do there.
+    navActivities.hidden = !signedIn;
     // Offered to a seat that belongs to a department. A district-wide seat with no
     // department of its own — the control room, the DC — has no "my department" to show, and
     // the two offices reach every roster through the console instead.
@@ -1361,6 +1363,8 @@ async function boot(): Promise<void> {
   // Settings (ADR-0032 phase 3). Its own top-level panel; the tab is shown to the `owner` and
   // `admin` roles, and `#settingsView` is filled lazily by `settings.js` on first open.
   const navSettings = el<HTMLButtonElement>('navSettings');
+  // Activities (ADR-0039): a page of its own, so the button leaves the shell.
+  const navActivities = el<HTMLButtonElement>('navActivities');
   const settingsView = el('settingsView');
   /**
    * The office screens, fetched together on first use — see `web/src/office.ts`.
@@ -3366,6 +3370,7 @@ async function boot(): Promise<void> {
   navReport.addEventListener('click', () => showView('report'));
   navAdmin.addEventListener('click', () => showView('admin'));
   navSettings.addEventListener('click', () => showView('settings'));
+  navActivities.addEventListener('click', () => location.assign(MEMBER_HOME));
   navDashboard.addEventListener('click', () => showView('dashboard'));
   navHelp.addEventListener('click', () => showView('help'));
 

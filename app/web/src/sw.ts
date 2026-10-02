@@ -1255,7 +1255,9 @@ declare const self: ServiceWorkerGlobalScope;
 // office bundle moved, so the bump.
 // v260: Bajaur C1 (ADR-0039) — "Activities department" on Add account. Settings moved, so the
 // bump. (`/activities.html` and its script are not the shell and are never cached by it.)
-const CACHE = 'dnc-shell-v260';
+// v261: an "Activities" button in the shell's navigation, for every signed-in account — the
+// control room had no way to reach `/activities.html`. `index.html` and `main.ts` moved.
+const CACHE = 'dnc-shell-v261';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.
