@@ -1,20 +1,68 @@
 /**
- * Activities — the page a `member` account lives on (ADR-0038 / ADR-0039, Bajaur).
+ * Activities — the page a `member` account lives on (ADR-0038 / ADR-0039, Bajaur — phase C1).
  *
- * Phase B: who is signed in, change password, sign out. Phase C adds the Activities themselves.
+ * Posts with photos, filtered by department, person and date; the Department list; the Recycle
+ * bin; the log; and the account's own password and default department.
  *
- * Nothing here enforces anything. The server decides what this account may do (INV-05); this
- * page only reads `/auth/me` to say who is signed in, and sends anybody without a session back
- * to the shell's sign-in.
+ * Nothing here enforces anything. The server decides what this account may do (INV-05): this
+ * page reads `/activities/me` to know which tabs and buttons to draw, and every action is asked
+ * again on the server. Everything from the server is put on the page with `textContent` — never
+ * `innerHTML` — because names and captions are typed by people.
+ *
+ * Photos are shrunk on the phone before they leave it (ADR-0039 §4): long edge 2048 px, JPEG
+ * at high quality, plus a 480 px copy for the list. Re-encoding through a canvas also drops the
+ * photo's embedded location and camera data, which nobody asked to publish.
  */
 
 interface Me {
-  readonly identity: {
-    readonly fullName: string;
-    readonly role: string;
-    readonly mustChangePassword: boolean;
-  };
+  readonly personId: string;
+  readonly fullName: string;
+  readonly role: string;
+  readonly mustChangePassword: boolean;
+  readonly permissions: readonly string[];
+  readonly defaultUnitId: string | null;
+  readonly today: string;
 }
+
+interface Unit {
+  readonly unitId: string;
+  readonly name: string;
+  readonly retired: boolean;
+}
+
+interface Person {
+  readonly personId: string;
+  readonly fullName: string;
+  readonly designation: string | null;
+  readonly defaultUnitId: string | null;
+}
+
+interface Post {
+  readonly postId: string;
+  readonly unitName: string;
+  readonly authorName: string;
+  readonly authorDesignation: string | null;
+  readonly activityDate: string;
+  readonly caption: string;
+  readonly place: string | null;
+  readonly createdAt: string;
+  readonly hiddenAt: string | null;
+  readonly photos: readonly { readonly mediaId: string; readonly hasThumb: boolean }[];
+  readonly mayDelete: boolean;
+  readonly mayModerate: boolean;
+}
+
+interface LogLine {
+  readonly type: string;
+  readonly actorName: string | null;
+  readonly unitName: string | null;
+  readonly detail: Record<string, unknown> | null;
+  readonly recordedAt: string;
+}
+
+const MAX_PHOTOS = 10;
+const LONG_EDGE = 2048;
+const THUMB_EDGE = 480;
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -22,45 +70,660 @@ function el<T extends HTMLElement = HTMLElement>(id: string): T {
   return found as T;
 }
 
-const ROLE_TEXT: Readonly<Record<string, string>> = {
-  member: 'Officer account — Activities only.',
-  owner: 'Owner account.',
-  admin: 'Administrator account.',
-  operator: 'Control-room account.',
-  viewer: 'Viewer account.',
-};
-
-async function load(): Promise<void> {
-  const status = el('status');
-  let me: Me;
-  try {
-    const res = await fetch('/auth/me', { cache: 'no-store' });
-    if (res.status === 401) {
-      location.replace('/');
-      return;
-    }
-    if (!res.ok) throw new Error(String(res.status));
-    me = (await res.json()) as Me;
-  } catch {
-    status.textContent = 'Cannot reach the server. Check your connection and reload.';
-    return;
-  }
-
-  el('who').textContent = me.identity.fullName;
-  el('role').textContent = ROLE_TEXT[me.identity.role] ?? '';
-  el('mustChange').hidden = !me.identity.mustChangePassword;
-  status.hidden = true;
-  el('page').hidden = false;
+function make<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className?: string,
+  content?: string,
+): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  if (className !== undefined) node.className = className;
+  if (content !== undefined) node.textContent = content;
+  return node;
 }
 
-el('signOut').addEventListener('click', () => {
-  void (async () => {
+function button(label: string, className?: string): HTMLButtonElement {
+  const b = make('button', className, label);
+  b.type = 'button';
+  return b;
+}
+
+/** The server's error text, or a plain one. Thrown so callers can show it where they are. */
+class ApiError extends Error {}
+
+async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      cache: 'no-store',
+      headers: body === undefined ? {} : { 'content-type': 'application/json' },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  } catch {
+    throw new ApiError('Cannot reach the server. Check your connection and try again.');
+  }
+  if (res.status === 401) {
+    location.replace('/');
+    throw new ApiError('Signed out.');
+  }
+  const parsed = (await res.json().catch(() => null)) as { error?: unknown } | null;
+  if (!res.ok) {
+    throw new ApiError(
+      typeof parsed?.error === 'string' ? parsed.error : `The server refused (${res.status}).`,
+    );
+  }
+  return parsed as T;
+}
+
+function showError(target: HTMLElement, e: unknown): void {
+  target.textContent = e instanceof Error ? e.message : String(e);
+  target.hidden = false;
+}
+
+function when(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function day(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+//------------------------------------------------------------------------------
+// State
+//------------------------------------------------------------------------------
+
+let me: Me;
+let units: Unit[] = [];
+let people: Person[] = [];
+const can = (p: string): boolean => me.permissions.includes(`activities.${p}`);
+
+//------------------------------------------------------------------------------
+// Tabs
+//------------------------------------------------------------------------------
+
+type Tab = 'posts' | 'new' | 'units' | 'bin' | 'log' | 'account';
+
+const TAB_LABEL: Readonly<Record<Tab, string>> = {
+  posts: 'Activities',
+  new: 'New post',
+  units: 'Departments',
+  bin: 'Recycle bin',
+  log: 'Log',
+  account: 'My account',
+};
+
+function tabsFor(): Tab[] {
+  const tabs: Tab[] = ['posts'];
+  if (can('upload')) tabs.push('new');
+  if (can('departments')) tabs.push('units');
+  if (can('moderate')) tabs.push('bin', 'log');
+  tabs.push('account');
+  return tabs;
+}
+
+function show(tab: Tab): void {
+  for (const t of Object.keys(TAB_LABEL) as Tab[]) el(`view-${t}`).hidden = t !== tab;
+  for (const b of Array.from(el('tabs').querySelectorAll('button'))) {
+    if (b.dataset['tab'] === tab) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  }
+  if (tab === 'posts') void loadFeed(false);
+  if (tab === 'bin') void loadBin();
+  if (tab === 'log') void loadLog();
+  if (tab === 'units') void loadPeople().then(drawUnits);
+}
+
+//------------------------------------------------------------------------------
+// Department and person selects
+//------------------------------------------------------------------------------
+
+function fillSelect(
+  select: HTMLSelectElement,
+  options: readonly { value: string; label: string }[],
+  value: string,
+): void {
+  select.replaceChildren(
+    ...options.map((o) => {
+      const opt = make('option', undefined, o.label);
+      opt.value = o.value;
+      return opt;
+    }),
+  );
+  select.value = value;
+}
+
+const liveUnits = (): Unit[] => units.filter((u) => !u.retired);
+
+function fillUnitSelects(): void {
+  fillSelect(
+    el<HTMLSelectElement>('fUnit'),
+    [
+      { value: '', label: 'All departments' },
+      ...units.map((u) => ({ value: u.unitId, label: u.name })),
+    ],
+    el<HTMLSelectElement>('fUnit').value,
+  );
+  const live = liveUnits().map((u) => ({ value: u.unitId, label: u.name }));
+  fillSelect(
+    el<HTMLSelectElement>('pUnit'),
+    [{ value: '', label: 'Choose a department' }, ...live],
+    me.defaultUnitId ?? '',
+  );
+  fillSelect(
+    el<HTMLSelectElement>('myUnit'),
+    [{ value: '', label: '— none —' }, ...live],
+    me.defaultUnitId ?? '',
+  );
+}
+
+async function loadUnits(): Promise<void> {
+  units = await api<Unit[]>('GET', '/activities/units');
+  fillUnitSelects();
+}
+
+async function loadPeople(): Promise<void> {
+  if (!can('read_all')) return;
+  people = await api<Person[]>('GET', '/activities/people');
+  fillSelect(
+    el<HTMLSelectElement>('fPerson'),
+    [
+      { value: '', label: 'Everyone' },
+      ...people.map((p) => ({
+        value: p.personId,
+        label: p.designation ? `${p.fullName} — ${p.designation}` : p.fullName,
+      })),
+    ],
+    el<HTMLSelectElement>('fPerson').value,
+  );
+}
+
+//------------------------------------------------------------------------------
+// The feed
+//------------------------------------------------------------------------------
+
+function openViewer(src: string): void {
+  el<HTMLImageElement>('viewerImg').src = src;
+  el('viewer').hidden = false;
+}
+
+el('viewer').addEventListener('click', () => {
+  el('viewer').hidden = true;
+  el<HTMLImageElement>('viewerImg').removeAttribute('src');
+});
+
+function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement {
+  const card = make('article');
+  card.append(make('div', 'meta', `${post.unitName} · ${day(post.activityDate)}`));
+  const by = post.authorDesignation
+    ? `${post.authorName} — ${post.authorDesignation}`
+    : post.authorName;
+  card.append(make('div', 'meta', `${by} · posted ${when(post.createdAt)}`));
+  if (post.place !== null) card.append(make('div', 'meta', `Place: ${post.place}`));
+  card.append(make('p', 'caption', post.caption));
+
+  if (post.photos.length > 0) {
+    const grid = make('div', 'photos');
+    for (const photo of post.photos) {
+      const img = make('img');
+      img.loading = 'lazy';
+      img.alt = 'Activity photo';
+      img.src = `/activities/media/${photo.mediaId}${photo.hasThumb ? '?size=thumb' : ''}`;
+      img.addEventListener('click', () => openViewer(`/activities/media/${photo.mediaId}`));
+      grid.append(img);
+    }
+    card.append(grid);
+  } else {
+    card.append(make('p', 'meta', 'No photos.'));
+  }
+
+  const actions = make('div', 'row');
+  const error = make('p', 'error');
+  error.hidden = true;
+  const act = (b: HTMLButtonElement, run: () => Promise<unknown>, ask?: string): void => {
+    b.addEventListener('click', () => {
+      if (ask !== undefined && !confirm(ask)) return;
+      void (async () => {
+        b.disabled = true;
+        error.hidden = true;
+        try {
+          await run();
+          refresh();
+        } catch (e) {
+          showError(error, e);
+          b.disabled = false;
+        }
+      })();
+    });
+    actions.append(b);
+  };
+
+  if (inBin) {
+    act(button('Restore'), () => api('POST', `/activities/posts/${post.postId}/restore`));
+  } else if (post.mayModerate) {
+    act(button('Move to Recycle bin'), () => api('POST', `/activities/posts/${post.postId}/hide`));
+  }
+  if (post.mayDelete) {
+    const del = button(inBin || post.mayModerate ? 'Delete permanently' : 'Delete', 'danger');
+    act(
+      del,
+      () => api('DELETE', `/activities/posts/${post.postId}`),
+      'Delete this post and its photos for good? This cannot be undone.',
+    );
+  }
+  if (actions.childElementCount > 0) card.append(actions, error);
+  return card;
+}
+
+let oldest: string | null = null;
+
+function feedQuery(): URLSearchParams {
+  const q = new URLSearchParams();
+  const unit = el<HTMLSelectElement>('fUnit').value;
+  const person = el<HTMLSelectElement>('fPerson').value;
+  const from = el<HTMLInputElement>('fFrom').value;
+  const to = el<HTMLInputElement>('fTo').value;
+  if (unit !== '') q.set('unit', unit);
+  if (person !== '' && can('read_all')) q.set('person', person);
+  if (from !== '') q.set('from', from);
+  if (to !== '') q.set('to', to);
+  return q;
+}
+
+async function loadFeed(more: boolean): Promise<void> {
+  const feed = el('feed');
+  const moreBtn = el<HTMLButtonElement>('more');
+  const q = feedQuery();
+  if (more && oldest !== null) q.set('before', oldest);
+  if (!more) {
+    oldest = null;
+    feed.replaceChildren(make('p', 'muted', 'Loading…'));
+  }
+  try {
+    const page = await api<{ posts: Post[]; more: boolean }>('GET', `/activities/posts?${q}`);
+    if (!more) feed.replaceChildren();
+    for (const p of page.posts) feed.append(postCard(p, false, () => void loadFeed(false)));
+    if (!more && page.posts.length === 0) {
+      feed.append(make('p', 'muted', 'No activities match.'));
+    }
+    oldest = page.posts.at(-1)?.createdAt ?? oldest;
+    moreBtn.hidden = !page.more;
+  } catch (e) {
+    const p = make('p', 'error');
+    showError(p, e);
+    feed.replaceChildren(p);
+  }
+}
+
+for (const id of ['fUnit', 'fPerson', 'fFrom', 'fTo']) {
+  el(id).addEventListener('change', () => void loadFeed(false));
+}
+el('more').addEventListener('click', () => void loadFeed(true));
+
+async function loadBin(): Promise<void> {
+  const feed = el('binFeed');
+  feed.replaceChildren(make('p', 'muted', 'Loading…'));
+  try {
+    const page = await api<{ posts: Post[] }>('GET', '/activities/posts?bin=1');
+    feed.replaceChildren(...page.posts.map((p) => postCard(p, true, () => void loadBin())));
+    if (page.posts.length === 0) feed.append(make('p', 'muted', 'The Recycle bin is empty.'));
+  } catch (e) {
+    const p = make('p', 'error');
+    showError(p, e);
+    feed.replaceChildren(p);
+  }
+}
+
+//------------------------------------------------------------------------------
+// The log
+//------------------------------------------------------------------------------
+
+const LOG_TEXT: Readonly<Record<string, string>> = {
+  posted: 'posted an activity',
+  photo_added: 'added a photo',
+  hidden: 'moved a post to the Recycle bin',
+  restored: 'restored a post',
+  deleted: 'deleted a post permanently',
+  unit_created: 'added a department',
+  unit_renamed: 'renamed a department',
+  unit_retired: 'retired a department',
+  default_unit_set: "set a person's default department",
+};
+
+async function loadLog(): Promise<void> {
+  const list = el('logList');
+  list.replaceChildren(make('p', 'muted', 'Loading…'));
+  try {
+    const lines = await api<LogLine[]>('GET', '/activities/log');
+    list.replaceChildren(
+      ...lines.map((l) => {
+        const row = make('div', 'list-row');
+        const what = [l.actorName ?? 'Someone', LOG_TEXT[l.type] ?? l.type];
+        if (l.unitName !== null) what.push(`— ${l.unitName}`);
+        const d = l.detail ?? {};
+        if (l.type === 'deleted' && typeof d['author'] === 'string') {
+          what.push(`(by ${d['author']}, ${String(d['activityDate'] ?? '')})`);
+        }
+        if (l.type === 'unit_renamed') what.push(`(was ${String(d['from'] ?? '')})`);
+        row.append(
+          make('span', undefined, what.join(' ')),
+          make('span', 'meta', when(l.recordedAt)),
+        );
+        return row;
+      }),
+    );
+    if (lines.length === 0) list.append(make('p', 'muted', 'Nothing yet.'));
+  } catch (e) {
+    const p = make('p', 'error');
+    showError(p, e);
+    list.replaceChildren(p);
+  }
+}
+
+//------------------------------------------------------------------------------
+// Departments
+//------------------------------------------------------------------------------
+
+function drawUnits(): void {
+  const list = el('unitList');
+  list.replaceChildren();
+  const error = el('unitError');
+  for (const u of units) {
+    const row = make('div', 'list-row');
+    row.append(
+      make('span', u.retired ? 'muted' : undefined, u.retired ? `${u.name} (retired)` : u.name),
+    );
+    if (!u.retired) {
+      const buttons = make('span', 'row');
+      buttons.style.marginTop = '0';
+      const rename = button('Rename');
+      rename.addEventListener('click', () => {
+        const name = prompt('New name for this department', u.name);
+        if (name === null || name.trim() === '' || name.trim() === u.name) return;
+        void api('PATCH', `/activities/units/${u.unitId}`, { name: name.trim() })
+          .then(() => loadUnits().then(drawUnits))
+          .catch((e: unknown) => showError(error, e));
+      });
+      const retire = button('Retire', 'danger');
+      retire.addEventListener('click', () => {
+        if (!confirm(`Retire "${u.name}"? Its old posts keep its name.`)) return;
+        void api('POST', `/activities/units/${u.unitId}/retire`)
+          .then(() => loadUnits().then(drawUnits))
+          .catch((e: unknown) => showError(error, e));
+      });
+      buttons.append(rename, retire);
+      row.append(buttons);
+    }
+    list.append(row);
+  }
+  if (units.length === 0)
+    list.append(make('p', 'muted', 'No departments yet. Add the first one above.'));
+
+  const peopleList = el('peopleList');
+  peopleList.replaceChildren();
+  const options = [
+    { value: '', label: '— none —' },
+    ...liveUnits().map((u) => ({ value: u.unitId, label: u.name })),
+  ];
+  for (const p of people) {
+    const row = make('div', 'list-row');
+    row.append(
+      make('span', undefined, p.designation ? `${p.fullName} — ${p.designation}` : p.fullName),
+    );
+    const select = make('select');
+    select.style.maxWidth = '260px';
+    fillSelect(select, options, p.defaultUnitId ?? '');
+    select.addEventListener('change', () => {
+      void api('PUT', '/activities/default-unit', {
+        personId: p.personId,
+        unitId: select.value === '' ? null : select.value,
+      }).catch((e: unknown) => showError(error, e));
+    });
+    row.append(select);
+    peopleList.append(row);
+  }
+}
+
+el<HTMLFormElement>('unitForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = el<HTMLInputElement>('unitName');
+  const error = el('unitError');
+  error.hidden = true;
+  void api('POST', '/activities/units', { name: input.value.trim() })
+    .then(async () => {
+      input.value = '';
+      await loadUnits();
+      drawUnits();
+    })
+    .catch((err: unknown) => showError(error, err));
+});
+
+//------------------------------------------------------------------------------
+// New post — photos are shrunk on the phone
+//------------------------------------------------------------------------------
+
+async function decode(file: File): Promise<ImageBitmap | HTMLImageElement> {
+  try {
+    return await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    // Older browsers: an <img> applies the photo's orientation itself.
+    const url = URL.createObjectURL(file);
     try {
-      await fetch('/auth/logout', { method: 'POST' });
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      return img;
     } finally {
-      location.replace('/');
+      URL.revokeObjectURL(url);
+    }
+  }
+}
+
+function encode(
+  source: ImageBitmap | HTMLImageElement,
+  longEdge: number,
+  quality: number,
+): Promise<Blob> {
+  const w = source.width;
+  const h = source.height;
+  const scale = Math.min(1, longEdge / Math.max(w, h));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(w * scale));
+  canvas.height = Math.max(1, Math.round(h * scale));
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) return Promise.reject(new Error('this phone cannot prepare photos'));
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) =>
+        blob === null ? reject(new Error('the photo could not be prepared')) : resolve(blob),
+      'image/jpeg',
+      quality,
+    );
+  });
+}
+
+async function prepare(file: File): Promise<{ photo: Blob; thumb: Blob }> {
+  let source: ImageBitmap | HTMLImageElement;
+  try {
+    source = await decode(file);
+  } catch {
+    throw new Error(
+      `${file.name}: this phone cannot read that kind of picture — choose a JPEG or PNG`,
+    );
+  }
+  const photo = await encode(source, LONG_EDGE, 0.88);
+  const thumb = await encode(source, THUMB_EDGE, 0.72);
+  if ('close' in source) source.close();
+  return { photo, thumb };
+}
+
+async function sendPhoto(postId: string, file: File): Promise<void> {
+  const { photo, thumb } = await prepare(file);
+  let res: Response;
+  try {
+    res = await fetch(`/activities/posts/${postId}/photos`, {
+      method: 'POST',
+      headers: { 'content-type': 'image/jpeg', 'x-thumb-bytes': String(thumb.size) },
+      body: new Blob([thumb, photo]),
+    });
+  } catch {
+    throw new Error(`${file.name}: the connection dropped`);
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+    throw new Error(`${file.name}: ${typeof body?.error === 'string' ? body.error : res.status}`);
+  }
+}
+
+let picked: File[] = [];
+/** The post whose photos are still being sent, and the ones that failed — for "try again". */
+let pending: { postId: string; failed: File[] } | null = null;
+
+function drawPicked(): void {
+  const grid = el('picked');
+  for (const img of Array.from(grid.querySelectorAll('img'))) URL.revokeObjectURL(img.src);
+  grid.replaceChildren(
+    ...picked.map((file, i) => {
+      const box = make('div', 'pick');
+      const img = make('img');
+      img.alt = file.name;
+      img.src = URL.createObjectURL(file);
+      const remove = button('×');
+      remove.setAttribute('aria-label', `Remove ${file.name}`);
+      remove.addEventListener('click', () => {
+        picked.splice(i, 1);
+        drawPicked();
+      });
+      box.append(img, remove);
+      return box;
+    }),
+  );
+}
+
+el<HTMLInputElement>('pPhotos').addEventListener('change', (e) => {
+  const input = e.currentTarget as HTMLInputElement;
+  const error = el('postError');
+  error.hidden = true;
+  for (const f of Array.from(input.files ?? [])) {
+    if (picked.length >= MAX_PHOTOS) {
+      showError(error, new Error(`A post holds at most ${MAX_PHOTOS} photos.`));
+      break;
+    }
+    picked.push(f);
+  }
+  input.value = '';
+  drawPicked();
+});
+
+async function sendAll(postId: string, files: readonly File[]): Promise<File[]> {
+  const progress = el('postProgress');
+  const failed: File[] = [];
+  const reasons: string[] = [];
+  for (const [i, file] of files.entries()) {
+    progress.textContent = `Sending photo ${i + 1} of ${files.length}…`;
+    try {
+      await sendPhoto(postId, file);
+    } catch (e) {
+      failed.push(file);
+      reasons.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+  progress.textContent = '';
+  if (failed.length > 0) {
+    showError(
+      el('postError'),
+      new Error(
+        `The post is saved, but ${failed.length} photo(s) did not go: ${reasons.join('; ')}`,
+      ),
+    );
+  }
+  return failed;
+}
+
+function resetForm(): void {
+  el<HTMLFormElement>('postForm').reset();
+  el<HTMLSelectElement>('pUnit').value = me.defaultUnitId ?? '';
+  el<HTMLInputElement>('pDate').value = me.today;
+  picked = [];
+  drawPicked();
+}
+
+el<HTMLFormElement>('postForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const submit = el<HTMLButtonElement>('postSubmit');
+  const error = el('postError');
+  const retry = el('retryPhotos');
+  error.hidden = true;
+  retry.hidden = true;
+  void (async () => {
+    submit.disabled = true;
+    try {
+      el('postProgress').textContent = 'Saving the post…';
+      const post = await api<{ postId: string }>('POST', '/activities/posts', {
+        unitId: el<HTMLSelectElement>('pUnit').value,
+        activityDate: el<HTMLInputElement>('pDate').value,
+        caption: el<HTMLTextAreaElement>('pCaption').value,
+        place: el<HTMLInputElement>('pPlace').value,
+      });
+      const failed = await sendAll(post.postId, picked);
+      resetForm();
+      if (failed.length > 0) {
+        pending = { postId: post.postId, failed };
+        retry.hidden = false;
+      } else {
+        show('posts');
+      }
+    } catch (err) {
+      el('postProgress').textContent = '';
+      showError(error, err);
+    } finally {
+      submit.disabled = false;
     }
   })();
+});
+
+el('retryPhotos').addEventListener('click', () => {
+  if (pending === null) return;
+  const { postId, failed } = pending;
+  el('postError').hidden = true;
+  el('retryPhotos').hidden = true;
+  void sendAll(postId, failed).then((stillFailed) => {
+    if (stillFailed.length > 0) {
+      pending = { postId, failed: stillFailed };
+      el('retryPhotos').hidden = false;
+    } else {
+      pending = null;
+      show('posts');
+    }
+  });
+});
+
+//------------------------------------------------------------------------------
+// My account
+//------------------------------------------------------------------------------
+
+el<HTMLSelectElement>('myUnit').addEventListener('change', (e) => {
+  const select = e.currentTarget as HTMLSelectElement;
+  const ok = el('myUnitOk');
+  ok.hidden = true;
+  void api<{ unitId: string | null }>('PUT', '/activities/default-unit', {
+    unitId: select.value === '' ? null : select.value,
+  }).then((r) => {
+    me = { ...me, defaultUnitId: r.unitId };
+    el<HTMLSelectElement>('pUnit').value = r.unitId ?? '';
+    ok.hidden = false;
+  });
 });
 
 el<HTMLFormElement>('password').addEventListener('submit', (e) => {
@@ -93,13 +756,74 @@ el<HTMLFormElement>('password').addEventListener('submit', (e) => {
       }
       form.reset();
       ok.hidden = false;
-      el('mustChange').hidden = true;
+      // Posting was held back until now; the server agrees from this request on.
+      if (me.mustChangePassword) {
+        me = { ...me, mustChangePassword: false };
+        el('mustChange').hidden = true;
+        drawTabs();
+      }
     } catch {
       error.textContent = 'Cannot reach the server. Check your connection and try again.';
       error.hidden = false;
     }
   })();
 });
+
+el('signOut').addEventListener('click', () => {
+  void (async () => {
+    try {
+      await fetch('/auth/logout', { method: 'POST' });
+    } finally {
+      location.replace('/');
+    }
+  })();
+});
+
+//------------------------------------------------------------------------------
+// Start
+//------------------------------------------------------------------------------
+
+function drawTabs(): void {
+  const nav = el('tabs');
+  // Until the temporary password is replaced, only "My account" is offered (the server refuses
+  // posting too — this only saves the officer a confusing refusal).
+  const tabs: Tab[] = me.mustChangePassword ? ['account'] : tabsFor();
+  nav.replaceChildren(
+    ...tabs.map((t) => {
+      const b = button(TAB_LABEL[t]);
+      b.dataset['tab'] = t;
+      b.addEventListener('click', () => show(t));
+      return b;
+    }),
+  );
+  nav.hidden = false;
+  show(tabs[0]!);
+}
+
+async function load(): Promise<void> {
+  const status = el('status');
+  try {
+    me = await api<Me>('GET', '/activities/me');
+    await loadUnits();
+    await loadPeople();
+  } catch (e) {
+    status.textContent =
+      e instanceof Error ? e.message : 'Cannot reach the server. Check your connection and reload.';
+    return;
+  }
+
+  el('who').textContent = me.fullName;
+  el('mustChange').hidden = !me.mustChangePassword;
+  el('fPersonWrap').hidden = !can('read_all');
+  el('scopeNote').textContent = can('read_all')
+    ? ''
+    : 'You see your own posts. The DC office sees every department.';
+  const date = el<HTMLInputElement>('pDate');
+  date.max = me.today;
+  date.value = me.today;
+  status.hidden = true;
+  drawTabs();
+}
 
 void load();
 

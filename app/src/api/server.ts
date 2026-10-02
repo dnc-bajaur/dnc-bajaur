@@ -146,6 +146,24 @@ import { backupHealth } from '../ops/backup.js';
 import { replicationHealthSafe } from '../ops/replication.js';
 import type { Nightly } from '../jobs/nightly.js';
 import { correlationIdFrom, log, withContext } from '../obs/log.js';
+import {
+  addPhoto,
+  createPost,
+  createUnit,
+  defaultActivitiesRoot,
+  deletePost,
+  listPeople,
+  listPosts,
+  listUnits,
+  me as activitiesMe,
+  moderatePost,
+  readLog as readActivitiesLog,
+  renameUnit,
+  retireUnit,
+  servePhoto,
+  setDefaultUnit,
+  type ActivitiesResult,
+} from './activities.js';
 
 /**
  * The sync server. Plain `node:http`, no framework — see ADR-0007.
@@ -176,6 +194,8 @@ export interface ServerOptions {
    * where an uploaded file becomes a URL somebody's browser will open.
    */
   readonly evidenceRoot?: string;
+  /** Where Activities photos are written (ADR-0039). Outside the web root, like evidence. */
+  readonly activitiesRoot?: string;
   /** Where dumps are written, so the console can list what is actually on disk (M0-55). */
   readonly backupDirectory?: string;
   /**
@@ -1022,6 +1042,123 @@ async function handleSettings(
 }
 
 /**
+ * Activities — ADR-0039, Bajaur. Everything under `/activities/`.
+ *
+ * The authority check is **not** here: every function in `api/activities.ts` asks the caller's
+ * Activities permissions for itself, so a route added to this switch without one is refused
+ * rather than silently open (INV-05) — the same rule as `/settings`.
+ */
+async function handleActivities(
+  pool: Pool,
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+  identity: Identity,
+  root: string,
+): Promise<void> {
+  const pathname = url.pathname;
+  const send = <T>(result: ActivitiesResult<T>, okStatus = 200): void => {
+    if (!result.ok) json(res, result.status, { error: result.error });
+    else json(res, okStatus, result.value);
+  };
+  const bad = (): void => void json(res, 400, { error: 'that was not valid json' });
+  const notAllowed = (): void => void json(res, 405, { error: 'method not allowed' });
+
+  if (pathname === '/activities/me') {
+    if (req.method !== 'GET') return notAllowed();
+    send(await activitiesMe(pool, identity));
+    return;
+  }
+
+  if (pathname === '/activities/units') {
+    if (req.method === 'GET') return send(await listUnits(pool));
+    if (req.method === 'POST') {
+      const input = await bodyOf(req);
+      if (input === null) return bad();
+      return send(await createUnit(pool, identity, input), 201);
+    }
+    return notAllowed();
+  }
+
+  const unit = /^\/activities\/units\/([^/]+)(?:\/(retire))?$/.exec(pathname);
+  if (unit !== null) {
+    if (!UUID_RE.test(unit[1]!)) return void json(res, 404, { error: 'no such department' });
+    if (req.method === 'PATCH' && unit[2] === undefined) {
+      const input = await bodyOf(req);
+      if (input === null) return bad();
+      return send(await renameUnit(pool, identity, unit[1]!, input));
+    }
+    if (req.method === 'POST' && unit[2] === 'retire') {
+      return send(await retireUnit(pool, identity, unit[1]!));
+    }
+    return notAllowed();
+  }
+
+  if (pathname === '/activities/default-unit') {
+    if (req.method !== 'PUT') return notAllowed();
+    const input = await bodyOf(req);
+    if (input === null) return bad();
+    return send(await setDefaultUnit(pool, identity, input));
+  }
+
+  if (pathname === '/activities/people') {
+    if (req.method !== 'GET') return notAllowed();
+    return send(await listPeople(pool, identity));
+  }
+
+  if (pathname === '/activities/log') {
+    if (req.method !== 'GET') return notAllowed();
+    return send(await readActivitiesLog(pool, identity));
+  }
+
+  if (pathname === '/activities/posts') {
+    if (req.method === 'GET') return send(await listPosts(pool, identity, url.searchParams));
+    if (req.method === 'POST') {
+      const input = await bodyOf(req);
+      if (input === null) return bad();
+      return send(await createPost(pool, identity, input), 201);
+    }
+    return notAllowed();
+  }
+
+  const post = /^\/activities\/posts\/([^/]+)(?:\/(photos|hide|restore))?$/.exec(pathname);
+  if (post !== null) {
+    const postId = post[1]!;
+    const action = post[2];
+    if (!UUID_RE.test(postId)) return void json(res, 404, { error: 'no such post' });
+    if (req.method === 'DELETE' && action === undefined) {
+      return send(await deletePost(pool, root, identity, postId));
+    }
+    if (req.method === 'POST' && action === 'photos') {
+      return send(await addPhoto(pool, root, req, identity, postId), 201);
+    }
+    if (req.method === 'POST' && (action === 'hide' || action === 'restore')) {
+      return send(await moderatePost(pool, identity, postId, action));
+    }
+    return notAllowed();
+  }
+
+  const media = /^\/activities\/media\/([^/]+)$/.exec(pathname);
+  if (media !== null) {
+    if (req.method !== 'GET') return notAllowed();
+    if (!UUID_RE.test(media[1]!)) return void json(res, 404, { error: 'no such photo' });
+    const reply = await servePhoto(
+      pool,
+      root,
+      req,
+      res,
+      identity,
+      media[1]!,
+      url.searchParams.get('size') === 'thumb',
+    );
+    if (reply !== null && !reply.ok) json(res, reply.status, { error: reply.error });
+    return;
+  }
+
+  json(res, 404, { error: 'not found' });
+}
+
+/**
  * The roster — M1a-10. Everything under `/roster`.
  *
  * Separate from `/admin` because the gate is different, and the difference is the point: a
@@ -1856,6 +1993,7 @@ export function createSyncServer(options: ServerOptions): Server {
   // to a directory **outside** the web root, because a directory the server serves
   // statically is a directory where an uploaded file becomes a URL a browser will open.
   const evidenceRoot = options.evidenceRoot ?? defaultEvidenceRoot();
+  const activitiesRoot = options.activitiesRoot ?? defaultActivitiesRoot();
   const backupDirectory = options.backupDirectory ?? join(process.cwd(), 'var', 'backups');
 
   /**
@@ -3089,6 +3227,21 @@ export function createSyncServer(options: ServerOptions): Server {
             whatsapp,
             options.whatsappFetch,
           );
+          return;
+        }
+
+        // Activities (ADR-0039) — open to a `member` on purpose, so it calls the ungated
+        // resolver. Every action asks the Activities permissions for itself (`api/activities.ts`).
+        if (url.pathname === '/activities' || url.pathname.startsWith('/activities/')) {
+          const token = readToken(req);
+          const identity = token === null ? null : await resolveAnySession(pool, token);
+
+          if (identity === null) {
+            json(res, 401, { error: 'authentication required' });
+            return;
+          }
+
+          await handleActivities(pool, req, res, url, identity, activitiesRoot);
           return;
         }
 

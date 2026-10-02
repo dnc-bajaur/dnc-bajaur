@@ -46,6 +46,19 @@ them is allowed — unlike evidence, which is never deleted.
    there too, and a 30-day lifecycle rule on the bucket is the safety net. Post records travel
    with the normal database backup.
 
+### Implementation note (2026-10-02, C1 — photos)
+
+Migration `0050_activities.sql` adds `activity_unit`, `activity_post`, `activity_media`,
+`activity_log` (append-only by trigger) and `person.activity_unit_id`. The routes are in
+`api/activities.ts`, under `/activities/`, and are the one place besides `/auth/me` that calls
+the ungated session resolver (pinned by `memberGate.test.ts`); every handler asks the
+Activities permissions itself. A post is created first and each photo is then sent in its own
+request, with a small thumbnail made on the phone in the same request. Photos are stored only
+if their bytes are JPEG, PNG or WebP, and are served inline with the sniffed type, `nosniff` and
+a sandboxing CSP. Soft-deleted posts are seen only by moderators, in the Recycle bin. Posting is
+refused until a forced password change is done. Retention, the warning, the ZIP and the backup
+are C2; videos are C3.
+
 ## Rationale
 
 A separate module keeps the emergency system exactly as it is: no new meaning for evidence, no

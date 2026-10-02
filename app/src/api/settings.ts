@@ -34,6 +34,7 @@ import {
   ROLES,
   can,
   isPermission,
+  resolvePermissions,
   type Permission,
   type PermissionOverride,
   type Role,
@@ -90,6 +91,18 @@ async function loadOverrides(pool: Pool, personId: string): Promise<PermissionOv
     permission: r.permission,
     effect: r.effect === 'deny' ? 'deny' : 'allow',
   }));
+}
+
+/**
+ * Everything this account may do right now — its role folded with its overrides. For a module
+ * that asks several questions at once (Activities: may I see all posts? moderate?), so it reads
+ * the overrides once rather than once per question.
+ */
+export async function permissionsOf(
+  pool: Pool,
+  identity: Identity,
+): Promise<ReadonlySet<Permission>> {
+  return resolvePermissions(identity.role, await loadOverrides(pool, identity.personId));
 }
 
 /**
@@ -318,6 +331,8 @@ export async function createAccount(
     return refuse(409, 'that phone number already has an account');
   }
 
+  await setActivityUnit(pool, personId, input['activityUnitId']);
+
   await recordAccessEvent(pool, {
     type: 'granted',
     actorPersonId: identity.personId,
@@ -326,6 +341,22 @@ export async function createAccount(
   }).catch(() => {});
 
   return { ok: true, value: { personId } };
+}
+
+/**
+ * The account's default Activities department (ADR-0038 §5, ADR-0039 §2), when the form gave
+ * one. Optional and harmless — it only pre-fills the Activities form — so an unknown or retired
+ * department is ignored rather than failing the account the administrator just made.
+ */
+async function setActivityUnit(pool: Pool, personId: string, unitId: unknown): Promise<void> {
+  const id = text(unitId);
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return;
+  await pool.query(
+    `UPDATE person SET activity_unit_id = $2
+      WHERE person_id = $1
+        AND EXISTS (SELECT 1 FROM activity_unit WHERE unit_id = $2 AND retired_at IS NULL)`,
+    [personId, id],
+  );
 }
 
 /**
@@ -417,6 +448,8 @@ export async function grantLogin(
     // Migration 0045: one live account per number. Another account already holds this one.
     return refuse(409, 'that phone number already has an account');
   }
+
+  await setActivityUnit(pool, subjectId, input['activityUnitId']);
 
   await recordAccessEvent(pool, {
     type: 'granted',

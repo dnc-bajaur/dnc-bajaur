@@ -673,6 +673,20 @@ export function mountSettings(): SettingsPanel {
     // `member` by default (ADR-0038 §5): most new accounts are officers posting Activities, and
     // the control room is the deliberate choice, not the one left in place.
     const role = choiceSelect(roleChoices(), 'member');
+    // The default Activities department (ADR-0039 §2) — optional, filled once the list arrives.
+    const unit = choiceSelect([{ value: '', label: '— none —' }], '');
+    void api<readonly { unitId: string; name: string; retired: boolean }[]>(
+      'GET',
+      '/activities/units',
+    ).then((units) => {
+      for (const u of units ?? []) {
+        if (u.retired) continue;
+        const opt = document.createElement('option');
+        opt.value = u.unitId;
+        opt.textContent = u.name;
+        unit.append(opt);
+      }
+    });
     const password = textInput('password');
     const passwordField = labelledField('Temporary password', password);
     wirePasswordEye(password);
@@ -682,6 +696,7 @@ export function mountSettings(): SettingsPanel {
       labelledField('Post', post),
       labelledField('Phone number', phone),
       labelledField('Role', role),
+      labelledField('Activities department', unit),
       passwordField,
     );
     bodyEl.append(
@@ -711,6 +726,7 @@ export function mountSettings(): SettingsPanel {
           designation: post.value.trim(),
           phone: number,
           role: role.value,
+          activityUnitId: unit.value,
           password: pw,
           mustChangePassword: true,
         });

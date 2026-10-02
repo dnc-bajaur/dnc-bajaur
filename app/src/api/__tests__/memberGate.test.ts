@@ -40,6 +40,9 @@ const NOT_GATED = new Set([
   '/auth/logout',
   '/auth/password',
   '/auth/me',
+  // Activities (ADR-0039): open to a member; each action asks the Activities permissions.
+  '/activities',
+  '/activities/anything',
 ]);
 
 /** Every literal path the router matches, read from its source. */
@@ -64,9 +67,9 @@ describe('the router source', () => {
   it('calls the ungated resolver only where a member is allowed', () => {
     // Code only: a mention in a comment is written in backticks and is not counted.
     const calls = [...serverSource.matchAll(/(?<!`)\bresolveAnySession\b(?!`)/g)].length;
-    // The import alias, the gated wrapper's own call, and `/auth/me`. A new call is a new hole
-    // in the gate until this number is raised on purpose, with Activities' routes in mind.
-    expect(calls).toBe(3);
+    // The import alias, the gated wrapper's own call, `/auth/me` and Activities. A new call is
+    // a new hole in the gate until this number is raised on purpose.
+    expect(calls).toBe(4);
   });
 });
 
@@ -160,6 +163,14 @@ maybe('a member is refused everywhere outside Activities (ADR-0038)', () => {
 
     const out = await call(token, '/auth/logout', 'POST');
     expect(out.status).toBe(200);
+  });
+
+  it('lets a member into Activities', async () => {
+    const res = await call(memberToken, '/activities/me');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { permissions: string[] };
+    expect(body.permissions).toContain('activities.upload');
+    expect(body.permissions).not.toContain('activities.read_all');
   });
 
   it('does not affect an operator', async () => {

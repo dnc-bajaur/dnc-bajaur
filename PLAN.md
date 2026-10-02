@@ -74,11 +74,19 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 | B1 ✅ | `member` role + **one deny-by-default gate**: a member reaches only Activities, own password, sign-out and the app shell. Permanent test walks **every** route (INV-05) | [ADR-0038](docs/adr/ADR-0038-member-accounts.md) | — |
 | B2 ✅ | Activities permissions in `domain/roles.ts` (table in ADR-0038 §3) + per-account allow/deny | ADR-0038 | — |
 | B3 ✅ | Accounts by Name / Post (`person.designation`) / Phone, `member` by default; a contact's number is refused there and given its login from the contact drawer ("Give login", same row); temporary password, changed at first sign-in. *Default Activity department moves to C1, where the Department list is made.* | ADR-0038 | — |
-| C1 | Activities, **photos**: tables, Department list (DC), post (date, caption, place, ≤10 photos, compressed on the phone), views by department / person / date, soft + hard delete, Recycle bin, log | [ADR-0039](docs/adr/ADR-0039-activities.md) | server disk |
+| C1 ✅ | Activities, **photos**: tables, Department list (DC), post (date, caption, place, ≤10 photos, compressed on the phone), views by department / person / date, soft + hard delete, Recycle bin, log | [ADR-0039](docs/adr/ADR-0039-activities.md) | server disk |
 | C2 | 30-day auto-delete + 3-day warning + ZIP download; media backup | ADR-0039 | Bajaur's media bucket |
 | A | **"Install this app" banner** — one tap on Android/Windows (Chrome, Edge); "Share → Add to Home Screen" steps on iPhone | — | domain + HTTPS (D-04) |
 | C3 | Activities, **videos**: resumable chunks, ≤3 min, server → 720p (ffmpeg), processing/ready/failed, `doctor` lists failures | ADR-0039 | ffmpeg on server |
 | D | **WhatsApp → Activities**, same number; open emergency → two buttons; unknown numbers → Pending list | [ADR-0040](docs/adr/ADR-0040-whatsapp-to-activities.md) | Bajaur's **new** Meta portfolio |
+
+C1 notes (2026-10-02):
+- Activities are **online only** — no offline outbox (ADR-0002 is for emergencies). A post is
+  saved first, then each photo is its own request; failed photos can be sent again.
+- **HEIC:** the phone converts it when the browser can read it (iPhone Safari does); otherwise
+  the page asks for a JPEG/PNG. Server-side conversion is left for C3, which brings ffmpeg.
+- A hard delete removes rows and files on the server. Backup copies do not exist yet — removing
+  them is part of C2.
 
 Rules that hold until these ship:
 - **B1 shipped (2026-10-02):** a `member` account is refused every operational route. Accounts

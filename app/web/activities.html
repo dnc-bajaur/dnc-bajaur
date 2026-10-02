@@ -15,7 +15,8 @@
       them. The service worker does not answer this navigation with the shell
       (`NOT_THE_APP` in `src/sw.ts`).
 
-      Phase B: who is signed in, change password, sign out. Phase C fills in the Activities.
+      Phase C1: posts with photos, the Department list, the Recycle bin and the log. What each
+      account sees is decided by the server (`/activities/me`); this page only draws it.
       The colour tokens are the shell's own (`index.html` :root), copied for the few used here.
     -->
     <script>
@@ -63,6 +64,9 @@
         line-height: 1.5;
       }
       header {
+        position: sticky;
+        top: 0;
+        z-index: 5;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -75,12 +79,30 @@
         margin: 0;
         font-size: 1.05rem;
       }
+      header .who {
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      nav {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--line);
+        background: var(--card);
+      }
+      nav button[aria-current='page'] {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: #fff;
+      }
       main {
-        max-width: 640px;
+        max-width: 760px;
         margin: 0 auto;
         padding: 16px;
       }
-      section {
+      section,
+      article {
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 10px;
@@ -102,7 +124,9 @@
         margin: 10px 0 4px;
         font-size: 0.9rem;
       }
-      input {
+      input,
+      select,
+      textarea {
         width: 100%;
         padding: 10px;
         font: inherit;
@@ -110,6 +134,10 @@
         background: var(--paper);
         border: 1px solid var(--line);
         border-radius: 8px;
+      }
+      textarea {
+        min-height: 90px;
+        resize: vertical;
       }
       button {
         font: inherit;
@@ -119,12 +147,35 @@
         background: var(--card);
         color: var(--ink);
         cursor: pointer;
+        white-space: nowrap;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
       }
       button.primary {
         background: var(--primary);
         border-color: var(--primary);
         color: #fff;
+      }
+      button.danger {
+        color: var(--critical);
+        border-color: var(--critical);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
         margin-top: 12px;
+      }
+      .filters {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 8px;
+      }
+      .filters label {
+        margin-top: 0;
       }
       .error {
         color: var(--critical);
@@ -133,6 +184,73 @@
       .ok {
         margin-top: 8px;
       }
+      .meta {
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .caption {
+        white-space: pre-wrap;
+        margin: 8px 0;
+      }
+      .photos {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .photos img,
+      .photos .pick {
+        width: 100%;
+        aspect-ratio: 1;
+        object-fit: cover;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--paper);
+        cursor: zoom-in;
+      }
+      .pick {
+        position: relative;
+      }
+      .pick img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 6px;
+      }
+      .pick button {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        padding: 0 7px;
+        line-height: 1.6;
+      }
+      .list-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-top: 1px solid var(--line);
+      }
+      .list-row:first-of-type {
+        border-top: 0;
+      }
+      .viewer {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.88);
+        cursor: zoom-out;
+      }
+      .viewer img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+      }
       [hidden] {
         display: none !important;
       }
@@ -140,28 +258,126 @@
   </head>
   <body>
     <header>
-      <h1>Activities · Bajaur</h1>
+      <div>
+        <h1>Activities · Bajaur</h1>
+        <div class="who" id="who"></div>
+      </div>
       <button id="signOut" type="button">Sign out</button>
     </header>
+    <nav id="tabs" hidden></nav>
     <main>
       <p id="status" class="muted">Loading…</p>
 
-      <div id="page" hidden>
+      <section id="mustChange" hidden>
+        <h2>Choose your own password first</h2>
+        <p>
+          Your account was given a temporary password. Choose your own under <b>My account</b>
+          before you post.
+        </p>
+      </section>
+
+      <!-- Posts: the feed and its filters -->
+      <div id="view-posts" hidden>
         <section>
-          <h2 id="who"></h2>
-          <p class="muted" id="role"></p>
+          <div class="filters">
+            <div>
+              <label for="fUnit">Department</label>
+              <select id="fUnit"></select>
+            </div>
+            <div id="fPersonWrap">
+              <label for="fPerson">Person</label>
+              <select id="fPerson"></select>
+            </div>
+            <div>
+              <label for="fFrom">From</label>
+              <input id="fFrom" type="date" />
+            </div>
+            <div>
+              <label for="fTo">To</label>
+              <input id="fTo" type="date" />
+            </div>
+          </div>
+          <p class="meta" id="scopeNote" style="margin-top: 8px"></p>
         </section>
+        <div id="feed"></div>
+        <div class="row"><button id="more" type="button" hidden>Show older posts</button></div>
+      </div>
 
-        <section id="mustChange" hidden>
-          <h2>Choose your own password</h2>
-          <p>Your account was given a temporary password. Choose your own before you continue.</p>
+      <!-- New post -->
+      <div id="view-new" hidden>
+        <section>
+          <h2>New activity</h2>
+          <form id="postForm">
+            <label for="pUnit">Department</label>
+            <select id="pUnit" required></select>
+            <label for="pDate">Date of the activity</label>
+            <input id="pDate" type="date" required />
+            <label for="pCaption">What was done</label>
+            <textarea id="pCaption" maxlength="2000" required></textarea>
+            <label for="pPlace">Place (optional)</label>
+            <input id="pPlace" maxlength="200" />
+            <label for="pPhotos">Photos (up to 10)</label>
+            <input id="pPhotos" type="file" accept="image/*" multiple />
+            <div class="photos" id="picked"></div>
+            <div class="row">
+              <button class="primary" id="postSubmit" type="submit">Post</button>
+              <button id="retryPhotos" type="button" hidden>Try the failed photos again</button>
+            </div>
+            <p id="postProgress" class="meta" role="status"></p>
+            <p id="postError" class="error" role="alert" hidden></p>
+          </form>
         </section>
+      </div>
 
-        <section id="activities">
-          <h2>Activities</h2>
-          <p class="muted">Uploading your department's daily pictures will appear here soon.</p>
+      <!-- Departments (DC / DNC) -->
+      <div id="view-units" hidden>
+        <section>
+          <h2>Departments</h2>
+          <p class="muted">
+            Used to file and find activities. Retiring one keeps its old posts under its name.
+          </p>
+          <form id="unitForm" class="row">
+            <input id="unitName" maxlength="120" placeholder="New department name" required />
+            <button class="primary" type="submit">Add</button>
+          </form>
+          <p id="unitError" class="error" role="alert" hidden></p>
+          <div id="unitList" style="margin-top: 12px"></div>
         </section>
+        <section>
+          <h2>Each person's default department</h2>
+          <p class="muted">Pre-filled on their new posts. They can still choose another.</p>
+          <div id="peopleList"></div>
+        </section>
+      </div>
 
+      <!-- Recycle bin (DC / DNC) -->
+      <div id="view-bin" hidden>
+        <section>
+          <h2>Recycle bin</h2>
+          <p class="muted">
+            Hidden posts. Restore puts one back; Delete permanently removes it and its photos.
+          </p>
+        </section>
+        <div id="binFeed"></div>
+      </div>
+
+      <!-- Log (DC / DNC) -->
+      <div id="view-log" hidden>
+        <section>
+          <h2>Activities log</h2>
+          <p class="muted">Who posted, hid, restored or deleted what, and when. Latest first.</p>
+          <div id="logList"></div>
+        </section>
+      </div>
+
+      <!-- My account -->
+      <div id="view-account" hidden>
+        <section>
+          <h2>My department</h2>
+          <label for="myUnit">Default department for my posts</label>
+          <select id="myUnit"></select>
+          <p id="myUnitOk" class="ok" role="status" hidden>Saved.</p>
+        </section>
         <section>
           <h2>Change password</h2>
           <form id="password">
@@ -182,13 +398,14 @@
               minlength="12"
               required
             />
-            <button class="primary" type="submit">Change password</button>
+            <div class="row"><button class="primary" type="submit">Change password</button></div>
             <p id="passwordError" class="error" role="alert" hidden></p>
             <p id="passwordOk" class="ok" role="status" hidden>Password changed.</p>
           </form>
         </section>
       </div>
     </main>
+    <div class="viewer" id="viewer" hidden><img id="viewerImg" alt="" /></div>
     <script src="/activities.js"></script>
   </body>
 </html>

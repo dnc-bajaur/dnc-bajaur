@@ -117,11 +117,13 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
 - **Built (ADR-0038):** B1 `member` role + deny-by-default gate (gated `resolveSession` in
   `api/server.ts`, pinned by `memberGate.test.ts`; members land on `/activities.html`). B2
   Activities permissions (`domain/roles.ts`). B3 accounts with Post, `member` by default,
-  "Give login" on a contact (`POST /settings/accounts/:id/grant`). CI green on `25dae9b`.
+  "Give login" on a contact (`POST /settings/accounts/:id/grant`).
   ⚠️ Any role other than `member` still acts as the full control room.
-- **Next:** C1 — Activities with photos per ADR-0039 (tables, Department list + default
-  department per account, upload with on-phone compression, views, delete, Recycle bin; block
-  uploads until a forced password change is done). Order in `PLAN.md` §4. Open bugs in §4.
+- **Built (ADR-0039) C1:** Activities with photos — migration 0050, `api/activities.ts`
+  (routes under `/activities/`, the one extra `resolveAnySession`), page `web/activities.html`.
+  Photos in `var/activities/` (server disk only — no backup or 30-day deletion yet).
+- **Next:** C2 — 30-day auto-delete + 3-day warning + ZIP download + media backup (ADR-0039
+  §7–8). Order in `PLAN.md` §4. Open bugs in §4.
 
 ## 6. Repository map
 
