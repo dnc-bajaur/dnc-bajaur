@@ -63,24 +63,35 @@ Accounts and services must be **new and Bajaur's own** — never reuse the other
 11. [ ] **Restore drill** — restore a backup beside production once (`docs/08-runbook.md`).
 12. [ ] Repository → **private** (owner).
 
-## 4. Bajaur's own requirements (agreed 2026-10-01)
+## 4. Bajaur's own requirements (agreed 2026-10-01, order revised 2026-10-02)
 
-Built in this order. Nothing here changes how the control room works today.
+Nothing here changes how the control room works today. **Revised order:** B first, because it
+is the safety gate (until it ships no officer may have an account) and needs nothing external.
+Everything below can be built and tested on `localhost:3100` now; only go-live waits on §2/§3.
 
-| Phase | What | Decision | Needs first |
+| Step | What | Decision | Needs before go-live |
 |---|---|---|---|
-| A | **"Install this app" banner** after first sign-in — one tap on Android/Windows (Chrome, Edge); step-by-step "Share → Add to Home Screen" on iPhone | — | domain + HTTPS (D-04) |
-| B | **`member` role** + the one gate; accounts by Name / Post / Phone; "Give login" from the contact list; DC/DNC create accounts (up to ~50) | [ADR-0038](docs/adr/ADR-0038-member-accounts.md) | — |
-| C | **Activities**: upload (photo compression on phone, video → 720p on server, max 3 min), Department list (made by the DC), views by department / person / date, soft + hard delete, 30-day auto-delete, media backup | [ADR-0039](docs/adr/ADR-0039-activities.md) | B; server disk; ffmpeg on server; media backup bucket |
-| D | **WhatsApp → Activities** on the same number; officer with an open emergency is asked which it is; unknown numbers → Pending list | [ADR-0040](docs/adr/ADR-0040-whatsapp-to-activities.md) | C; Bajaur's **new** Meta business portfolio |
+| B1 | `member` role + **one deny-by-default gate**: a member reaches only Activities, own password, sign-out and the app shell. Permanent test walks **every** route (INV-05) | [ADR-0038](docs/adr/ADR-0038-member-accounts.md) | — |
+| B2 | Activities permissions in `domain/roles.ts` (table in ADR-0038 §3) + per-account allow/deny | ADR-0038 | — |
+| B3 | Accounts by Name / Post (`person.designation`) / Phone / default department; "Give login" from the contact list; temporary password, changed at first sign-in | ADR-0038 | — |
+| C1 | Activities, **photos**: tables, Department list (DC), post (date, caption, place, ≤10 photos, compressed on the phone), views by department / person / date, soft + hard delete, Recycle bin, log | [ADR-0039](docs/adr/ADR-0039-activities.md) | server disk |
+| C2 | 30-day auto-delete + 3-day warning + ZIP download; media backup | ADR-0039 | Bajaur's media bucket |
+| A | **"Install this app" banner** — one tap on Android/Windows (Chrome, Edge); "Share → Add to Home Screen" steps on iPhone | — | domain + HTTPS (D-04) |
+| C3 | Activities, **videos**: resumable chunks, ≤3 min, server → 720p (ffmpeg), processing/ready/failed, `doctor` lists failures | ADR-0039 | ffmpeg on server |
+| D | **WhatsApp → Activities**, same number; open emergency → two buttons; unknown numbers → Pending list | [ADR-0040](docs/adr/ADR-0040-whatsapp-to-activities.md) | Bajaur's **new** Meta portfolio |
 
 Rules that hold until these ship:
-- **Until Phase B ships, create no account except the control room's.** Today every account,
+- **Until B1 ships, create no account except the control room's.** Today every account,
   of any role, acts as the full control room (ADR-0038, Context).
 - Existing gap: the `viewer` role is not enforced on operational writes. Do not issue viewer
   accounts until it is.
 - WhatsApp setup and template submission happen **only** on Bajaur's new Meta business
   portfolio — never on any other district's.
+
+Known inherited bugs (found 2026-10-02):
+- [ ] `installer/runtime/first-run.mjs` still inserts into the dropped `department` table — the
+      Windows installer cannot create the first account. Fix before any Windows install.
+- [x] `npm run dev:account` and `npm run demo` used the dropped `department` table — fixed.
 
 ## 5. To verify (open points)
 
@@ -88,10 +99,10 @@ Rules that hold until these ship:
   DC office before publishing.
 - `docs/06-open-questions.md` still holds the original deployment's questions; go through it
   and keep only what applies to Bajaur.
-- [ ] **Local database (owner builds it):** Bajaur's own portable PostgreSQL 17 — binaries in
+- [x] **Local database** (2026-10-02): Bajaur's own portable PostgreSQL 17.11 — binaries in
       `D:\dnc-bajaur-postgres`, data in `D:\dnc-bajaur-pgdata`, port 5434, databases
-      `dnc_bajaur_dev` / `dnc_bajaur_test`. Never the other district's cluster on this machine.
-      Then `app/.env` (with `PG_BIN`) and the app on `localhost:3100`.
+      `dnc_bajaur_dev` / `dnc_bajaur_test`; app on `localhost:3100`. The full suite, database
+      tests included, now runs locally.
 
 ## 6. Kept apart from the other district (2026-10-02)
 

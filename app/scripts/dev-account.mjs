@@ -24,7 +24,6 @@
  */
 
 import process from 'node:process';
-import { randomUUID } from 'node:crypto';
 
 process.loadEnvFile('.env');
 
@@ -54,40 +53,19 @@ const NAME = 'Development Login (not a real officer)';
 
 try {
   /**
-   * An **administrative** office, so this account sees the district rather than one department.
+   * An **administrative** seat, so this account sees the district rather than one post.
    *
-   * That is what makes it useful for looking at the control room: a district-tier seat lands on
-   * intake (M6-11), sees every incident on the board, and gets the administration console. A
-   * department seat would show a correct but much smaller product.
+   * Departments are gone (migrations 0039/0042): the tier is derived by a trigger from the
+   * seat's own `is_administration` tick. A district-tier seat lands on intake, sees every
+   * incident on the board, and gets the administration console.
    */
-  const office = await pool.query(
-    `SELECT department_id, name FROM department
-      WHERE is_administration = true AND retired_at IS NULL
-      ORDER BY name LIMIT 1`,
-  );
-
-  let departmentId = office.rows[0]?.department_id;
-  let departmentName = office.rows[0]?.name;
-
-  if (departmentId === undefined) {
-    // An empty database — no directory loaded. Make one office so there is something to hold.
-    const made = await pool.query(
-      `INSERT INTO department (code, name, is_administration)
-       VALUES ($1, $2, true) RETURNING department_id, name`,
-      [`dev-office-${randomUUID().slice(0, 8)}`, 'DC Office (development)'],
-    );
-    departmentId = made.rows[0].department_id;
-    departmentName = made.rows[0].name;
-    console.log(`  created ${departmentName} — the database had no administrative office`);
-  }
-
   const seat = await pool.query(
-    `INSERT INTO seat (title, department_id) VALUES ($1, $2) RETURNING seat_id, tier`,
-    ['Development Control Room', departmentId],
+    `INSERT INTO seat (title, is_administration) VALUES ($1, true) RETURNING seat_id, tier`,
+    ['Development Control Room'],
   );
 
   const person = await pool.query(
-    `INSERT INTO person (full_name, phone, password_hash) VALUES ($1, $2, $3)
+    `INSERT INTO person (full_name, phone, password_hash, role) VALUES ($1, $2, $3, 'owner')
      ON CONFLICT DO NOTHING
      RETURNING person_id`,
     [NAME, PHONE, await hashPassword(PASSWORD)],
@@ -111,11 +89,9 @@ try {
   console.log(`      Phone     ${PHONE}`);
   console.log(`      Password  ${PASSWORD}`);
   console.log('');
-  console.log(`  Post: Development Control Room · ${departmentName}`);
-  // The tier is derived by a database trigger from whether the office is administrative
-  // (migration 0010), so it is read back rather than asserted — an account that silently came
-  // out department-tier would show a correct but much smaller product, and that exact bug is
-  // recorded in CHANGELOG.md for 2026-08-05.
+  console.log('  Post: Development Control Room · role: owner');
+  // The tier is derived by a database trigger (migration 0042), so it is read back rather than
+  // asserted — an account that silently came out post-tier would show a much smaller product.
   const tier = await pool.query('SELECT tier FROM seat WHERE seat_id = $1', [
     seat.rows[0].seat_id,
   ]);

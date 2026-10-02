@@ -75,9 +75,8 @@ await pool.query('DELETE FROM presence_report WHERE note LIKE $1', [`%${MARK}`])
 
 /** A seat to attribute the reports to, so they render with an author like a real one would. */
 const seat = await pool.query(
-  `SELECT s.seat_id FROM seat s
-     JOIN department d ON d.department_id = s.department_id
-    WHERE d.is_administration AND s.retired_at IS NULL
+  `SELECT seat_id FROM seat
+    WHERE is_administration AND retired_at IS NULL
     LIMIT 1`,
 );
 const seatId = seat.rows[0]?.seat_id ?? null;
@@ -189,39 +188,8 @@ for (const [key, value] of facts) {
   ]);
 }
 
-//------------------------------------------------------------------------------
-// The published emergency numbers
-//------------------------------------------------------------------------------
-//
-// 1122, 15 and 16 are **not demo data**. They are Pakistan's national emergency numbers,
-// printed on posters and answered by a control room — which is exactly why they are safe on a
-// screen a room can read, and why they carry no marker: they are not something to clear later.
-//
-// Set only where the district has not already put something, so this never overwrites a real
-// number somebody typed.
-
-const numbers = [
-  ['Rescue 1122', '1122'],
-  ['District Police Officer', '15'],
-  ['Fire', '16'],
-];
-
-let numbered = 0;
-for (const [match, number] of numbers) {
-  const updated = await pool.query(
-    `UPDATE department
-        SET contact_phone = $2
-      WHERE name ILIKE $1
-        AND retired_at IS NULL
-        AND (contact_phone IS NULL OR contact_phone = '')`,
-    [`%${match}%`, number],
-  );
-  numbered += updated.rowCount ?? 0;
-}
-
 console.log(
   `demo data written — ${String(written)} condition reports, ${String(placed)} presence reports, ` +
-    `${String(numbered)} published numbers, ` +
     `${String(alerts.length)} advisories, ${String(facts.length)} facts`,
 );
 console.log(`Everything is marked "${MARK}". Remove it with:  node scripts/demo-data.mjs --clear`);
