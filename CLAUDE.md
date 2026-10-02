@@ -100,8 +100,9 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
 
 ## 5. Current state
 
-> Keep this section **short** (under ~20 lines). Replace lines; do not append history.
-> Detailed plans and progress live in **`PLAN.md`**.
+> **This is the handoff between sessions.** A new session reads it first and starts from **Next**.
+> At the end of every task: rewrite these lines (what is done, what is next), tick `PLAN.md`,
+> commit and push. Keep it **under ~20 lines** — replace, never append history.
 
 - **2026-10-01** — Repository created from the original codebase. All other-district data
   removed; neutral placeholders in its place (listed in `PLAN.md` §2). CI green: all 148 test
