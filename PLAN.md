@@ -76,7 +76,7 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 | B3 ✅ | Accounts by Name / Post (`person.designation`) / Phone, `member` by default; a contact's number is refused there and given its login from the contact drawer ("Give login", same row); temporary password, changed at first sign-in. *Default Activity department moves to C1, where the Department list is made.* | ADR-0038 | — |
 | C1 ✅ | Activities, **photos**: tables, Department list (DC), post (date, caption, place, ≤10 photos, compressed on the phone), views by department / person / date, soft + hard delete, Recycle bin, log | [ADR-0039](docs/adr/ADR-0039-activities.md) | server disk |
 | C2 ✅ | 30-day auto-delete + 3-day warning + ZIP download; media backup | ADR-0039 | Bajaur's media bucket (`ACTIVITIES_S3_BUCKET`, 30-day lifecycle rule) |
-| A | **"Install this app" banner** — one tap on Android/Windows (Chrome, Edge); "Share → Add to Home Screen" steps on iPhone | — | domain + HTTPS (D-04) |
+| A ✅ | **"Install this app" banner** — one tap on Android/Windows (Chrome, Edge); "Share → Add to Home Screen" steps on iPhone | — | domain + HTTPS (D-04) |
 | C3 | Activities, **videos**: resumable chunks, ≤3 min, server → 720p (ffmpeg), processing/ready/failed, `doctor` lists failures | ADR-0039 | ffmpeg on server |
 | D | **WhatsApp → Activities**, same number; open emergency → two buttons; unknown numbers → Pending list | [ADR-0040](docs/adr/ADR-0040-whatsapp-to-activities.md) | Bajaur's **new** Meta portfolio |
 
@@ -87,6 +87,13 @@ C1 notes (2026-10-02):
   the page asks for a JPEG/PNG. Server-side conversion is left for C3, which brings ffmpeg.
 - A hard delete removes rows and files on the server. Backup copies do not exist yet — removing
   them is part of C2.
+
+A notes (2026-10-02):
+- `web/src/install.ts`, on the shell and on Activities (which now links the manifest). Chrome/
+  Edge show it only when they consider the page installable — over HTTPS, so not on a bare IP
+  address. iPhone gets the Share steps. "Not now" is remembered in that browser for 14 days.
+- Activities' own selected-tab buttons still put white text on the dark-mode violet (faint);
+  `--on-accent` now exists on that page for when they are fixed.
 
 C2 notes (2026-10-02):
 - Housekeeping runs **hourly** (expire → bucket deletes → copy), not once a night; see the

@@ -6,6 +6,9 @@
     <title>Activities — District Nerve Center Bajaur</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
     <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <!-- The manifest makes this page installable too: an officer lands here, not on `/`. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#f7f8fa" />
     <!--
       Activities — ADR-0038 / ADR-0039, Bajaur.
 
@@ -35,6 +38,7 @@
         --ink: #111319;
         --muted: #5f6774;
         --primary: #5b3fd6;
+        --on-accent: #ffffff; /* text on a --primary fill */
         --critical: #c11414;
         --warn: #8a5300;
         font-family:
@@ -53,6 +57,7 @@
         --ink: #f4f4f7;
         --muted: #8b8fa3;
         --primary: #9b83ff;
+        --on-accent: #0b0d12; /* white on this violet is too faint; the shell's own value */
         --critical: #f26a6a;
         --warn: #f0b45a;
       }

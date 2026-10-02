@@ -57,10 +57,11 @@ const manifest = {
    * page that linked it would boot **unstyled with no network**, which is ADR-0002's whole
    * promise. Tokens live in `index.html`'s `:root`, beside the measured palette.
    *
-   * Bumped again 2026-08-13 with the white palette (M9-42), and again on 2026-08-11. Three places carry this literal by
-   * hand — this file, `index.html`'s `<meta theme-color>`, and the `.mark`/`.clock` glow
-   * effects a few lines above `--primary` in the same file — because none of them can read a
-   * CSS custom property. Change one, change all three, or the drift this comment already
+   * Bumped again 2026-08-13 with the white palette (M9-42), and again on 2026-08-11. Four places carry this literal by
+   * hand — this file, `index.html`'s `<meta theme-color>`, the `.mark`/`.clock` glow
+   * effects a few lines above `--primary` in the same file, and `activities.html`'s
+   * `<meta theme-color>` — because none of them can read a CSS custom property. Change one,
+   * change all four, or the drift this comment already
    * describes once happens a second time.
    */
   background_color: '#f7f8fa',

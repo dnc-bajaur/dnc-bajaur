@@ -14,6 +14,8 @@
  * photo's embedded location and camera data, which nobody asked to publish.
  */
 
+import { offerInstall } from './install.js';
+
 interface Me {
   readonly personId: string;
   readonly fullName: string;
@@ -917,6 +919,5 @@ async function load(): Promise<void> {
   drawTabs();
 }
 
+offerInstall();
 void load();
-
-export {};

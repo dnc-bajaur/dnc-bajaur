@@ -56,6 +56,7 @@ import { startAges, startClock } from './dashboard.js';
 import type { DashboardLinks, DashboardScreen } from './dashboard.js';
 import type { DispatchPanel, RecordOutcome, ToldEntry } from './dispatch.js';
 import { incidentRow, type IncidentRowData } from './incidentRow.js';
+import { offerInstall } from './install.js';
 
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -6078,6 +6079,7 @@ function offlineReadiness(): void {
 }
 
 offlineReadiness();
+offerInstall();
 
 /**
  * `boot()` opens IndexedDB, reads `localStorage` and wires every screen. If any of that

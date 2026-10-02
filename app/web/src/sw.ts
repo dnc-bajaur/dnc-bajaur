@@ -1257,7 +1257,10 @@ declare const self: ServiceWorkerGlobalScope;
 // bump. (`/activities.html` and its script are not the shell and are never cached by it.)
 // v261: an "Activities" button in the shell's navigation, for every signed-in account — the
 // control room had no way to reach `/activities.html`. `index.html` and `main.ts` moved.
-const CACHE = 'dnc-shell-v261';
+// v262: the "Install this app" banner (`install.ts`, Bajaur PLAN §4 A), and the Directory and
+// Groups cards built with `textContent` instead of unescaped `innerHTML` — that fix (923ea6d)
+// moved `admin.ts` without this bump, so it reaches cached browsers only now.
+const CACHE = 'dnc-shell-v262';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.
