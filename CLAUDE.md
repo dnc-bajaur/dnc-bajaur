@@ -121,9 +121,12 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   ⚠️ Any role other than `member` still acts as the full control room.
 - **Built (ADR-0039) C1:** Activities with photos — migration 0050, `api/activities.ts`
   (routes under `/activities/`, the one extra `resolveAnySession`), page `web/activities.html`.
-  Photos in `var/activities/` (server disk only — no backup or 30-day deletion yet).
-- **Next:** C2 — 30-day auto-delete + 3-day warning + ZIP download + media backup (ADR-0039
-  §7–8). Order in `PLAN.md` §4. Open bugs in §4.
+  Photos in `var/activities/`.
+- **Built (ADR-0039) C2:** migration 0051; hourly housekeeping `jobs/activitiesRetention.ts`
+  (30-day expiry → bucket deletes → encrypted copy to `ACTIVITIES_S3_BUCKET`); DC warning +
+  ZIP (`/activities/expiring[.zip]`, `ops/zip.ts`). No media bucket exists yet.
+- **Next:** A — "Install this app" banner (`PLAN.md` §4 order). The two open bugs in §4 are
+  small and can go first.
 
 ## 6. Repository map
 

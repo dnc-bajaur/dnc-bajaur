@@ -21,6 +21,9 @@ import { proactiveFromEnv, whatsappFromEnv } from './ops/whatsapp.js';
 import { refreshWhatsAppNumber } from './ops/whatsappNumber.js';
 import { defaultEvidenceRoot } from './ops/evidence.js';
 import { createNightly } from './jobs/nightly.js';
+import { createActivitiesHousekeeping } from './jobs/activitiesRetention.js';
+import { defaultActivitiesRoot } from './api/activities.js';
+import { mediaStore, type MediaEnv } from './ops/offsite.js';
 import { refreshWeather } from './ops/weather.js';
 import { refreshNews } from './ops/news.js';
 import { log } from './obs/log.js';
@@ -97,6 +100,10 @@ async function start(): Promise<void> {
   }
 
   const backupDirectory = process.env['BACKUP_DIR'] ?? join(here, '..', 'var', 'backups');
+  // One value for the server and the housekeeping job, so the files one writes are the files
+  // the other expires and copies.
+  const activitiesRoot = defaultActivitiesRoot();
+  const activitiesMedia = mediaStore(process.env as MediaEnv);
 
   /**
    * The district's WhatsApp account, if it has one — ADR-0014.
@@ -198,6 +205,8 @@ async function start(): Promise<void> {
     nodeEnv,
     webRoot: join(here, '..', 'web', 'dist'),
     backupDirectory,
+    activitiesRoot,
+    activitiesBackup: { configured: activitiesMedia.configured, why: activitiesMedia.why },
     // Late-bound on purpose: the server is created before the job, and the console's
     // "back up now" button needs the job rather than a copy of its options.
     get nightly() {
@@ -300,6 +309,19 @@ async function start(): Promise<void> {
         ...(o.offsiteSkipped === undefined ? {} : { offsiteSkipped: o.offsiteSkipped }),
       });
     },
+  });
+
+  /**
+   * Activities: the 30-day rule and the media backup (ADR-0039 §7–8, Bajaur).
+   *
+   * Started even with no media bucket: the 30-day rule still applies, and the DC's warning and
+   * `doctor` say the photos exist only on this server.
+   */
+  const activitiesHousekeeping = createActivitiesHousekeeping({
+    pool,
+    root: activitiesRoot,
+    store: activitiesMedia,
+    passphrase: process.env['BACKUP_PASSPHRASE'],
   });
 
   /**
@@ -413,6 +435,7 @@ async function start(): Promise<void> {
   });
   scheduler.start();
   nightly.start();
+  activitiesHousekeeping.start();
   log('info', 'started', { port, nodeEnv });
 
   let shuttingDown = false;
@@ -425,6 +448,7 @@ async function start(): Promise<void> {
       // Stop escalating first, then stop accepting requests, then release the pool.
       // Reversing this could leave a pass writing to a closed pool mid-escalation.
       nightly.stop();
+      activitiesHousekeeping.stop();
       clearInterval(weatherTimer);
       await scheduler.stop();
       /**

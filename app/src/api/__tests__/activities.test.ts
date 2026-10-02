@@ -432,6 +432,80 @@ maybe('Activities (ADR-0039, phase C1)', () => {
     });
   });
 
+  describe('thirty days (phase C2)', () => {
+    /** Move a post back in time, into the last days of its thirty. */
+    const age = (postId: string, days: number): Promise<unknown> =>
+      pool.query(
+        `UPDATE activity_post SET created_at = now() - make_interval(days => $2::int)
+          WHERE post_id = $1`,
+        [postId, days],
+      );
+
+    it('tells everyone who can see a post when it will be deleted', async () => {
+      const { postId } = await post(memberA.token);
+      const res = await call(memberA.token, '/activities/posts');
+      const body = (await res.json()) as { posts: { postId: string; expiresAt: string }[] };
+      const mine = body.posts.find((p) => p.postId === postId)!;
+      const days = (Date.parse(mine.expiresAt) - Date.now()) / 86_400_000;
+      expect(days).toBeGreaterThan(29.9);
+      expect(days).toBeLessThanOrEqual(30);
+    });
+
+    it('warns the DC / DNC only, with what is about to go and whether it is backed up', async () => {
+      const { postId } = await post(memberA.token);
+      expect((await photo(memberA.token, postId)).status).toBe(201);
+      await age(postId, 28);
+
+      expect((await call(memberA.token, '/activities/expiring')).status).toBe(403);
+      expect((await call(operator, '/activities/expiring')).status).toBe(403);
+
+      const res = await call(admin, '/activities/expiring');
+      expect(res.status).toBe(200);
+      const x = (await res.json()) as {
+        retentionDays: number;
+        warningDays: number;
+        posts: number;
+        photos: number;
+        zipFits: boolean;
+        backup: { configured: boolean };
+      };
+      expect(x.retentionDays).toBe(30);
+      expect(x.warningDays).toBe(3);
+      expect(x.posts).toBeGreaterThanOrEqual(1);
+      expect(x.photos).toBeGreaterThanOrEqual(1);
+      expect(x.zipFits).toBe(true);
+      // No bucket in this test server: said, not hidden.
+      expect(x.backup.configured).toBe(false);
+    });
+
+    it('hands the DC / DNC a ZIP of it, and logs who took it', async () => {
+      const caption = `Kept past thirty days ${randomUUID()}`;
+      const { postId } = await post(memberA.token, { caption });
+      const bytes = jpeg(300);
+      expect((await photo(memberA.token, postId, bytes)).status).toBe(201);
+      await age(postId, 28);
+
+      expect((await call(operator, '/activities/expiring.zip')).status).toBe(403);
+      expect((await call(memberA.token, '/activities/expiring.zip')).status).toBe(403);
+
+      const res = await call(admin, '/activities/expiring.zip');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('application/zip');
+      expect(res.headers.get('content-disposition')).toMatch(/^attachment; filename="/);
+      const zip = Buffer.from(await res.arrayBuffer());
+      // The end record, the photo's bytes stored as they are, and the caption in the index.
+      expect(zip.readUInt32LE(zip.length - 22)).toBe(0x06054b50);
+      expect(zip.includes(bytes)).toBe(true);
+      expect(zip.includes(Buffer.from(caption, 'utf8'))).toBe(true);
+
+      const logged = await pool.query<{ actor_person_id: string }>(
+        `SELECT actor_person_id FROM activity_log WHERE type = 'zip_downloaded'
+          ORDER BY seq DESC LIMIT 1`,
+      );
+      expect(logged.rows[0]!.actor_person_id).not.toBeNull();
+    });
+  });
+
   describe('the record', () => {
     it('keeps the Activities log append-only', async () => {
       await expect(pool.query('UPDATE activity_log SET type = type')).rejects.toThrow(

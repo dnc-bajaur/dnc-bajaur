@@ -59,6 +59,29 @@ a sandboxing CSP. Soft-deleted posts are seen only by moderators, in the Recycle
 refused until a forced password change is done. Retention, the warning, the ZIP and the backup
 are C2; videos are C3.
 
+### Implementation note (2026-10-02, C2 — thirty days and the backup)
+
+Migration `0051_activities_retention.sql`. One housekeeping job (`jobs/activitiesRetention.ts`,
+own advisory lock, separate from the escalation scheduler) runs **hourly rather than nightly** —
+the same reasoning as the database backup in `jobs/nightly.ts`: every step is idempotent, and a
+timer hours away never fires on a rebooted server. Each pass, in order:
+
+1. **Expire** — posts uploaded 30+ days ago (Recycle bin included) are hard-deleted through the
+   same `removePost` a person's delete uses, logged as `expired` with no actor.
+2. **Remove from the bucket** — a hard delete queues its objects in `activity_backup_removal` in
+   the same transaction that removes the rows; the job deletes them from the bucket. A refusal
+   stays queued with its reason.
+3. **Copy** — new photos and thumbnails are encrypted with `BACKUP_PASSPHRASE` (as the dumps
+   are) and sent to `ACTIVITIES_S3_BUCKET`, a separate bucket on the same S3 keys. Refused
+   without a passphrase of 16+ characters.
+
+**Warning and ZIP** (moderators only): `GET /activities/expiring` says what goes in the next 3
+days and whether the backup is behind (photos not copied, or deletes waiting, for over a day);
+`GET /activities/expiring.zip` streams those posts — a folder each, plus `activities.csv` — and
+logs `zip_downloaded`. The ZIP is written by `ops/zip.ts` (stored, no ZIP64, no dependency).
+Every post card shows its automatic delete date in its last 3 days. `npm run doctor` reports
+whether the media bucket is configured.
+
 ## Rationale
 
 A separate module keeps the emergency system exactly as it is: no new meaning for evidence, no

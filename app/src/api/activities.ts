@@ -36,6 +36,7 @@ import type { Identity } from '../auth/sessions.js';
 import type { Permission } from '../domain/roles.js';
 import { districtDate } from '../domain/districtTime.js';
 import { decideType } from '../ops/fileType.js';
+import { fits, zipWriter } from '../ops/zip.js';
 import { log } from '../obs/log.js';
 import { permissionsOf } from './settings.js';
 
@@ -65,6 +66,16 @@ export const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 /** The small copy for the list, made on the phone alongside the photo. */
 export const MAX_THUMB_BYTES = 512 * 1024;
+
+/**
+ * Every post is deleted this many days after it was uploaded — Recycle bin included
+ * (ADR-0039 §7). Counted from upload, not from the activity's date: a post sent late still gets
+ * its thirty days.
+ */
+export const RETENTION_DAYS = 30;
+
+/** How many days before that the DC is warned and offered the ZIP. */
+export const WARNING_DAYS = 3;
 
 const PHOTO_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const EXT: Readonly<Record<string, string>> = {
@@ -393,6 +404,8 @@ export interface PostView {
   readonly place: string | null;
   readonly createdAt: string;
   readonly hiddenAt: string | null;
+  /** When the 30-day rule deletes it (ADR-0039 §7). */
+  readonly expiresAt: string;
   readonly photos: readonly { readonly mediaId: string; readonly hasThumb: boolean }[];
   /** What the caller may do with it — drawn by the page, enforced again by each action. */
   readonly mayDelete: boolean;
@@ -412,6 +425,7 @@ interface PostRow {
   place: string | null;
   created_at: string;
   hidden_at: string | null;
+  expires_at: string;
   photos: { mediaId: string; hasThumb: boolean }[] | null;
 }
 
@@ -420,6 +434,7 @@ const POST_SELECT = `
          a.full_name AS author_name, a.designation AS author_designation,
          to_char(p.activity_date, 'YYYY-MM-DD') AS activity_date,
          p.caption, p.place, p.created_at, p.hidden_at,
+         p.created_at + make_interval(days => ${RETENTION_DAYS}) AS expires_at,
          (SELECT json_agg(json_build_object('mediaId', m.media_id,
                                             'hasThumb', m.thumb_path IS NOT NULL)
                           ORDER BY m.created_at, m.media_id)
@@ -443,6 +458,7 @@ function toView(c: Caller, r: PostRow): PostView {
     place: r.place,
     createdAt: r.created_at,
     hiddenAt: r.hidden_at,
+    expiresAt: r.expires_at,
     photos,
     mayDelete: c.can.has('activities.moderate') || (own && c.can.has('activities.delete_own')),
     mayModerate: c.can.has('activities.moderate'),
@@ -735,8 +751,8 @@ async function removeFiles(root: string, paths: readonly (string | null)[]): Pro
  * Hard delete — the post, its rows and its files, immediately (ADR-0039 §6).
  *
  * The uploader may delete their own; a moderator may delete anybody's, hidden or not. The log
- * keeps one line: who deleted which post, and when. Backup copies are removed by the nightly
- * media backup in C2.
+ * keeps one line: who deleted which post, and when. Its copies in the media bucket are queued
+ * for removal in the same transaction (`removePost`).
  */
 export async function deletePost(
   pool: Pool,
@@ -745,20 +761,8 @@ export async function deletePost(
   postId: string,
 ): Promise<ActivitiesResult<{ readonly postId: string }>> {
   const c = await caller(pool, identity);
-  const found = await pool.query<{
-    author_person_id: string;
-    hidden_at: string | null;
-    unit_id: string;
-    unit_name: string;
-    author_name: string | null;
-    activity_date: string;
-  }>(
-    `SELECT p.author_person_id, p.hidden_at, p.unit_id, u.name AS unit_name,
-            a.full_name AS author_name, to_char(p.activity_date, 'YYYY-MM-DD') AS activity_date
-       FROM activity_post p
-       JOIN activity_unit u ON u.unit_id = p.unit_id
-       JOIN person a ON a.person_id = p.author_person_id
-      WHERE p.post_id = $1`,
+  const found = await pool.query<{ author_person_id: string; hidden_at: string | null }>(
+    'SELECT author_person_id, hidden_at FROM activity_post WHERE post_id = $1',
     [postId],
   );
   const post = found.rows[0];
@@ -770,21 +774,85 @@ export async function deletePost(
   const allowed = c.can.has('activities.moderate') || (own && c.can.has('activities.delete_own'));
   if (!allowed) return refuse(403, 'you do not have permission to delete this post');
 
+  const removed = await removePost(pool, root, postId, 'deleted', identity.personId);
+  return removed ? { ok: true, value: { postId } } : refuse(404, 'no such post');
+}
+
+/**
+ * Remove one post for good: its media rows, the post, one log line, and then its files.
+ *
+ * Shared by a person's hard delete (`deleted`, with who) and the 30-day rule (`expired`, with
+ * nobody — ADR-0039 §7). In the same transaction, every object the post has in the media bucket
+ * is queued for removal there (ADR-0039 §8), so a delete cannot be forgotten by the bucket even
+ * if the bucket cannot be reached tonight.
+ *
+ * Returns false if the post was already gone — a second delete racing the first, or the expiry
+ * job meeting a post somebody deleted a moment earlier.
+ */
+export async function removePost(
+  pool: Pool,
+  root: string,
+  postId: string,
+  type: 'deleted' | 'expired',
+  actorPersonId: string | null,
+): Promise<boolean> {
   const client = await pool.connect();
   let files: { stored_path: string; thumb_path: string | null }[];
   try {
     await client.query('BEGIN');
-    const media = await client.query<{ stored_path: string; thumb_path: string | null }>(
-      'DELETE FROM activity_media WHERE post_id = $1 RETURNING stored_path, thumb_path',
+    // Locked first, so two removals of one post cannot both write a log line.
+    const found = await client.query<{
+      author_person_id: string;
+      hidden_at: string | null;
+      unit_id: string;
+      unit_name: string;
+      author_name: string | null;
+      activity_date: string;
+      created_at: string;
+    }>(
+      `SELECT p.author_person_id, p.hidden_at, p.unit_id, u.name AS unit_name,
+              a.full_name AS author_name, to_char(p.activity_date, 'YYYY-MM-DD') AS activity_date,
+              p.created_at
+         FROM activity_post p
+         JOIN activity_unit u ON u.unit_id = p.unit_id
+         JOIN person a ON a.person_id = p.author_person_id
+        WHERE p.post_id = $1
+        FOR UPDATE OF p`,
+      [postId],
+    );
+    const post = found.rows[0];
+    if (post === undefined) {
+      await client.query('ROLLBACK');
+      return false;
+    }
+    const media = await client.query<{
+      stored_path: string;
+      thumb_path: string | null;
+      backup_key: string | null;
+      thumb_backup_key: string | null;
+    }>(
+      `DELETE FROM activity_media WHERE post_id = $1
+       RETURNING stored_path, thumb_path, backup_key, thumb_backup_key`,
       [postId],
     );
     files = media.rows;
+    const keys = media.rows
+      .flatMap((m) => [m.backup_key, m.thumb_backup_key])
+      .filter((k): k is string => k !== null);
+    if (keys.length > 0) {
+      await client.query(
+        `INSERT INTO activity_backup_removal (object_key)
+         SELECT unnest($1::text[]) ON CONFLICT (object_key) DO NOTHING`,
+        [keys],
+      );
+    }
     await client.query('DELETE FROM activity_post WHERE post_id = $1', [postId]);
     await client.query(
       `INSERT INTO activity_log (type, actor_person_id, post_id, unit_id, detail)
-       VALUES ('deleted', $1, $2, $3, $4)`,
+       VALUES ($1, $2, $3, $4, $5)`,
       [
-        identity.personId,
+        type,
+        actorPersonId,
         postId,
         post.unit_id,
         JSON.stringify({
@@ -794,6 +862,7 @@ export async function deletePost(
           activityDate: post.activity_date,
           photos: media.rowCount,
           fromRecycleBin: post.hidden_at !== null,
+          ...(type === 'expired' ? { postedAt: post.created_at } : {}),
         }),
       ],
     );
@@ -810,7 +879,7 @@ export async function deletePost(
     files.flatMap((f) => [f.stored_path, f.thumb_path]),
   );
   await rm(inside(root, postId), { recursive: true, force: true }).catch(() => {});
-  return { ok: true, value: { postId } };
+  return true;
 }
 
 /** Soft delete (`hide`) or `restore` — moderators only, both logged. */
@@ -967,4 +1036,284 @@ export async function readLog(
       recordedAt: r.recorded_at,
     })),
   };
+}
+
+//------------------------------------------------------------------------------
+// Thirty days: the warning and the ZIP (ADR-0039 §7)
+//------------------------------------------------------------------------------
+
+/** What the media backup has not done yet — read by the DC's warning and by `doctor`. */
+export interface BackupBacklog {
+  /** Photos uploaded more than a day ago and still not in the media bucket. */
+  readonly notCopied: number;
+  /** Bucket objects whose delete has been waiting more than a day. */
+  readonly removalsWaiting: number;
+  /** The bucket's last refusal of a delete, if one is waiting. */
+  readonly lastError: string | null;
+}
+
+export async function backupBacklog(pool: Pool): Promise<BackupBacklog> {
+  const { rows } = await pool.query<{
+    not_copied: number;
+    removals: number;
+    last_error: string | null;
+  }>(
+    `SELECT (SELECT count(*) FROM activity_media
+              WHERE backed_up_at IS NULL AND created_at < now() - interval '1 day')::int AS not_copied,
+            (SELECT count(*) FROM activity_backup_removal
+              WHERE queued_at < now() - interval '1 day')::int AS removals,
+            (SELECT last_error FROM activity_backup_removal
+              WHERE last_error IS NOT NULL ORDER BY queued_at DESC LIMIT 1) AS last_error`,
+  );
+  const r = rows[0]!;
+  return { notCopied: r.not_copied, removalsWaiting: r.removals, lastError: r.last_error };
+}
+
+export interface ExpiringView {
+  readonly retentionDays: number;
+  readonly warningDays: number;
+  /** Posts the 30-day rule deletes within the warning window — Recycle bin included. */
+  readonly posts: number;
+  readonly photos: number;
+  readonly bytes: number;
+  readonly firstExpiresAt: string | null;
+  /** False when the ZIP would be too large to make; the page then says so instead of offering it. */
+  readonly zipFits: boolean;
+  readonly backup: {
+    readonly configured: boolean;
+    readonly why: string | null;
+  } & BackupBacklog;
+}
+
+/** `created_at` on or before this is inside the warning window. */
+const IN_WARNING = `p.created_at <= now() - make_interval(days => ${RETENTION_DAYS - WARNING_DAYS})`;
+
+/**
+ * The DC's warning: what the 30-day rule is about to delete, and whether the media backup is
+ * keeping up. Moderators only — they are the ones who can keep a copy (the ZIP) and the ones
+ * whose job is to know the backup is not running.
+ */
+export async function expiring(
+  pool: Pool,
+  identity: Identity,
+  backup: { readonly configured: boolean; readonly why: string | null },
+): Promise<ActivitiesResult<ExpiringView>> {
+  const c = await caller(pool, identity);
+  if (!c.can.has('activities.moderate')) {
+    return refuse(403, 'you do not have permission to see what is about to be deleted');
+  }
+  const { rows } = await pool.query<{
+    posts: number;
+    photos: number;
+    bytes: string;
+    first_expires_at: string | null;
+  }>(
+    `SELECT count(DISTINCT p.post_id)::int AS posts,
+            count(m.media_id)::int AS photos,
+            coalesce(sum(m.byte_size), 0)::text AS bytes,
+            min(p.created_at) + make_interval(days => ${RETENTION_DAYS}) AS first_expires_at
+       FROM activity_post p
+       LEFT JOIN activity_media m ON m.post_id = p.post_id
+      WHERE ${IN_WARNING}`,
+  );
+  const r = rows[0]!;
+  const bytes = Number(r.bytes);
+  return {
+    ok: true,
+    value: {
+      retentionDays: RETENTION_DAYS,
+      warningDays: WARNING_DAYS,
+      posts: r.posts,
+      photos: r.photos,
+      bytes,
+      firstExpiresAt: r.first_expires_at,
+      // One more entry for the index; its size is a rounding error against 4 GB.
+      zipFits: fits(r.photos + 1, bytes),
+      backup: { ...backup, ...(await backupBacklog(pool)) },
+    },
+  };
+}
+
+/** A folder or file name every unzip tool accepts — Windows' rules are the strictest. */
+function safeName(text: string): string {
+  return (
+    text
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f<>:"/\\|?*]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/[. ]+$/, '')
+      .slice(0, 80) || 'post'
+  );
+}
+
+const BOM = String.fromCharCode(0xfeff);
+
+/** A spreadsheet must not read a caption as a formula (same defence as `exportCsv.ts`). */
+function csvCell(value: string | number | null): string {
+  if (value === null) return '';
+  const t = String(value);
+  const safe = /^[=+\-@\t\r]/.test(t) ? `'${t}` : t;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+async function writeOut(res: ServerResponse, bytes: Buffer): Promise<void> {
+  if (!res.write(bytes)) {
+    await new Promise<void>((resolve) => {
+      const done = (): void => {
+        res.off('drain', done);
+        res.off('close', done);
+        resolve();
+      };
+      res.on('drain', done);
+      res.on('close', done);
+    });
+  }
+}
+
+/**
+ * The ZIP: every post the 30-day rule is about to delete, a folder each, with its photos and
+ * one `activities.csv` describing them all. The way to keep something past thirty days
+ * (ADR-0039 "We give up").
+ *
+ * Moderators only. Logged as `zip_downloaded` before the first byte is sent, so a copy of the
+ * district's pictures never leaves unattributed (INV-06) — even if the download is abandoned.
+ *
+ * Answers the request itself on success; returns a refusal otherwise.
+ */
+export async function downloadExpiring(
+  pool: Pool,
+  root: string,
+  res: ServerResponse,
+  identity: Identity,
+): Promise<ActivitiesResult<null> | null> {
+  const c = await caller(pool, identity);
+  if (!c.can.has('activities.moderate')) {
+    return refuse(403, 'you do not have permission to download these');
+  }
+
+  const { rows } = await pool.query<{
+    post_id: string;
+    unit_name: string;
+    author_name: string | null;
+    author_designation: string | null;
+    activity_date: string;
+    caption: string;
+    place: string | null;
+    created_at: string;
+    expires_at: string;
+    hidden_at: string | null;
+    media: { path: string; type: string; bytes: number }[] | null;
+  }>(
+    `SELECT p.post_id, u.name AS unit_name, a.full_name AS author_name,
+            a.designation AS author_designation,
+            to_char(p.activity_date, 'YYYY-MM-DD') AS activity_date,
+            p.caption, p.place, p.created_at, p.hidden_at,
+            p.created_at + make_interval(days => ${RETENTION_DAYS}) AS expires_at,
+            (SELECT json_agg(json_build_object('path', m.stored_path, 'type', m.content_type,
+                                               'bytes', m.byte_size)
+                             ORDER BY m.created_at, m.media_id)
+               FROM activity_media m WHERE m.post_id = p.post_id) AS media
+       FROM activity_post p
+       JOIN activity_unit u ON u.unit_id = p.unit_id
+       JOIN person a        ON a.person_id = p.author_person_id
+      WHERE ${IN_WARNING}
+      ORDER BY p.activity_date, lower(u.name), p.created_at`,
+  );
+  if (rows.length === 0) return refuse(404, 'nothing is due to be deleted in the next few days');
+
+  const photos = rows.reduce((n, r) => n + (r.media?.length ?? 0), 0);
+  const bytes = rows.reduce((n, r) => n + (r.media ?? []).reduce((b, m) => b + m.bytes, 0), 0);
+  if (!fits(photos + 1, bytes)) {
+    return refuse(413, 'too much to put in one ZIP — ask for a copy from the server instead');
+  }
+
+  await writeLog(pool, {
+    type: 'zip_downloaded',
+    actor: identity.personId,
+    detail: { posts: rows.length, photos, bytes },
+  });
+
+  const zip = zipWriter();
+  res.writeHead(200, {
+    'content-type': 'application/zip',
+    'content-disposition': `attachment; filename="bajaur-activities-${districtDate()}.zip"`,
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+  });
+
+  // Past this point the status is sent: a failure can only cut the download short, never turn
+  // into an error page. It is cut, so the browser shows a failed download, not a broken file.
+  try {
+    const index: string[] = [
+      [
+        'Folder',
+        'Department',
+        'Posted by',
+        'Post',
+        'Activity date',
+        'What',
+        'Place',
+        'Posted at',
+        'Deleted from the app on',
+        'Photos',
+        'In Recycle bin',
+      ]
+        .map(csvCell)
+        .join(','),
+    ];
+
+    for (const r of rows) {
+      if (res.destroyed) return null;
+      const folder = safeName(
+        `${r.activity_date} ${r.unit_name} - ${r.author_name ?? ''} - ${r.post_id.slice(0, 8)}`,
+      );
+      let n = 0;
+      for (const m of r.media ?? []) {
+        let data: Buffer;
+        try {
+          data = await readFile(inside(root, m.path));
+        } catch {
+          // Recorded but missing from disk: said in the index rather than failing the whole ZIP.
+          log('error', 'an Activities photo is recorded but missing from disk', { path: m.path });
+          continue;
+        }
+        n += 1;
+        await writeOut(
+          res,
+          zip.add({
+            name: `${folder}/photo-${String(n).padStart(2, '0')}.${EXT[m.type] ?? 'bin'}`,
+            bytes: data,
+            modified: new Date(r.created_at),
+          }),
+        );
+      }
+      index.push(
+        [
+          folder,
+          r.unit_name,
+          r.author_name ?? '',
+          r.author_designation,
+          r.activity_date,
+          r.caption,
+          r.place,
+          r.created_at,
+          r.expires_at,
+          `${n} of ${r.media?.length ?? 0}`,
+          r.hidden_at === null ? 'no' : 'yes',
+        ]
+          .map(csvCell)
+          .join(','),
+      );
+    }
+
+    // With a byte-order mark, so Excel opens Urdu and Pashto text as UTF-8.
+    const csv = Buffer.from(`${BOM}${index.join('\r\n')}\r\n`, 'utf8');
+    await writeOut(res, zip.add({ name: 'activities.csv', bytes: csv, modified: new Date() }));
+    res.end(zip.finish());
+  } catch (e) {
+    log('error', 'the Activities ZIP failed part-way', { error: String(e) });
+    res.destroy();
+  }
+  return null;
 }

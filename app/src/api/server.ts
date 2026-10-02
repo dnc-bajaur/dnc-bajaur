@@ -158,6 +158,8 @@ import {
   me as activitiesMe,
   moderatePost,
   readLog as readActivitiesLog,
+  expiring as activitiesExpiring,
+  downloadExpiring as downloadExpiringActivities,
   renameUnit,
   retireUnit,
   servePhoto,
@@ -196,6 +198,11 @@ export interface ServerOptions {
   readonly evidenceRoot?: string;
   /** Where Activities photos are written (ADR-0039). Outside the web root, like evidence. */
   readonly activitiesRoot?: string;
+  /**
+   * Whether Bajaur's media bucket is set up (ADR-0039 §8), for the DC's warning to say so.
+   * Absent means not set up — the honest default.
+   */
+  readonly activitiesBackup?: { readonly configured: boolean; readonly why: string | null };
   /** Where dumps are written, so the console can list what is actually on disk (M0-55). */
   readonly backupDirectory?: string;
   /**
@@ -1055,6 +1062,7 @@ async function handleActivities(
   url: URL,
   identity: Identity,
   root: string,
+  backup: { readonly configured: boolean; readonly why: string | null },
 ): Promise<void> {
   const pathname = url.pathname;
   const send = <T>(result: ActivitiesResult<T>, okStatus = 200): void => {
@@ -1109,6 +1117,18 @@ async function handleActivities(
   if (pathname === '/activities/log') {
     if (req.method !== 'GET') return notAllowed();
     return send(await readActivitiesLog(pool, identity));
+  }
+
+  if (pathname === '/activities/expiring') {
+    if (req.method !== 'GET') return notAllowed();
+    return send(await activitiesExpiring(pool, identity, backup));
+  }
+
+  if (pathname === '/activities/expiring.zip') {
+    if (req.method !== 'GET') return notAllowed();
+    const reply = await downloadExpiringActivities(pool, root, res, identity);
+    if (reply !== null && !reply.ok) json(res, reply.status, { error: reply.error });
+    return;
   }
 
   if (pathname === '/activities/posts') {
@@ -1994,6 +2014,10 @@ export function createSyncServer(options: ServerOptions): Server {
   // statically is a directory where an uploaded file becomes a URL a browser will open.
   const evidenceRoot = options.evidenceRoot ?? defaultEvidenceRoot();
   const activitiesRoot = options.activitiesRoot ?? defaultActivitiesRoot();
+  const activitiesBackup = options.activitiesBackup ?? {
+    configured: false,
+    why: 'no media bucket yet',
+  };
   const backupDirectory = options.backupDirectory ?? join(process.cwd(), 'var', 'backups');
 
   /**
@@ -3241,7 +3265,7 @@ export function createSyncServer(options: ServerOptions): Server {
             return;
           }
 
-          await handleActivities(pool, req, res, url, identity, activitiesRoot);
+          await handleActivities(pool, req, res, url, identity, activitiesRoot, activitiesBackup);
           return;
         }
 

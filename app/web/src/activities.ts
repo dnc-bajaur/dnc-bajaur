@@ -47,9 +47,27 @@ interface Post {
   readonly place: string | null;
   readonly createdAt: string;
   readonly hiddenAt: string | null;
+  readonly expiresAt: string;
   readonly photos: readonly { readonly mediaId: string; readonly hasThumb: boolean }[];
   readonly mayDelete: boolean;
   readonly mayModerate: boolean;
+}
+
+interface Expiring {
+  readonly retentionDays: number;
+  readonly warningDays: number;
+  readonly posts: number;
+  readonly photos: number;
+  readonly bytes: number;
+  readonly firstExpiresAt: string | null;
+  readonly zipFits: boolean;
+  readonly backup: {
+    readonly configured: boolean;
+    readonly why: string | null;
+    readonly notCopied: number;
+    readonly removalsWaiting: number;
+    readonly lastError: string | null;
+  };
 }
 
 interface LogLine {
@@ -177,7 +195,10 @@ function show(tab: Tab): void {
     if (b.dataset['tab'] === tab) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   }
-  if (tab === 'posts') void loadFeed(false);
+  if (tab === 'posts') {
+    void loadFeed(false);
+    void loadExpiring();
+  }
   if (tab === 'bin') void loadBin();
   if (tab === 'log') void loadLog();
   if (tab === 'units') void loadPeople().then(drawUnits);
@@ -269,6 +290,10 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
     : post.authorName;
   card.append(make('div', 'meta', `${by} · posted ${when(post.createdAt)}`));
   if (post.place !== null) card.append(make('div', 'meta', `Place: ${post.place}`));
+  // Within the last days of its thirty, everyone who can see the post is told (ADR-0039 §7).
+  if (Date.parse(post.expiresAt) - Date.now() < WARNING_MS) {
+    card.append(make('div', 'meta expires', `Deleted automatically on ${when(post.expiresAt)}`));
+  }
   card.append(make('p', 'caption', post.caption));
 
   if (post.photos.length > 0) {
@@ -325,6 +350,65 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
 }
 
 let oldest: string | null = null;
+
+/** Matches the server's warning window; only decides when the note on a card is drawn. */
+const WARNING_MS = 3 * 24 * 60 * 60 * 1000;
+
+function megabytes(bytes: number): string {
+  return `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MB`;
+}
+
+/**
+ * The DC's warning: what the 30-day rule is about to delete, the ZIP to keep it, and whether the
+ * media backup is running. Only drawn for a moderator; the server refuses anyone else.
+ */
+async function loadExpiring(): Promise<void> {
+  const box = el('expiring');
+  if (!can('moderate')) return;
+  let x: Expiring;
+  try {
+    x = await api<Expiring>('GET', '/activities/expiring');
+  } catch {
+    box.hidden = true;
+    return;
+  }
+  const parts: HTMLElement[] = [];
+  if (x.posts > 0 && x.firstExpiresAt !== null) {
+    parts.push(
+      make('h2', undefined, `${x.posts} post${x.posts === 1 ? '' : 's'} will be deleted soon`),
+      make(
+        'p',
+        undefined,
+        `Posts are kept for ${x.retentionDays} days after upload. ${x.photos} photo${
+          x.photos === 1 ? '' : 's'
+        } (${megabytes(x.bytes)}) will be deleted from ${when(x.firstExpiresAt)} onwards, ` +
+          'Recycle bin included. Download them now to keep a copy.',
+      ),
+    );
+    if (x.zipFits) {
+      const link = make('a', 'button primary', 'Download ZIP');
+      link.setAttribute('href', '/activities/expiring.zip');
+      link.setAttribute('download', '');
+      const row = make('div', 'row');
+      row.append(link);
+      parts.push(row);
+    } else {
+      parts.push(make('p', 'error', 'Too much for one ZIP. Ask for a copy from the server.'));
+    }
+  }
+  const b = x.backup;
+  let backupNote: string | null = null;
+  if (!b.configured) {
+    backupNote = 'Media backup is not set up: these photos exist only on the server.';
+  } else if (b.notCopied > 0 || b.removalsWaiting > 0) {
+    backupNote =
+      `Media backup is behind: ${b.notCopied} photo(s) not copied, ` +
+      `${b.removalsWaiting} delete(s) waiting${b.lastError === null ? '' : ` (${b.lastError})`}.`;
+  }
+  if (backupNote !== null) parts.push(make('p', 'meta expires', backupNote));
+  box.replaceChildren(...parts);
+  box.hidden = parts.length === 0;
+}
 
 function feedQuery(): URLSearchParams {
   const q = new URLSearchParams();
@@ -393,6 +477,8 @@ const LOG_TEXT: Readonly<Record<string, string>> = {
   hidden: 'moved a post to the Recycle bin',
   restored: 'restored a post',
   deleted: 'deleted a post permanently',
+  expired: 'removed a post after 30 days',
+  zip_downloaded: 'downloaded the posts about to be deleted',
   unit_created: 'added a department',
   unit_renamed: 'renamed a department',
   unit_retired: 'retired a department',
@@ -407,10 +493,12 @@ async function loadLog(): Promise<void> {
     list.replaceChildren(
       ...lines.map((l) => {
         const row = make('div', 'list-row');
-        const what = [l.actorName ?? 'Someone', LOG_TEXT[l.type] ?? l.type];
+        // An expiry has no person: the 30-day rule did it.
+        const who = l.type === 'expired' ? 'The app' : (l.actorName ?? 'Someone');
+        const what = [who, LOG_TEXT[l.type] ?? l.type];
         if (l.unitName !== null) what.push(`— ${l.unitName}`);
         const d = l.detail ?? {};
-        if (l.type === 'deleted' && typeof d['author'] === 'string') {
+        if ((l.type === 'deleted' || l.type === 'expired') && typeof d['author'] === 'string') {
           what.push(`(by ${d['author']}, ${String(d['activityDate'] ?? '')})`);
         }
         if (l.type === 'unit_renamed') what.push(`(was ${String(d['from'] ?? '')})`);

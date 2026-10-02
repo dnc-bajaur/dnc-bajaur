@@ -830,6 +830,26 @@ function checkOffsite(env) {
   );
 }
 
+/**
+ * Activities photos (ADR-0039 §8, Bajaur). A separate bucket from the dumps, on the same S3
+ * keys — see `mediaStore()`. Configuration only: whether the copy is keeping up is on the DC's
+ * Activities warning, read from the database by the running server.
+ */
+function checkActivitiesBackup(env) {
+  const s3 = set(env.S3_ENDPOINT) && set(env.S3_ACCESS_KEY_ID) && set(env.S3_SECRET_ACCESS_KEY);
+  if (s3 && set(env.ACTIVITIES_S3_BUCKET) && set(env.BACKUP_PASSPHRASE)) {
+    ok('Activities media backup', 'Configured. New photos are copied, encrypted, every hour.');
+    return;
+  }
+  todo(
+    'Activities media backup (ADR-0039 §8)',
+    'Activities photos exist only on this server.',
+    'Needs ACTIVITIES_S3_BUCKET — a bucket of its own, with a 30-day lifecycle rule — plus ' +
+      'the S3 keys and BACKUP_PASSPHRASE the database backup uses. Posts are still deleted ' +
+      'after 30 days either way.',
+  );
+}
+
 //------------------------------------------------------------------------------
 
 async function main() {
@@ -844,6 +864,7 @@ async function main() {
   checkProxyPair(env);
   await checkWhatsApp(env, origin);
   checkOffsite(env);
+  checkActivitiesBackup(env);
 
   for (const f of findings) {
     const mark =

@@ -209,7 +209,7 @@ export function gcsStore(env: OffsiteEnv, http = fetch): OffsiteStore {
  *     the error it produces says nothing about clocks — see `whyItFailed` below.
  */
 export function sign(
-  method: 'PUT' | 'GET',
+  method: 'PUT' | 'GET' | 'DELETE',
   url: URL,
   body: Buffer,
   credentials: {
@@ -407,6 +407,96 @@ export function s3Store(
         out.push({ key: decodeXml(m[1]!), bytes: Number(m[2]) });
       }
       return out;
+    },
+  };
+}
+
+//------------------------------------------------------------------------------
+// Activities media — a second, separate bucket (ADR-0039 §8, Bajaur)
+//------------------------------------------------------------------------------
+
+/**
+ * Where Activities photos are copied each night.
+ *
+ * **A separate bucket from the database backups, on purpose.** These objects are deleted —
+ * by their uploader, by the DC, and by the 30-day rule — and a bucket whose objects are
+ * deleted by the application is a bucket whose credentials can delete. The database dumps
+ * must never sit behind a key like that. The bucket's own 30-day lifecycle rule is the
+ * safety net for any delete this job never managed to send.
+ *
+ * Same S3 account and keys as the dump bucket (`S3_ENDPOINT`, `S3_ACCESS_KEY_ID`,
+ * `S3_SECRET_ACCESS_KEY`, `S3_REGION`); only the bucket differs: `ACTIVITIES_S3_BUCKET`.
+ */
+export interface MediaStore {
+  readonly configured: boolean;
+  readonly why: string | null;
+  put(key: string, bytes: Buffer): Promise<void>;
+  /** Remove an object. An object already gone is not an error. */
+  remove(key: string): Promise<void>;
+}
+
+export interface MediaEnv extends OffsiteEnv {
+  readonly ACTIVITIES_S3_BUCKET?: string | undefined;
+}
+
+export function mediaStore(
+  env: MediaEnv,
+  http = fetch,
+  clock: () => Date = () => new Date(),
+): MediaStore {
+  const endpoint = env.S3_ENDPOINT;
+  const bucket = env.ACTIVITIES_S3_BUCKET;
+  const accessKeyId = env.S3_ACCESS_KEY_ID;
+  const secretAccessKey = env.S3_SECRET_ACCESS_KEY;
+  const region = env.S3_REGION ?? 'auto';
+
+  if (
+    endpoint === undefined ||
+    bucket === undefined ||
+    accessKeyId === undefined ||
+    secretAccessKey === undefined
+  ) {
+    const why =
+      'no media bucket yet (ACTIVITIES_S3_BUCKET with the S3 keys) — Activities photos exist only on this server';
+    return {
+      configured: false,
+      why,
+      put: () => Promise.reject(new Error(why)),
+      remove: () => Promise.reject(new Error(why)),
+    };
+  }
+
+  const credentials = { accessKeyId, secretAccessKey, region };
+  const base = endpoint.replace(/\/+$/, '');
+
+  return {
+    configured: true,
+    why: null,
+    async put(key, bytes): Promise<void> {
+      const url = new URL(`${base}/${bucket}/${key}`);
+      const headers = sign('PUT', url, bytes, credentials, clock());
+      const res = await http(url.toString(), {
+        method: 'PUT',
+        headers: { ...headers, 'content-type': 'application/octet-stream' },
+        body: new Uint8Array(bytes),
+      });
+      if (!res.ok) {
+        throw new Error(
+          `upload rejected: ${whyItFailed(res.status, await res.text().catch(() => ''))}`,
+        );
+      }
+    },
+    async remove(key): Promise<void> {
+      const url = new URL(`${base}/${bucket}/${key}`);
+      const headers = sign('DELETE', url, Buffer.alloc(0), credentials, clock());
+      const res = await http(url.toString(), { method: 'DELETE', headers });
+      // S3 answers 204 whether or not the object existed; some compatible stores answer 404.
+      // Either way the object is not there, which is what was asked.
+      if (!res.ok && res.status !== 404) {
+        throw new Error(
+          `delete rejected: ${whyItFailed(res.status, await res.text().catch(() => ''))}`,
+        );
+      }
     },
   };
 }
