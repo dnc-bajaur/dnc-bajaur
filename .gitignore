@@ -75,3 +75,6 @@ r2 bukket.txt
 # them. The release goes to the district directly; it does not go through the repository.
 installer/stage/
 installer/out/
+
+# The Activities porting kit (PLAN §7): generated, read-only hand-over, never source.
+/port-kit/
