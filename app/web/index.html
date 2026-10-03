@@ -93,6 +93,21 @@
       :root[dir='rtl'] #boardView {
         overflow-x: clip;
       }
+      /* A viewer's account says so beside the name; the Status controls it cannot use are dimmed. */
+      #readOnlyNote {
+        margin-inline-start: 0.4rem;
+        padding: 0 0.4rem;
+        border: 1px solid currentColor;
+        border-radius: 4px;
+        font-size: 0.8em;
+      }
+      :root[data-readonly] #statusView :is(button, input) {
+        cursor: default;
+        opacity: 0.6;
+      }
+      :root[data-readonly] #statusView button[aria-pressed='true'] {
+        opacity: 1;
+      }
       #langSlot:empty {
         display: none;
       }
@@ -8132,6 +8147,8 @@
       </button>
       <div id="who" hidden>
         <span id="whoName" translate="no" dir="auto"></span>
+        <!-- A `viewer` account (ADR-0032): said beside the name, on every screen. -->
+        <span id="readOnlyNote" hidden>Read-only account</span>
         <br /><button type="button" id="changePw">Change my password</button>
         <button type="button" id="logout">Sign out</button>
       </div>

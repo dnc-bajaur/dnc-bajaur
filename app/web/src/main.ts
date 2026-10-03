@@ -425,6 +425,16 @@ async function boot(): Promise<void> {
           ? `${identity.fullName} — no current duty assignment`
           : identity.fullName;
     }
+    /**
+     * A `viewer` reads and changes nothing (ADR-0032) — the server refuses every write it sends
+     * (`resolveSession`, INV-05). The screens stop offering what would only be refused: no Report
+     * tab or form, and the Status screen's controls are shown but cannot be pressed. A courtesy,
+     * not the control.
+     */
+    const readOnly = identity?.role === 'viewer';
+    document.documentElement.toggleAttribute('data-readonly', readOnly);
+    el('readOnlyNote').hidden = !readOnly;
+    el('statusView').inert = readOnly;
     // The board and the inbox both need a seat to scope them, so they are offered only once
     // signed in. Intake never is — an emergency can be captured signed out (INV-01).
     nav.hidden = !signedIn;
@@ -508,6 +518,7 @@ async function boot(): Promise<void> {
     if (signedIn && identity?.isAdministration !== true && !offers('field_intake')) {
       navReport.hidden = true;
     }
+    if (readOnly) navReport.hidden = true;
     /**
      * "Incident details" belonged to the control room and to nobody else, until 2026-09-09.
      *
@@ -3158,6 +3169,8 @@ async function boot(): Promise<void> {
       | 'piReport'
       | 'help',
   ): void {
+    // A viewer has no report form: whatever asked for it gets the dashboard (see `paintIdentity`).
+    if (view === 'report' && identity?.role === 'viewer') view = 'dashboard';
     dashboardView.hidden = view !== 'dashboard';
     statusView.hidden = view !== 'status';
     reportView.hidden = view !== 'report';
@@ -5882,6 +5895,7 @@ async function boot(): Promise<void> {
        * dashboard by size alone.
        */
       if (identity.isAdministration) showView('report');
+      else if (identity.role === 'viewer') showView('dashboard');
       else if (window.matchMedia('(min-width: 56rem)').matches) showView('dashboard');
 
       await trySync();
@@ -5999,6 +6013,8 @@ async function boot(): Promise<void> {
    * else's.
    */
   if (identity !== null && location.hash.startsWith('#board')) showView('board');
+  // A viewer who reloads would otherwise sit on the report form the page starts with.
+  else if ((identity as Identity | null)?.role === 'viewer') showView('dashboard');
 
   void trySync();
 
