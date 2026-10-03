@@ -337,6 +337,23 @@ async function refreshPendingCount(): Promise<void> {
   }
 }
 
+/**
+ * The count keeps itself current: asked again every minute while the page is in front, and at
+ * once when the DC comes back to it. Something sent on WhatsApp shows on the tab without a reload.
+ * A hidden page asks nothing.
+ */
+const PENDING_EVERY_MS = 60_000;
+
+function watchPendingCount(): void {
+  if (!can('pending')) return;
+  setInterval(() => {
+    if (document.visibilityState === 'visible') void refreshPendingCount();
+  }, PENDING_EVERY_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void refreshPendingCount();
+  });
+}
+
 //------------------------------------------------------------------------------
 // Department and person selects
 //------------------------------------------------------------------------------
@@ -1894,6 +1911,7 @@ async function load(): Promise<void> {
   date.value = me.today;
   status.hidden = true;
   drawTabs();
+  watchPendingCount();
 }
 
 drawLangSwitch(el('langSlot'));

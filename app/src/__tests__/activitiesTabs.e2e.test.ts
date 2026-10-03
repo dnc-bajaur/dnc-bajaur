@@ -85,10 +85,8 @@ describe.skipIf(dbUrl === undefined)('Activities — fewer tabs (E3)', () => {
   const tabLabels = (page: Page): Promise<string[]> =>
     page.locator('#tabs button').allTextContents();
 
-  it('gives the DC six tabs, the Pending count, Departments under Officers, and History', async () => {
-    const dc = await seedActor(pool, { title: 'Tabs e2e DC', role: 'owner' });
-
-    // Something waiting on the Pending list: an unknown number's words.
+  /** Something waiting on the Pending list: an unknown number's words. Returns how many wait. */
+  async function addPending(): Promise<number> {
     const inbound = await pool.query<{ inbound_id: string }>(
       `INSERT INTO activity_inbound (from_phone, state, reason)
        VALUES ($1, 'pending', 'unknown_sender') RETURNING inbound_id`,
@@ -104,7 +102,42 @@ describe.skipIf(dbUrl === undefined)('Activities — fewer tabs (E3)', () => {
         WHERE i.state = 'pending'
           AND EXISTS (SELECT 1 FROM activity_inbound_media m WHERE m.inbound_id = i.inbound_id)`,
     );
-    const count = Number(waiting.rows[0]!.n);
+    return Number(waiting.rows[0]!.n);
+  }
+
+  it('keeps the Pending count current without a reload', async () => {
+    const dc = await seedActor(pool, { title: 'Tabs e2e DC count', role: 'owner' });
+    const before = await addPending();
+
+    const page = await (await browser.newContext()).newPage();
+    await page.goto(origin);
+    await page.waitForSelector('#login');
+    await page.fill('#phone', dc.phone);
+    await page.fill('#password', TEST_PASSWORD);
+    await page.click('#loginSubmit');
+    await page.waitForSelector('#nav:not([hidden])');
+    // The page's own timers, driven by hand: a minute passes when this test says so.
+    await page.clock.install();
+    await page.goto(`${origin}/activities.html`);
+    const pending = '#tabs button[data-tab="pending"]';
+    await page.waitForSelector(`${pending}:has-text("(${before})")`);
+
+    // Sent on WhatsApp while the page sits open: nothing yet, then the next minute's ask.
+    expect(await addPending()).toBe(before + 1);
+    expect(await page.locator(pending).textContent()).toBe(`Pending (${before})`);
+    await page.clock.fastForward(61_000);
+    await page.waitForSelector(`${pending}:has-text("(${before + 1})")`);
+
+    // And at once when the DC comes back to the page, without waiting for the minute.
+    expect(await addPending()).toBe(before + 2);
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.waitForSelector(`${pending}:has-text("(${before + 2})")`);
+    await page.context().close();
+  }, 120_000);
+
+  it('gives the DC six tabs, the Pending count, Departments under Officers, and History', async () => {
+    const dc = await seedActor(pool, { title: 'Tabs e2e DC', role: 'owner' });
+    const count = await addPending();
 
     const page = await openActivities(dc.phone, false);
     await page.waitForSelector(`#tabs button[data-tab="pending"]:has-text("(${count})")`);
