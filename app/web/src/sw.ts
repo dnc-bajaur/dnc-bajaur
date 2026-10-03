@@ -1017,14 +1017,14 @@ declare const self: ServiceWorkerGlobalScope;
 // v235: the "who was told" list carries ADR-0035 to the RECIPIENT it left name-only. A
 // dispatched officer showed as their name alone on the incident drawer's "Who was told"
 // panel, on the board's `who` column, in the response breakdown and the CSV export; now they
-// are `Rustam Khan — DDMA` — name then the post they hold longest (`dutySeatOfPerson`'s rule)
+// are `Officer India — DDMA` — name then the post they hold longest (`dutySeatOfPerson`'s rule)
 // — the district's own shape in `backlog/whatsapp-response-workflow.md` §6. `actorsFor` carries
 // the post as `personSeats` (provenance's `people` map stays bare); `main.ts`'s `nameForTarget`
 // composes it, `board.ts`'s `dispatchNames` does the board/dashboard, and
 // `domain/recipients.ts`'s new `withDesignation` the reports — same ` — ` separator ADR-0035's
 // `actorName` uses, collapsing to one string where name and post restate each other. A `post`
 // recipient is unchanged. `web/src/main.ts` moved, so `shellVersion.test.ts` requires the bump.
-// (v234 is nawaz-ae's parallel dash-cards `--pflow-h` change; numbers need only be unused.)
+// (v234 is a parallel branch's dash-cards `--pflow-h` change; numbers need only be unused.)
 
 // v236: an emergency card with nothing open leaves the wall. The owner's ask (2026-09-08) —
 // `routineEmergencies`, `importantEmergencies` and the `alerts` panel read as clutter on a wall
@@ -1034,18 +1034,18 @@ declare const self: ServiceWorkerGlobalScope;
 // section hidden without dropping it from the arrangement, so the card returns the moment a row
 // arrives. The always-there panels — `utilities`, `services`, `keys`/`facts`, `presence`,
 // `stillRunning`, `situation` — are untouched. `dashboard.js` moved, so `shellVersion.test.ts`
-// requires the bump. (v235 is nawaz-c5's parallel "who was told" change.)
+// requires the bump. (v235 is a parallel branch's "who was told" change.)
 
 // v237: a dispatched POST names its holder too. `v235` gave a `person` recipient on the "who
-// was told" list its held post (`Rustam Khan — DDMA`) and left a `post` recipient — which a
+// was told" list its held post (`Officer India — DDMA`) and left a `post` recipient — which a
 // learned proposal usually is — reading its title alone; the owner tested with one
 // (`DNC-BAJAUR-82` -> the seat "IT Soft") and saw no name. The list answers *which human was
-// reached* either way, so a `post` now reads `Imtiaz Ahmad — IT Soft`, its current holder then
+// reached* either way, so a `post` now reads `Officer November — IT Soft`, its current holder then
 // its title. `actorsFor` carries `seats[id].holder` (absent for a vacant post; provenance's
 // `nameOf` reads only `title`), `dispatchNames` does the board / dashboard, `main.ts`'s
 // `nameForTarget` composes both arms with one helper, and `domain/report.ts` / `api/reports.ts`
 // the reports via a new `seatHolders`. `web/src/main.ts` moved, so `shellVersion.test.ts`
-// requires the bump. (v236 is nawaz-ae's parallel empty-card change.)
+// requires the bump. (v236 is a parallel branch's empty-card change.)
 // v238: "Status by recipient" stops repeating the message the record already printed. The owner
 // photographed `DNC-BAJAUR-79` (2026-09-08): the fire alert's four lines sat under *"The alert we
 // sent"* and then again under every one of the three recipients — one sentence, four copies, with
@@ -1279,7 +1279,10 @@ declare const self: ServiceWorkerGlobalScope;
 // `/set-password` never cached. `admin.ts`, `activities.ts`, `office.css` and `ur.json` moved.
 // v270: the administration tick gets its control in the contact drawer. `admin.ts` moved.
 // v271: "Remove this video" on an Activities video that could not be used. `activities.*` moved.
-const CACHE = 'dnc-shell-v271';
+// v272: officer names from the original deployment's directory replaced with placeholders in the
+// web client's comments and the contact form's example (isolation rule 3). `admin.ts`, `dispatch.*`,
+// `duplicates.ts` and `main.ts` moved.
+const CACHE = 'dnc-shell-v272';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.

@@ -50,7 +50,7 @@ CREATE INDEX IF NOT EXISTS incident_event_settlements_by_attempt
 -- `dispatched` is deliberately **not** folded into `routed`, and this is the migration that
 -- makes the distinction cheap enough to keep. Routing is the district's standing configuration
 -- answering *which departments handle this kind of thing*; a dispatch is a named operator, on a
--- telephone call at 02:00, saying *tell Rescue, tell the DEO, and tell Nawaz*. One event type
+-- telephone call at 02:00, saying *tell Rescue, tell the DEO, and tell Officer Golf*. One event type
 -- carrying both would leave the record unable to answer **who decided this** — which is the
 -- question the paper register is being replaced to answer.
 --

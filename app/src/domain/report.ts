@@ -209,7 +209,7 @@ export interface ReportSources {
   /**
    * personId → the post that officer holds now — 2026-09-07.
    *
-   * So a dispatched officer reads `Ali Khan — AC HQ Bajaur` in the "Told:" line and the
+   * So a dispatched officer reads `Officer Kilo — AC HQ Bajaur` in the "Told:" line and the
    * "Who was told" section, person then post, the way ADR-0035 names every actor on this
    * document. Until now a `person` recipient here carried a name and no post, because only a
    * `post` target had a `postTitle`. Optional: a caller that does not pass it (the older tests)
@@ -221,7 +221,7 @@ export interface ReportSources {
    * seatId → the officer holding that post now — 2026-09-08, the other half.
    *
    * A `post` recipient (a learned proposal usually is one) read as its title alone; with this
-   * it reads `Imtiaz Ahmad — IT Soft`, holder then title, symmetric with a `person` recipient.
+   * it reads `Officer November — IT Soft`, holder then title, symmetric with a `person` recipient.
    * Absent for a vacant post — the title stands alone. Optional, same as above.
    */
   readonly seatHolders?: Readonly<Record<string, string>>;
@@ -299,7 +299,7 @@ function nameOfTarget(
 ): string {
   switch (target.kind) {
     case 'post':
-      // Holder then title (`Imtiaz Ahmad — IT Soft`), or the title alone for a vacant post —
+      // Holder then title (`Officer November — IT Soft`), or the title alone for a vacant post —
       // `recipientName` is the shared rule, the same as the `person` arm below.
       return recipientName(
         sources.seatHolders?.[target.id] ?? null,
@@ -632,7 +632,7 @@ function recipients(sources: ReportSources): readonly ReportRecipient[] {
               ? (sources.recipientDesignations?.[personId] ?? null)
               : null,
         // The human half: a `person` target's own name, or — for a `post` target — the officer
-        // holding it, so the row reads `Imtiaz Ahmad — IT Soft` and not the title alone.
+        // holding it, so the row reads `Officer November — IT Soft` and not the title alone.
         personName:
           personId !== null
             ? (sources.people[personId] ?? null)

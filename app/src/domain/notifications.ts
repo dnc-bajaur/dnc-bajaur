@@ -39,7 +39,7 @@ export interface NotifyTarget {
    * A **named officer**, owed this message as themselves rather than as a post — M6-03.
    *
    * The third addressee, and the one the district asked for. Until it existed an operator who
-   * meant *"tell Nawaz, he knows that road"* could only express it by naming his post, which
+   * meant *"tell Officer Golf, he knows that road"* could only express it by naming his post, which
    * says something different: a post is held by whoever holds it tonight, so the obligation
    * would have quietly retargeted itself at the next shift change and the record would show
    * somebody else having been told.
@@ -181,7 +181,7 @@ export function obligationsFor(state: IncidentState): readonly NotifyTarget[] {
  * A **person** first, when the obligation names one; then the seat; then the department. Order
  * matters and is not arbitrary, because a person-addressed obligation is normally resolved to a
  * seat before delivery — so both fields are set on the attempt, and keying on the seat would
- * make *"tell the DEO"* and *"tell Nawaz, who holds the DEO post"* the same obligation. They are
+ * make *"tell the DEO"* and *"tell Officer Golf, who holds the DEO post"* the same obligation. They are
  * not: the first follows the post through a handover and the second follows the man. Merged,
  * the second one silently disappears the moment somebody else takes the post.
  *

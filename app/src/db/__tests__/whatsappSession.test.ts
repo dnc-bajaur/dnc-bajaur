@@ -148,9 +148,9 @@ describe.skipIf(dbUrl === undefined)('the question the district is waiting on', 
     const phone = '923001200003';
     const asked = await ask(pool, phone);
 
-    expect(await answerQuestion(pool, asked.questionId, 'Nasir Khan, ADC')).toBe(true);
+    expect(await answerQuestion(pool, asked.questionId, 'Officer Lima, ADC')).toBe(true);
     // Meta redelivers. The second call must not be the one that writes the event.
-    expect(await answerQuestion(pool, asked.questionId, 'Nasir Khan, ADC')).toBe(false);
+    expect(await answerQuestion(pool, asked.questionId, 'Officer Lima, ADC')).toBe(false);
 
     // And it is no longer waiting, so the officer's next message is an ordinary reply again.
     expect(await pendingQuestion(pool, phone)).toBeNull();
@@ -161,13 +161,13 @@ describe.skipIf(dbUrl === undefined)('the question the district is waiting on', 
     // removed on answer — the district must be able to see that it asked.
     const phone = '923001200004';
     const asked = await ask(pool, phone);
-    await answerQuestion(pool, asked.questionId, 'Bilal, AAC Mamund');
+    await answerQuestion(pool, asked.questionId, 'Officer Mike, AAC Mamund');
 
     const row = await pool.query<{ answer: string; answered_at: Date }>(
       'SELECT answer, answered_at FROM whatsapp_question WHERE question_id = $1',
       [asked.questionId],
     );
-    expect(row.rows[0]?.answer).toBe('Bilal, AAC Mamund');
+    expect(row.rows[0]?.answer).toBe('Officer Mike, AAC Mamund');
     expect(row.rows[0]?.answered_at).not.toBeNull();
   });
 

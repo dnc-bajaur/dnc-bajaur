@@ -808,7 +808,7 @@ export async function dispatchNames(
 
   if (personIds.size > 0) {
     /**
-     * **Name AND designation — `Rustam Khan — DDMA`, the district's own shape**
+     * **Name AND designation — `Officer India — DDMA`, the district's own shape**
      * (`backlog/whatsapp-response-workflow.md` §6, asked for 2026-08-23).
      *
      * The designation is the post the officer has held longest — `dutySeatOfPerson`'s rule
@@ -819,7 +819,7 @@ export async function dispatchNames(
      *
      * Both branches compose. The district picks a **person** or a **post** in the picker (and a
      * learned proposal is usually a post), and either way the "who was told" list is answering
-     * one question — *which human was reached* — so a `post` recipient reads `Imtiaz Ahmad —
+     * one question — *which human was reached* — so a `post` recipient reads `Officer November —
      * IT Soft`, its holder then its title, exactly as a `person` reads their name then the post
      * they hold. A vacant post keeps its title alone (ADR-0004: it must still be visible).
      */

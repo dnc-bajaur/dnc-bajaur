@@ -272,7 +272,7 @@ async function buildRecipients(
    *
    * Why offer it at all when a post already reaches the same handset: **authority attaches to
    * the post, but knowledge attaches to the person** (ADR-0004). "Tell the DEO" and "tell
-   * Nawaz, he knows that road" are different intentions, and an operator who can only express
+   * Officer Golf, he knows that road" are different intentions, and an operator who can only express
    * the first will put the second in the message text where nothing can act on it.
    */
   type PersonRow = {
@@ -318,8 +318,8 @@ async function buildRecipients(
    *
    * ⚠️ **That is not hypothetical, and the plan's claim that it was cost this the audit to find.**
    * `backlog/m10-plan.md` said *"Nobody in Bajaur holds two posts today"*. M10-05 queried the live
-   * directory on 2026-08-16: **three do**, and two of them across different departments — Imran
-   * (C&W Buildings · C&W Highways) and Zubair Ahmad (ADC General · ADC Relief). Collapsing Imran to
+   * directory on 2026-08-16: **three do**, and two of them across different departments — Officer Delta
+   * (C&W Buildings · C&W Highways) and Officer Charlie (ADC General · ADC Relief). Collapsing Officer Delta to
    * one row labelled *C&W Building Division* **hides that he is also Highways**, and this list is
    * how the control room decides who to tell. A room told to reach Highways would not find him.
    *

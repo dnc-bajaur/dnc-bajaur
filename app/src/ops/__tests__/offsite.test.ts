@@ -61,7 +61,7 @@ function fakeStore(
 
 describe('encrypting a dump', () => {
   const plaintext = Buffer.from(
-    'COPY person (full_name, phone) FROM stdin;\nNoor Rahman Khan\t03001234567\n',
+    'COPY person (full_name, phone) FROM stdin;\nExample Emergency Officer\t03001234567\n',
   );
 
   it('round-trips', () => {
@@ -76,7 +76,7 @@ describe('encrypting a dump', () => {
     // The thing this protects: every reporter's number in the district, in a file handed to
     // a cloud provider.
     expect(asText).not.toContain('03001234567');
-    expect(asText).not.toContain('Noor Rahman Khan');
+    expect(asText).not.toContain('Example Emergency Officer');
     expect(asText).not.toContain(PASSPHRASE);
   });
 

@@ -126,14 +126,14 @@ describe.skipIf(dbUrl === undefined)('the contact list (integration)', () => {
   it('1. adds a contact from three fields, and hands it straight back', async () => {
     const phone = newPhone();
     const res = await add(dcToken, {
-      fullName: `Noor Rahman (${RUN})`,
+      fullName: `Example Officer (${RUN})`,
       designation: `District Emergency Officer (${RUN})`,
       phone,
     });
     expect(res.status).toBe(201);
 
     const contact = (await res.json()) as Contact;
-    expect(contact.fullName).toBe(`Noor Rahman (${RUN})`);
+    expect(contact.fullName).toBe(`Example Officer (${RUN})`);
     expect(contact.designation).toBe(`District Emergency Officer (${RUN})`);
     expect(contact.phone).toBe(phone);
     expect(contact.isAdministration).toBe(false);
@@ -151,7 +151,7 @@ describe.skipIf(dbUrl === undefined)('the contact list (integration)', () => {
     };
     const mine = list.contacts.find((c) => c.seatId === contact.seatId);
     expect(mine, 'the contact was created and does not appear in the list').toBeDefined();
-    expect(mine?.fullName).toBe(`Noor Rahman (${RUN})`);
+    expect(mine?.fullName).toBe(`Example Officer (${RUN})`);
   });
 
   it('2. allows a second contact under the same designation, and refuses a repeated phone', async () => {

@@ -935,7 +935,7 @@ export interface ActorDirectory {
   /**
    * seatId → the post held, which is what authority actually attaches to (ADR-0004), plus its
    * current `holder` when it has one — so a `post` recipient on the "who was told" list reads
-   * `Imtiaz Ahmad — IT Soft`. `holder` is absent for a vacant post; provenance's `nameOf`
+   * `Officer November — IT Soft`. `holder` is absent for a vacant post; provenance's `nameOf`
    * reads only `title`.
    */
   readonly seats: Readonly<
@@ -944,7 +944,7 @@ export interface ActorDirectory {
   /**
    * personId → the post this officer holds now, for the ones that hold one — 2026-09-07.
    *
-   * The "who was told" panel names a dispatched officer `Rustam Khan — DDMA`
+   * The "who was told" panel names a dispatched officer `Officer India — DDMA`
    * (`backlog/whatsapp-response-workflow.md` §6); this is the second half. Kept apart from
    * `people` because provenance leads with the seat and does not repeat it. An officer holding
    * no live post is simply absent here and is named alone.
@@ -1014,7 +1014,7 @@ async function actorsFor(
 
   if (personIds.length > 0) {
     /**
-     * The name, and — since the district asked for `Rustam Khan — DDMA` on the "who was told"
+     * The name, and — since the district asked for `Officer India — DDMA` on the "who was told"
      * list (`backlog/whatsapp-response-workflow.md` §6) — the post the officer holds, as its
      * own map. `people` stays the bare name: provenance ("X overrode this") already leads with
      * the seat (ADR-0004) and does not want the designation twice. `personSeats` is what
@@ -1052,7 +1052,7 @@ async function actorsFor(
 
   if (seatIds.length > 0) {
     // `holder` — the officer in this post now, so a `post` recipient on the "who was told"
-    // list reads `Imtiaz Ahmad — IT Soft`, its holder then its title, the same shape a
+    // list reads `Officer November — IT Soft`, its holder then its title, the same shape a
     // `person` recipient gets (2026-09-08). `nameForTarget` composes it; provenance's `nameOf`
     // reads only `title` and is unaffected. `duty_one_current_holder_per_seat` bounds it to one.
     const res = await pool.query<{

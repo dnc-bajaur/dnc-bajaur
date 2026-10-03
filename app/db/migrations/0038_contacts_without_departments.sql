@@ -139,7 +139,7 @@ UPDATE seat SET tier = tier;
 -- Of Bajaur's 81 rows, **38 have no phone number** and only **34 are vacant**. The other four hold
 -- a named officer whose number was never recorded:
 --
---     Rescue 1122 — District Emergency Officer     Noor Rahman Khan
+--     Rescue 1122 — District Emergency Officer     (named officer, example)
 --     Civil Defence — CDO                          Shahid
 --     DHQ Hospital — Associate Hospital Director   Dr. Saleem
 --     Traffic Police — SP Traffic                  Fazal Ud Din

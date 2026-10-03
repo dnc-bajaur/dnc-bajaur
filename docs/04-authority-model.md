@@ -130,7 +130,7 @@ generated from it.
 ## Seats, not people
 
 Authority attaches to a **seat** (`ADR-0004`), never to an individual. "The DC seat may
-override closure" survives a transfer; "Imran may override closure" does not, and quietly
+override closure" survives a transfer; "Officer Delta may override closure" does not, and quietly
 leaves a departed officer with authority.
 
 An event records both the person and the seat they held at the time, so history remains

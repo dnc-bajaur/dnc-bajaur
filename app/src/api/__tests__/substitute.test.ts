@@ -241,11 +241,11 @@ describe.skipIf(dbUrl === undefined)('who is coming in your place', () => {
     const asked = await pendingQuestion(pool, officerKey);
     expect(asked).not.toBeNull();
 
-    expect(await inbound(typed('Nasir Khan, ADC Revenue'))).toBe(200);
+    expect(await inbound(typed('Officer Lima, ADC Revenue'))).toBe(200);
 
     const written = await notes(id);
     expect(written.some((n) => n.includes('Sending someone in their place'))).toBe(true);
-    expect(written.some((n) => n.includes('Nasir Khan, ADC Revenue'))).toBe(true);
+    expect(written.some((n) => n.includes('Officer Lima, ADC Revenue'))).toBe(true);
     /**
      * **And it says the match was NOT inferred.** Every other reply in this system carries the
      * opposite sentence, because it is matched to an incident by the number it came from. This
@@ -260,7 +260,7 @@ describe.skipIf(dbUrl === undefined)('who is coming in your place', () => {
       [asked?.questionId],
     );
     expect(closed.rows[0]?.answered_at).not.toBeNull();
-    expect(closed.rows[0]?.answer).toBe('Nasir Khan, ADC Revenue');
+    expect(closed.rows[0]?.answer).toBe('Officer Lima, ADC Revenue');
   });
 
   it('does not read a tap on another meeting as the name', async () => {
@@ -283,13 +283,13 @@ describe.skipIf(dbUrl === undefined)('who is coming in your place', () => {
     const id = await sendMeeting(`Water supply ${RUN}`);
     await inbound(tap('Sending someone'));
 
-    const reply = typed(`Bilal Ahmad, AAC Mamund ${RUN}`);
+    const reply = typed(`Officer Mike, AAC Mamund ${RUN}`);
     await inbound(reply);
     // Meta retries any non-2xx and redelivers on a timeout. Byte-identical, deliberately.
     await inbound(reply);
 
     const written = await notes(id);
-    const named = written.filter((n) => n.includes(`Bilal Ahmad, AAC Mamund ${RUN}`));
+    const named = written.filter((n) => n.includes(`Officer Mike, AAC Mamund ${RUN}`));
     expect(named).toHaveLength(1);
   });
 

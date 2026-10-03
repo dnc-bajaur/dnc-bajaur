@@ -5,7 +5,7 @@
  * this proves the rules underneath it, including the two that read as bugs until the reasoning
  * is:
  *
- *   * **`targetKey` prefers the person over the seat**, so *"tell the DEO"* and *"tell Nawaz,
+ *   * **`targetKey` prefers the person over the seat**, so *"tell the DEO"* and *"tell Officer Golf,
  *     who holds the DEO post"* stay two obligations. A post is held by whoever holds it
  *     tonight; merging them loses the one somebody actually chose at the next shift change.
  *   * **a routed department and a dispatched one are two obligations**, deliberately. One is the
@@ -19,7 +19,7 @@ import { foldIncident } from '../incident.js';
 import { alreadyAttempted, obligationsFor, targetKey, unmetObligations } from '../notifications.js';
 import { ev, INCIDENT, POLICE, RESCUE } from './fixtures.js';
 
-const NAWAZ = 'person-nawaz';
+const GOLF = 'person-golf';
 const DEO_POST = 'seat-deo';
 
 function state(events: Parameters<typeof foldIncident>[1]) {
@@ -79,13 +79,13 @@ describe('an escalation tells nobody — the district’s decision, 2026-08-21',
   it('leaves an operator’s own dispatch owed, escalation or not', () => {
     const s = state([
       ev('reported', { reportId: 'r1', category: 'fire', severity: 'critical' }),
-      ev('dispatched', { targets: [{ kind: 'person', id: NAWAZ }] }),
+      ev('dispatched', { targets: [{ kind: 'person', id: GOLF }] }),
       ev('escalated', { fromSeatId: null, toSeatId: 'seat-dc', trigger: 'sla_breach' }),
     ]);
 
     const targets = obligationsFor(s);
     expect(targets).toHaveLength(1);
-    expect(targets[0]?.personId).toBe(NAWAZ);
+    expect(targets[0]?.personId).toBe(GOLF);
     expect(targets[0]?.reason).toBe('dispatched');
   });
 });
@@ -97,13 +97,13 @@ describe('obligations from a dispatch', () => {
     // ("mutalqa department ya personal ya post") could only be half honoured.
     const s = state([
       ev('reported', { reportId: 'r1', category: 'fire', severity: 'high' }),
-      ev('dispatched', { targets: [{ kind: 'person', id: NAWAZ }] }),
+      ev('dispatched', { targets: [{ kind: 'person', id: GOLF }] }),
     ]);
 
     const targets = obligationsFor(s).filter((t) => t.reason === 'dispatched');
 
     expect(targets).toHaveLength(1);
-    expect(targets[0]?.personId).toBe(NAWAZ);
+    expect(targets[0]?.personId).toBe(GOLF);
     expect(targets[0]?.seatId).toBeNull();
     expect(targets[0]?.departmentId).toBeNull();
   });
@@ -116,7 +116,7 @@ describe('obligations from a dispatch', () => {
       ev('dispatched', {
         targets: [
           { kind: 'post', id: DEO_POST },
-          { kind: 'person', id: NAWAZ },
+          { kind: 'person', id: GOLF },
         ],
       }),
     ]);
@@ -124,7 +124,7 @@ describe('obligations from a dispatch', () => {
     const targets = obligationsFor(s).filter((t) => t.reason === 'dispatched');
 
     expect(targets.map((t) => t.seatId)).toContain(DEO_POST);
-    expect(targets.map((t) => t.personId)).toContain(NAWAZ);
+    expect(targets.map((t) => t.personId)).toContain(GOLF);
   });
 
   it('owes a routed department its own obligation, keyed by department', () => {
@@ -152,7 +152,7 @@ describe('obligations from a dispatch', () => {
     const s = state([
       ev('reported', { reportId: 'r1', category: 'fire', severity: 'high' }),
       ev('dispatched', { targets: [{ kind: 'post', id: DEO_POST }] }),
-      ev('dispatched', { targets: [{ kind: 'person', id: NAWAZ }] }),
+      ev('dispatched', { targets: [{ kind: 'person', id: GOLF }] }),
     ]);
 
     expect(s.dispatchedTo).toHaveLength(2);
@@ -211,7 +211,7 @@ describe('what makes two obligations the same one', () => {
     // The whole reason `personId` is kept beside `seatId` on the attempt. A person-addressed
     // obligation is normally resolved to a seat before delivery, so both fields are set — and
     // keying on the seat would silently merge the two.
-    const asPerson = targetKey({ seatId: DEO_POST, personId: NAWAZ });
+    const asPerson = targetKey({ seatId: DEO_POST, personId: GOLF });
     const asPost = targetKey({ seatId: DEO_POST, personId: null });
 
     expect(asPerson).not.toBe(asPost);
@@ -232,18 +232,18 @@ describe('what makes two obligations the same one', () => {
   it('does not re-attempt a person-addressed obligation on the next pass', () => {
     const s = state([
       ev('reported', { reportId: 'r1', category: 'fire', severity: 'high' }),
-      ev('dispatched', { targets: [{ kind: 'person', id: NAWAZ }] }),
+      ev('dispatched', { targets: [{ kind: 'person', id: GOLF }] }),
       ev('notified', {
         attemptId: 'a1',
         seatId: null,
-        personId: NAWAZ,
+        personId: GOLF,
         channel: 'web',
         reason: 'dispatched',
       }),
     ]);
 
     expect(
-      alreadyAttempted(s.notifications, { seatId: null, personId: NAWAZ }, 'dispatched', 'web'),
+      alreadyAttempted(s.notifications, { seatId: null, personId: GOLF }, 'dispatched', 'web'),
     ).toBe(true);
   });
 
@@ -256,14 +256,14 @@ describe('what makes two obligations the same one', () => {
       ev('notified', {
         attemptId: 'a1',
         seatId: null,
-        personId: NAWAZ,
+        personId: GOLF,
         channel: 'web',
         reason: 'dispatched',
       }),
       ev('notification_delivered', { attemptId: 'a1', seatId: null, channel: 'web' }),
     ]);
 
-    expect(s.notifications[0]?.personId).toBe(NAWAZ);
+    expect(s.notifications[0]?.personId).toBe(GOLF);
     expect(s.notifications[0]?.state).toBe('delivered');
   });
 });

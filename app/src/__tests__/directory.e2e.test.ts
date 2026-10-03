@@ -667,7 +667,7 @@ describe.skipIf(dbUrl === undefined)('telling a department, and adding to it', (
    *
    * The number matters because *"Reach them"* is the entire system on the night the API is down,
    * a rule kept unchanged from the 2026-08-03 reversal. It also makes a shared handset visible:
-   * `03000000171` belongs to Kamran Ali **and** Kamran Aziz in the live directory, which is
+   * a shared number can belong to Officer Alpha **and** Officer Bravo in a real directory, which is
    * why `collapseSelection` must never deduplicate by number.
    */
   it('11. puts the number on the row, and never a blank designation', async () => {

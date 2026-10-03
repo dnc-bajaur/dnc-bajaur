@@ -117,7 +117,7 @@ export type AcknowledgementRoute = 'link' | 'reply' | 'operator';
  *
  * Two, not one, because the district asked for *"personal ya post"* and those are genuinely
  * different intentions. **Authority attaches to the post; knowledge attaches to the person**
- * (ADR-0004) — "tell the DEO" and "tell Nawaz, he knows that road" are not the same sentence,
+ * (ADR-0004) — "tell the DEO" and "tell Officer Golf, he knows that road" are not the same sentence,
  * and an operator who can only say the first will put the second in the message text, where
  * nothing can act on it.
  *
@@ -451,7 +451,7 @@ interface Payloads {
    * A **second, deliberately separate** provenance beside `routed`. `routed` answers *who is
    * responsible for this incident*; this answers *who was told about it on the night*. They
    * are usually the same people and they are not the same fact — an operator telephones the
-   * DEO and Nawaz without making either of them the holder. Folding the two into one event
+   * DEO and Officer Golf without making either of them the holder. Folding the two into one event
    * would make the record unable to answer *who decided this*, and that question is the
    * entire reason the paper register is being replaced.
    *

@@ -215,7 +215,7 @@ button.dfcancel {
 
   `flex-basis: 100%` puts it on its own line and the left padding lines it up under the label
   rather than under the checkbox. `tabular-nums` because these are read out loud and compared by
-  eye: two officers sharing one handset is real here (Kamran Ali and Kamran Aziz, M10-05), and
+  eye: two officers sharing one handset is real in a district (seen in the original deployment), and
   proportional digits make two identical numbers look different.
 */
 .dnum {

@@ -869,7 +869,7 @@ export function mountAdmin(): AdminConsole {
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.className = 'd-input';
-    nameInput.placeholder = 'e.g. Dr. Tariq Jamil';
+    nameInput.placeholder = 'e.g. Officer name';
     nameField.append(nameInput);
     form.append(nameField);
 

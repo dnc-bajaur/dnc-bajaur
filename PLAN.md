@@ -203,8 +203,12 @@ Known inherited bugs (found 2026-10-02):
 
 - Legal pages (`installer/cloud/*.html`) name the controller of the data — re-read them with the
   DC office before publishing.
-- `docs/06-open-questions.md` still holds the original deployment's questions; go through it
-  and keep only what applies to Bajaur.
+- [x] `docs/06-open-questions.md` rewritten for Bajaur (2026-10-03): the original deployment's
+      answers and officer names removed; what needs Bajaur's answer is open, what the ADRs
+      decided is listed as such.
+- [x] Officer names from the original deployment's directory, found in comments, tests, ADRs and
+      a migration comment, replaced with visible placeholders (rule 3). They remain in git
+      history — the owner decides whether to rewrite it (`OWNER-QUESTIONS.md` item 6).
 - [x] **Local database** (2026-10-02): Bajaur's own portable PostgreSQL 17.11 — binaries in
       `D:\dnc-bajaur-postgres`, data in `D:\dnc-bajaur-pgdata`, port 5434, databases
       `dnc_bajaur_dev` / `dnc_bajaur_test`; app on `localhost:3100`. The full suite, database

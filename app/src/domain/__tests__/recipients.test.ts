@@ -27,7 +27,7 @@ const NIGHT_POST = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2';
 const DOCTOR_POST = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
 const KHAN = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1';
 /** Holds two designations, the way three officers in Bajaur's real directory do — see O-27. */
-const IMRAN = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2';
+const DELTA = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2';
 const NIGHT_OFFICER = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3';
 
 function held(over: Partial<Parameters<typeof reachabilityOf>[0]> = {}) {
@@ -47,7 +47,7 @@ function recipient(over: Partial<Recipient> = {}): Recipient {
     label: 'District Emergency Officer',
     departmentId: RESCUE,
     departmentName: 'Rescue 1122',
-    holderName: 'Sher Ali Khan',
+    holderName: 'Officer Juliet',
     holderPersonId: KHAN,
     designation: null,
     phone: '03001112222',
@@ -116,8 +116,8 @@ describe('collapseSelection', () => {
    * two designations held by one officer was an odd thing to do on a picker grouped by
    * department.
    *
-   * With one row per designation it is the obvious thing to do — Imran is *C&W Buildings* and
-   * *C&W Highways*, Zubair Ahmad is *ADC General* and *ADC Relief*, both read off the district's
+   * With one row per designation it is the obvious thing to do — Officer Delta is *C&W Buildings* and
+   * *C&W Highways*, Officer Charlie is *ADC General* and *ADC Relief*, both from the original deployment's
    * live directory on 2026-08-16. Uncollapsed that is **two messages to one handset for one
    * emergency**, which `recipients.ts`'s own header calls the fastest way to teach somebody to
    * mute their phone.
@@ -126,8 +126,8 @@ describe('collapseSelection', () => {
     const twoHats = {
       ...index,
       holderOfPost: new Map<string, string | null>([
-        [DOCTOR_POST, IMRAN],
-        [NIGHT_POST, IMRAN],
+        [DOCTOR_POST, DELTA],
+        [NIGHT_POST, DELTA],
       ]),
       departmentOfPost: new Map<string, string | null>([
         [DOCTOR_POST, HEALTH],
@@ -157,9 +157,9 @@ describe('collapseSelection', () => {
     const threeHats = {
       ...index,
       holderOfPost: new Map<string, string | null>([
-        [DEO_POST, IMRAN],
-        [DOCTOR_POST, IMRAN],
-        [NIGHT_POST, IMRAN],
+        [DEO_POST, DELTA],
+        [DOCTOR_POST, DELTA],
+        [NIGHT_POST, DELTA],
       ]),
     };
 
@@ -221,8 +221,8 @@ describe('collapseSelection', () => {
     const twoHats = {
       ...index,
       holderOfPost: new Map<string, string | null>([
-        [DEO_POST, IMRAN],
-        [NIGHT_POST, IMRAN],
+        [DEO_POST, DELTA],
+        [NIGHT_POST, DELTA],
       ]),
     };
 

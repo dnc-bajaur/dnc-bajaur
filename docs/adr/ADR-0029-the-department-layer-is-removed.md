@@ -51,7 +51,7 @@ The department layer is load-bearing in exactly **one** place, and dead in every
 ### 1. A contact is three fields
 
 ```
-Name          Sher Ali Khan
+Name          Officer Juliet
 Designation   AC HQ Bajaur
 Phone         0300 0000558
 ```
@@ -87,7 +87,7 @@ number was never recorded** — and they are these:
 
 | Post | Holder |
 |---|---|
-| Rescue 1122 — District Emergency Officer | Noor Rahman Khan |
+| Rescue 1122 — District Emergency Officer | Example Emergency Officer |
 | Civil Defence — CDO | Shahid |
 | DHQ Hospital — Associate Hospital Director | Dr. Saleem |
 | Traffic Police — SP Traffic | Fazal Ud Din |

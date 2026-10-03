@@ -517,8 +517,8 @@ describe.skipIf(dbUrl === undefined)('authentication (integration)', () => {
   });
 
   /**
-   * M10-05 found three people in the live directory holding two posts at once (Imran, Naveed,
-   * Zubair Ahmad). `resolveIdentity`'s query joins `duty_assignment` on `to_at IS NULL`, which
+   * M10-05 found three people in the original deployment's directory holding two posts at once (examples:
+   * Officer Charlie). `resolveIdentity`'s query joins `duty_assignment` on `to_at IS NULL`, which
    * genuinely returns one row per held seat — and it had always taken the first without an
    * `ORDER BY`, so which of a dual-post person's two seats they signed in as was whatever order
    * Postgres felt like giving back, and could differ request to request for the SAME person.

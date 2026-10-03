@@ -291,7 +291,11 @@ describe.skipIf(dbUrl === undefined)('loading a directory (integration)', () => 
        * gaps and the loader now counts them apart.
        */
       const out = await loadDirectory(pool, [
-        { department: dept('J'), designation: 'Named No Number', name: 'Noor Rahman Khan' },
+        {
+          department: dept('J'),
+          designation: 'Named No Number',
+          name: 'Example Emergency Officer',
+        },
       ]);
 
       expect(out.problems).toEqual([]);
@@ -314,7 +318,7 @@ describe.skipIf(dbUrl === undefined)('loading a directory (integration)', () => 
         ['Named No Number'],
       );
       expect(holder.rowCount, 'the post was left unheld and the sweep would retire it').toBe(1);
-      expect(holder.rows[0]?.full_name).toBe('Noor Rahman Khan');
+      expect(holder.rows[0]?.full_name).toBe('Example Emergency Officer');
       expect(holder.rows[0]?.placeholder, 'a stand-in number was not labelled as one').toBe(true);
 
       // And it is said out loud rather than counted silently — this needs a telephone call,

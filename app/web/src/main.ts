@@ -4270,13 +4270,13 @@ async function boot(): Promise<void> {
       people: Record<string, string>;
       /**
        * `holder` is the officer in a post now, when it has one — so a `post` recipient reads
-       * `Imtiaz Ahmad — IT Soft`. Absent for a vacant post and on an older server; provenance
+       * `Officer November — IT Soft`. Absent for a vacant post and on an older server; provenance
        * (`nameOf`) reads only `title`.
        */
       seats: Record<string, { title: string; tier: string; holder?: string }>;
       /**
        * personId → the post that officer holds now — 2026-09-07. Composed onto the name as
-       * `Rustam Khan — DDMA` for a `person` recipient (whatsapp-response-workflow.md §6).
+       * `Officer India — DDMA` for a `person` recipient (whatsapp-response-workflow.md §6).
        * **Optional, and absent means an older server**, never "holds no post".
        */
       personSeats?: Record<string, string>;

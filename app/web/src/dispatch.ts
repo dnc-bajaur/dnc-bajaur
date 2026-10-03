@@ -1034,7 +1034,7 @@ export function mountDispatch(
          * standing rule kept from the 2026-08-03 reversal). Hunting for it on another screen at
          * 02:00 is how a district goes back to a personal handset and the record stops existing.
          *
-         * **It also makes a shared handset visible.** `03000000171` is Kamran Ali's *and* Kamran
+         * **It also makes a shared handset visible.** a shared office number can be Officer Alpha's *and* Officer
          * Aziz's — confirmed in the live directory (M10-05), and the reason
          * `collapseSelection` must never deduplicate by number. Two rows carrying one number is a
          * fact the operator can now see for themselves rather than being told about afterwards.

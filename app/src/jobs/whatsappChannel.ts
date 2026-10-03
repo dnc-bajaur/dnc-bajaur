@@ -761,7 +761,7 @@ export function whatsappChannel(options: WhatsAppChannelOptions): NotificationCh
        * there, and that is a stronger statement than this lookup.
        *
        * ⚠️ **This deliberately does NOT touch the obligation or `targetKey`.** The ledger row
-       * stays person-keyed, so *"tell the DEO"* and *"tell Nawaz, who holds the DEO post"* remain
+       * stays person-keyed, so *"tell the DEO"* and *"tell Officer Golf, who holds the DEO post"* remain
        * two obligations exactly as M6 decided — and `oneMessagePerRecipient` still sees the same
        * two recipients it saw yesterday. Only the token learns the seat.
        */

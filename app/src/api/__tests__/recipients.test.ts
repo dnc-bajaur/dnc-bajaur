@@ -245,7 +245,7 @@ describe.skipIf(dbUrl === undefined)('who the control room can tell (integration
    *
    * `backlog/m10-plan.md` said *"Nobody in Bajaur holds two posts today"*. The M10-05 audit
    * queried the live directory on 2026-08-16 and **three people do**, two of them across
-   * different departments: Imran (C&W Buildings · C&W Highways) and Zubair Ahmad (ADC General ·
+   * different departments: Officer Delta (C&W Buildings · C&W Highways) and Officer Charlie (ADC General ·
    * ADC Relief).
    *
    * Collapsing on `person_id` alone gave one row carrying **whichever department the database
@@ -281,7 +281,7 @@ describe.skipIf(dbUrl === undefined)('who the control room can tell (integration
     /**
      * **Each contact is its own designation, and the officer's name is on both.**
      *
-     * O-27's finding survives the flattening intact and is the reason this test stays: Imran is
+     * O-27's finding survives the flattening intact and is the reason this test stays: Officer Delta is
      * *C&W Buildings* **and** *C&W Highways*, and a control room told to reach Highways must find
      * him there. What changed is only which row carries it — the designation is now the contact's
      * own label rather than a field on a person row.

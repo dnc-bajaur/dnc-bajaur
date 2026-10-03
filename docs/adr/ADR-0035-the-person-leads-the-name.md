@@ -30,7 +30,7 @@ it, because the fold carried only `acknowledgedBySeatId`.
 
 ### On any page a human reads, the person's name comes first, then the post
 
-`"Assistant Commissioner Ali Khan — AC HQ Bajaur"`, not the other way round. The officer's
+`"Assistant Commissioner Officer Kilo — AC HQ Bajaur"`, not the other way round. The officer's
 name is what a DC office writes on a file and what an operator says on the telephone; the
 post follows it. Applied at every actor-naming site: the post-incident report (screen, PDF
 and the plain-text upward-submission export), the Record's incident drawer, the

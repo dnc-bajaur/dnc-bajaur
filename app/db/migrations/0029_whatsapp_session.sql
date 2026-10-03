@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_window (
 -- That inference has to be written down somewhere before it happens, or the reply arrives and
 -- looks exactly like every other reply: a deliberate act by somebody who was told about an
 -- emergency, which `recordReply` would record as an acknowledgement of whatever was last sent
--- to that number. The district would end up with "Replied on WhatsApp: Nasir Khan" against a
+-- to that number. The district would end up with "Replied on WhatsApp: Officer Lima" against a
 -- meeting, and no answer to the question it actually asked.
 CREATE TABLE IF NOT EXISTS whatsapp_question (
     question_id uuid        PRIMARY KEY,

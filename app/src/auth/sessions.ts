@@ -315,7 +315,7 @@ export async function startSession(pool: Pool, identity: Identity): Promise<Logi
 /** The seat a person holds *right now*. Null seat means no current duty assignment. */
 /**
  * A person can hold **more than one seat at once** — M10-05's audit of the live directory found
- * three (Imran: C&W Buildings and C&W Highways; Naveed: two Irrigation posts; Zubair Ahmad: ADC
+ * three (Officer Delta: C&W Buildings and C&W Highways; Officer Echo: two Irrigation posts; Officer Charlie: ADC
  * General and ADC Relief). `LEFT JOIN duty_assignment ... to_at IS NULL` can therefore return
  * more than one row for one `person_id`, and this function has always taken `res.rows[0]` —
  * **without an `ORDER BY`, which of the two seats came back was whatever order Postgres felt

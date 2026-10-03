@@ -351,7 +351,7 @@ describe.skipIf(dbUrl === undefined)('the central board (integration)', () => {
        * point. Routing is deliberately not called, so `responsibleDepartments` stays empty and
        * the row has nothing but `toldNames` to say who this went to.
        */
-      const name = 'Nawaz Khan (told-by-name test)';
+      const name = 'Officer Foxtrot (told-by-name test)';
       const person = await pool.query<{ person_id: string }>(
         `INSERT INTO person (full_name, phone, password_hash)
          VALUES ($1, $2, $3) RETURNING person_id`,
@@ -375,7 +375,7 @@ describe.skipIf(dbUrl === undefined)('the central board (integration)', () => {
     });
 
     /**
-     * **`Rustam Khan — DDMA` — name AND the post held, on the row** — the district's own shape
+     * **`Officer India — DDMA` — name AND the post held, on the row** — the district's own shape
      * (`backlog/whatsapp-response-workflow.md` §6), person-first per ADR-0035, shipped
      * 2026-09-07.
      *
@@ -384,7 +384,7 @@ describe.skipIf(dbUrl === undefined)('the central board (integration)', () => {
      * incident.
      */
     it('names a dispatched officer as "name — designation" when they hold a post', async () => {
-      const name = 'Rustam Khan (designation test)';
+      const name = 'Officer India (designation test)';
       const designation = `DDMA Bajaur ${randomUUID().slice(0, 8)}`;
       const seat = await pool.query<{ seat_id: string }>(
         `INSERT INTO seat (title, tier, can_break_glass, is_administration)
@@ -419,7 +419,7 @@ describe.skipIf(dbUrl === undefined)('the central board (integration)', () => {
      */
     it('names a dispatched POST as "holder — title" on the row', async () => {
       const title = `IT Soft ${randomUUID().slice(0, 8)}`;
-      const holder = 'Imtiaz Ahmad (post-holder test)';
+      const holder = 'Officer November (post-holder test)';
       const seat = await pool.query<{ seat_id: string }>(
         `INSERT INTO seat (title, tier, can_break_glass, is_administration)
          VALUES ($1, 'post', false, false) RETURNING seat_id`,

@@ -32,7 +32,7 @@ directory rather than reasoned about:
 | **Actual reachable handsets** | **40** |
 
 **Five rows for every one human being.** One officer appeared three times — as a department
-(`Assistant Commissioner Bajaur`), as a post (`AC HQ Bajaur`) and as a person (`Sher Ali Khan`) —
+(`Assistant Commissioner Bajaur`), as a post (`AC HQ Bajaur`) and as a person (`Officer Juliet`) —
 all three the same number.
 
 And the layer producing it is not there. **79 departments for 81 posts**: almost every one holds a
@@ -95,8 +95,8 @@ Nothing ever collapsed **post against post**. It stayed harmless only while the 
 to absorb the overlap, and while ticking two designations held by one officer was an odd thing to
 do on a picker grouped by department.
 
-It is the obvious thing to do on a flat list. **Imran** holds *C&W Buildings* and *C&W Highways*;
-**Zubair Ahmad** holds *ADC General* and *ADC Relief* — read off the live directory on 2026-08-16
+It is the obvious thing to do on a flat list. **Officer Delta** holds *C&W Buildings* and *C&W Highways*;
+**Officer Charlie** holds *ADC General* and *ADC Relief* — in the original deployment's directory
 (M10-05). Uncollapsed, that is two obligations and **two messages to one handset for one
 emergency**, which `domain/recipients.ts` calls the fastest way to teach somebody to mute their
 phone.

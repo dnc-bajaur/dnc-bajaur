@@ -7,11 +7,11 @@
  *
  * ## ⚠️ A warning, never a refusal, and the district is the reason
  *
- * **Two officers in Bajaur genuinely share `03000000171`** — Kamran Ali and Kamran Aziz,
+ * **Two officers can genuinely share one office handset** (`03000000171` in the examples),
  * confirmed in the live directory on 2026-08-16, and the reason migration 0006 moved phone
  * uniqueness off `person` in the first place (Q-19). A form that refused a duplicate number could
  * not enter the district's own roster. Names repeat too, and in a district of forty officers two
- * people called Imran is an ordinary Tuesday.
+ * people with the same name is an ordinary Tuesday.
  *
  * So this answers *"is this already here?"* and nothing else. Whether that means **the same
  * person twice** or **two people who share a handset** is a question only the operator can

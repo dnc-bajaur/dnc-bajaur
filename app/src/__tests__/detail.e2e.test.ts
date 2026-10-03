@@ -977,7 +977,7 @@ describe.skipIf(dbUrl === undefined)('M0-35: incident detail', () => {
   });
 
   /**
-   * **`Rustam Khan — DDMA` on the "who was told" row — name AND the post held, 2026-09-07.**
+   * **`Officer India — DDMA` on the "who was told" row — name AND the post held, 2026-09-07.**
    *
    * The district's own shape for this list (`backlog/whatsapp-response-workflow.md` §6),
    * person-first per ADR-0035. Test 11 covers officers holding no post — named alone; this
@@ -997,7 +997,7 @@ describe.skipIf(dbUrl === undefined)('M0-35: incident detail', () => {
     const person = await pool.query<{ person_id: string }>(
       `INSERT INTO person (full_name, phone, password_hash)
        VALUES ($1, $2, 'not-a-login') RETURNING person_id`,
-      ['Rustam Khan', `+92300${randomUUID().slice(0, 10)}`],
+      ['Officer India', `+92300${randomUUID().slice(0, 10)}`],
     );
     await pool.query('INSERT INTO duty_assignment (seat_id, person_id) VALUES ($1, $2)', [
       seat.rows[0]!.seat_id,
@@ -1012,7 +1012,7 @@ describe.skipIf(dbUrl === undefined)('M0-35: incident detail', () => {
     await page.waitForSelector('#whoToldRows .told', { timeout: 15_000 });
 
     const names = await page.locator('#whoToldRows .told .tname').allTextContents();
-    expect(names).toContain(`Rustam Khan — ${designation}`);
+    expect(names).toContain(`Officer India — ${designation}`);
   });
 
   /**
@@ -1033,7 +1033,7 @@ describe.skipIf(dbUrl === undefined)('M0-35: incident detail', () => {
     const person = await pool.query<{ person_id: string }>(
       `INSERT INTO person (full_name, phone, password_hash)
        VALUES ($1, $2, 'not-a-login') RETURNING person_id`,
-      ['Imtiaz Ahmad', `+92300${randomUUID().slice(0, 10)}`],
+      ['Officer November', `+92300${randomUUID().slice(0, 10)}`],
     );
     await pool.query('INSERT INTO duty_assignment (seat_id, person_id) VALUES ($1, $2)', [
       seat.rows[0]!.seat_id,
@@ -1048,7 +1048,7 @@ describe.skipIf(dbUrl === undefined)('M0-35: incident detail', () => {
     await page.waitForSelector('#whoToldRows .told', { timeout: 15_000 });
 
     const names = await page.locator('#whoToldRows .told .tname').allTextContents();
-    expect(names).toContain(`Imtiaz Ahmad — ${title}`);
+    expect(names).toContain(`Officer November — ${title}`);
   });
 
   /**

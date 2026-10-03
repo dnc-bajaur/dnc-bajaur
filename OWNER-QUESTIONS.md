@@ -21,19 +21,19 @@ answered.
    want Nastaliq at least on Activities.
 5. **Digits stay 0-9** (not ۰-۹), because phone and incident numbers are read out and typed back.
 
-## ⚠️ Possible other-district name in the code (found 2026-10-03)
+## ⚠️ Other-district officer names were in the code — removed (2026-10-03)
 
-6. The name **"Nawaz"** appears in this repository as an example officer name and in old notes:
-   `db/migrations/0020_dispatch.sql:53`, `src/api/contacts.ts:275`, `src/jobs/whatsappChannel.ts:764`,
-   `src/domain/notifications.ts:42,184`, `src/domain/events.ts:120,454`,
-   `src/domain/__tests__/notifications.test.ts` (test id `person-nawaz`),
-   `src/api/__tests__/board.test.ts:354`, `web/src/__tests__/duplicates.test.ts:21`, and
-   `web/src/sw.ts:1027-1048` ("nawaz-ae's parallel … change" — looks like the other project's
-   branch names). **If this is a real person or name from the other district, say so and I will
-   replace every one with a neutral placeholder** (a migration file's comment included — comments
-   in an applied migration can be edited safely). I did not change them on my own because most
-   are only illustrative and the change touches many files. The one place a user could see it —
-   the "How to use" guide's example screen — now says "Duty Officer" instead.
+6. While translating, I found **real-looking officer names from the original deployment's
+   directory** in comments, tests, two ADRs, a migration comment and the old
+   `docs/06-open-questions.md` (e.g. officers sharing a handset, a Rescue 1122 officer, "the
+   district's own shape" examples) — some described as facts *about Bajaur*. That breaks
+   isolation rule 3, so **I replaced every one with visible placeholders** ("Officer Alpha",
+   "Officer Bravo", …) and rewrote `docs/06-open-questions.md` for Bajaur (the old one held the
+   other district's answers). Nothing that runs depends on these names; the tests pass.
+   **Still your decision:** the names remain in **git history** (earlier commits). Removing them
+   from history means rewriting it and force-pushing, which cannot be undone and changes every
+   commit id — I did not do that. Tell me if you want it. Your own name ("Imtiaz Ahmad") appeared
+   as an example post-holder and was replaced too.
 
 ## The "How to use" guide is out of date (found 2026-10-03, while translating it)
 

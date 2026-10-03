@@ -565,7 +565,7 @@ async function recordReply(reply: ReplyToRecord): Promise<void> {
    *
    * Checked **before** the ordinary reply path, because otherwise the name of a deputy would be
    * recorded as an acknowledgement of whatever was last sent to that number — *"Replied on
-   * WhatsApp: Nasir Khan"* against a meeting, and no answer at all to the question actually put.
+   * WhatsApp: Officer Lima"* against a meeting, and no answer at all to the question actually put.
    *
    * ⚠️ **A tap is never an answer to this, and that guard is the whole care in it.** The question
    * asks for a person's name, typed. An officer who taps *Attending* on a **different** meeting

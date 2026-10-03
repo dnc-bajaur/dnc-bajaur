@@ -73,7 +73,7 @@ export async function postIncidentReport(
     generatedAt: options.now ?? new Date().toISOString(),
     seats: seatTitles,
     people: readable.actors.people,
-    // `Ali Khan — AC HQ Bajaur` (a person) / `Imtiaz Ahmad — IT Soft` (a post) on the "Told:"
+    // `Officer Kilo — AC HQ Bajaur` (a person) / `Officer November — IT Soft` (a post) on the "Told:"
     // line and the "Who was told" section — the human then the post, either way
     // (whatsapp-response-workflow.md §6). Both resolved by `readIncident`.
     recipientDesignations: readable.actors.personSeats,

@@ -78,7 +78,7 @@ export interface Recipient {
  * `Name — Designation` — the one way this district names a told or responding officer.
  *
  * The district asked for a named officer on the "who was told" list, the board's `who` column
- * and the response breakdown to carry the post they hold beside their name — `Rustam Khan —
+ * and the response breakdown to carry the post they hold beside their name — `Officer India —
  * DDMA` (`backlog/whatsapp-response-workflow.md` §6). It is the same rule ADR-0035 set for every
  * actor-naming site ("the person leads the name; one string when the two restate each other"),
  * reaching the **recipient** list that ADR left name-only. The separator matches `actorName` in
@@ -230,9 +230,9 @@ export function collapseSelection(
        * the overlap, and because ticking two posts held by one officer was an unusual thing to
        * do while the picker was grouped by department.
        *
-       * It is no longer unusual. With one row per designation, *Imran* is **two rows** (C&W
-       * Buildings and C&W Highways) and *Zubair Ahmad* is two (ADC General and ADC Relief) —
-       * these are the district's own, read off the live directory on 2026-08-16 — and an
+       * It is no longer unusual. With one row per designation, *Officer Delta* is **two rows** (C&W
+       * Buildings and C&W Highways) and *Officer Charlie* is two (ADC General and ADC Relief) —
+       * these are the district's own, in the original deployment's directory — and an
        * operator ticking both is ticking the obvious thing. Uncollapsed that is two obligations
        * and **two messages to one handset for one emergency**, which this file's own header
        * calls the fastest way to teach somebody to mute their phone.

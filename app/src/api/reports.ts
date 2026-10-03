@@ -476,7 +476,7 @@ export function resolutionCsv(
 //------------------------------------------------------------------------------
 
 async function seatTitles(pool: Pool): Promise<ReadonlyMap<string, string>> {
-  // The holder, so a `post` recipient in the export's "told" column reads `Imtiaz Ahmad —
+  // The holder, so a `post` recipient in the export's "told" column reads `Officer November —
   // IT Soft`, holder then title — symmetric with `personNames` and the board / drawer. A
   // vacant post keeps its title alone.
   const res = await pool.query<{ seat_id: string; title: string; holder: string | null }>(
@@ -501,7 +501,7 @@ async function seatTitles(pool: Pool): Promise<ReadonlyMap<string, string>> {
 
 async function personNames(pool: Pool): Promise<ReadonlyMap<string, string>> {
   /**
-   * `Rustam Khan — DDMA` — name and the post held — so the export's "told" column reads the
+   * `Officer India — DDMA` — name and the post held — so the export's "told" column reads the
    * way the board and the drawer do (`backlog/whatsapp-response-workflow.md` §6). The post is
    * the one held longest (`dutySeatOfPerson`'s rule); a retired one names no designation, and
    * an officer holding none is named alone.
