@@ -222,6 +222,20 @@ F notes (2026-10-03):
 - F6: Windows' built-in `tar` skips a file whose folder name is in Urdu script when listing the
   ZIP (the ZIP itself is correct — .NET and Explorer read it). Inherited, not from ZIP64.
 
+## 4b. Activities as a feed (owner asked 2026-10-03, [ADR-0044](docs/adr/ADR-0044-activities-feed-comments-respond.md))
+
+The owner tried Activities with a new account: too confusing at one look, mostly for the DC.
+Decided in conversation; each step is built, tested, committed and pushed on its own.
+
+| Step | What | Done when |
+|---|---|---|
+| G1 | **Feed first:** Activities opens on the posts — **All** / **Departments** (a department list with counts, one tap to its feed), Person and date behind **Filter**. A post is a card: name, post, department, **mobile number** (every account sees it), time, words, media. Tabs: Activities · New post · Pending (only while something waits) · **More** (Officers, History, My account) | the DC's first screen has no form; e2e pins the tabs, the two buttons and the number on a card |
+| G2 | **Reactions and comments**, in the app only: *Seen* / *Well done* (one per person per post), comments by every account that can see the post (`activities.comment`, viewer included); author or moderator deletes | server refuses without the permission; cascade with the post; nothing sent on WhatsApp |
+| G3 | **Respond** (`activities.respond`: DC and control room): one WhatsApp message to the post's sender, labelled *Activities — not an emergency alert*; plain inside the 24-hour window, template `dnc_bajaur_activity_response` outside; sent / delivered / read / failed shown; button, messages and answers shown only to those who can respond; the officer's reply returns to the post | stubbed Meta: window open, window shut with and without template, status webhooks, quoted reply, unquoted words, a photo and a voice note in reply; nobody else sees any of it |
+| G4 | **Guide** rewritten for the above, English and Urdu | `help.e2e` and `activitiesUrdu.e2e` green |
+
+Needs before go-live: Meta account (already §3 step 5) and the new template (§3 step 6).
+
 ## 5. To verify (open points)
 
 - Legal pages (`installer/cloud/*.html`) name the controller of the data — re-read them with the
