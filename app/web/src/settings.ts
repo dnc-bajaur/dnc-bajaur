@@ -111,6 +111,8 @@ const PERMISSIONS: readonly { readonly key: string; readonly label: string }[] =
   { key: 'activities.moderate', label: "Activities: hide, restore or delete anyone's post" },
   { key: 'activities.departments', label: 'Activities: keep the Department list' },
   { key: 'activities.pending', label: 'Activities: approve pictures from unknown numbers' },
+  { key: 'activities.comment', label: 'Activities: react to posts and comment on them' },
+  { key: 'activities.respond', label: 'Activities: send a WhatsApp message to a post’s sender' },
 ];
 
 interface Override {

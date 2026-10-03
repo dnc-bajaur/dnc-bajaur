@@ -35,6 +35,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 import {
+  ACTIVITY_RESPONSE_TEMPLATE,
   ALERT_TEMPLATE_IMAGE,
   ALERT_TEMPLATE,
   EMERGENCY_TEMPLATE,
@@ -100,6 +101,11 @@ export interface WhatsAppConfig {
    * sent by WhatsApp, and the DC is handed the link to send by hand instead.
    */
   readonly loginTemplate?: { readonly name: string; readonly language: string };
+  /**
+   * The Activities Respond template (ADR-0044 §6), once Meta has approved it. Absent: a Respond
+   * goes only inside the 24-hour window, and outside it the DC office is told nothing was sent.
+   */
+  readonly activityTemplate?: { readonly name: string; readonly language: string };
   /**
    * The template whose buttons an officer can **tap to answer** — 2026-08-19.
    *
@@ -233,6 +239,14 @@ export function whatsappFromEnv(
           loginTemplate: {
             name: env['WHATSAPP_TEMPLATE_LOGIN'].trim(),
             language: env['WHATSAPP_TEMPLATE_LOGIN_LANG'] ?? LOGIN_LINK_TEMPLATE.language,
+          },
+        }
+      : {}),
+    ...(set(env['WHATSAPP_TEMPLATE_ACTIVITY'])
+      ? {
+          activityTemplate: {
+            name: env['WHATSAPP_TEMPLATE_ACTIVITY'].trim(),
+            language: env['WHATSAPP_TEMPLATE_ACTIVITY_LANG'] ?? ACTIVITY_RESPONSE_TEMPLATE.language,
           },
         }
       : {}),
@@ -1104,6 +1118,48 @@ export async function sendLoginLink(
             sub_type: 'url',
             index: String(LOGIN_LINK_TEMPLATE.urlButton?.index ?? 0),
             parameters: [{ type: 'text', text: message.token }],
+          },
+        ],
+      },
+    },
+    fetchImpl,
+  );
+}
+
+/**
+ * Send an Activities Respond on the district's template (ADR-0044 §6) — the path for a number
+ * whose 24-hour window is shut. The caller checks `config.activityTemplate` first: with none,
+ * nothing is sent.
+ *
+ * The message goes as one line: Meta refuses a parameter holding a line break, a tab or more than
+ * four spaces in a row, and it refuses the whole message, not the parameter.
+ */
+export async function sendActivityResponse(
+  config: WhatsAppConfig,
+  message: { readonly toPhone: string; readonly postDate: string; readonly message: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<SendResult> {
+  const template = config.activityTemplate;
+  if (template === undefined) {
+    return { ok: false, failure: 'no_activity_template', retryable: false };
+  }
+  return post(
+    config,
+    `${config.baseUrl ?? GRAPH}/${config.phoneNumberId}/messages`,
+    {
+      messaging_product: 'whatsapp',
+      to: toE164(message.toPhone),
+      type: 'template',
+      template: {
+        name: template.name,
+        language: { code: template.language },
+        components: [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: message.postDate },
+              { type: 'text', text: message.message.replace(/\s+/g, ' ').trim() },
+            ],
           },
         ],
       },

@@ -93,6 +93,8 @@ import {
   type WhatsAppConfig,
 } from '../ops/whatsapp.js';
 import { defaultEvidenceRoot, store } from '../ops/evidence.js';
+import { defaultActivitiesRoot } from './activities.js';
+import { applyResponseStatus, takeAnswer } from './activityResponses.js';
 import {
   takeForActivities,
   type EmergencyPathFor,
@@ -180,6 +182,12 @@ export async function handleWhatsAppWebhook(
    * `api/whatsappActivities.ts` — and only the emergency branch reaches `recordReply`.
    */
   activities?: WhatsAppActivities,
+  /**
+   * The Activities root, for an officer's answer to a Respond (ADR-0044 §7): a photo or a voice
+   * note sent as a reply is kept in its post's folder. Separate from `activities` because a
+   * Respond is answered whether or not WhatsApp → Activities is switched on.
+   */
+  activitiesRoot: string = defaultActivitiesRoot(),
 ): Promise<WebhookReply> {
   if (config === null) {
     return { status: 404, body: 'whatsapp is not configured', contentType: TEXT };
@@ -239,6 +247,13 @@ export async function handleWhatsAppWebhook(
     );
 
     if (applied === null) {
+      // Not an alert: an Activities Respond (ADR-0044 §6) keeps its own delivery state, and
+      // settles nothing on any incident.
+      if (
+        await applyResponseStatus(pool, update.providerMessageId, update.status, update.failure)
+      ) {
+        continue;
+      }
       // A message this district did not send — a shared test account, or a webhook retried
       // across a database restore. Logged so it is visible, skipped so it is harmless.
       log('info', 'whatsapp status for an unknown message', {
@@ -317,6 +332,31 @@ export async function handleWhatsAppWebhook(
         log('info', 'could not mark an inbound message read', { failure: receipt.failure });
       }
     }
+
+    /**
+     * **An answer to an Activities Respond goes back to its post** — ADR-0044 §7.
+     *
+     * Before anything asks whether this is an activity or an emergency's evidence: the officer
+     * replied to an Activities message, and it must never be guessed onto an incident. It does
+     * not depend on WhatsApp → Activities being switched on — a Respond can be sent either way.
+     * A video is noted on the post and still goes on below, to be whatever it always was.
+     */
+    const answer = await takeAnswer(
+      { pool, config, fetchImpl, root: activitiesRoot },
+      reply.fromPhone,
+      {
+        messageId: reply.messageId,
+        text: reply.text,
+        at: reply.at,
+        tapped: reply.tapped,
+        ...(reply.media === undefined ? {} : { media: reply.media }),
+        ...(reply.location === undefined ? {} : { location: reply.location }),
+        ...(reply.reaction === undefined ? {} : { reaction: reply.reaction }),
+        ...(reply.replyId === undefined ? {} : { replyId: reply.replyId }),
+        ...(reply.contextMessageId === undefined ? {} : { replyContextId: reply.contextMessageId }),
+      },
+    );
+    if (answer === 'taken') continue;
 
     /**
      * **Activities first, for a photo or a video, and for a tap on its two buttons** — ADR-0040.

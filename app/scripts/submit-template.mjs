@@ -48,6 +48,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
+  ACTIVITY_RESPONSE_TEMPLATE,
   ALERT_TEMPLATE,
   ALERT_TEMPLATE_IMAGE,
   ALERT_TEMPLATE_IMAGE_V3,
@@ -90,6 +91,7 @@ const SUBMITTABLE = [
   NOTICE_TEMPLATE_IMAGE,
   EMERGENCY_TEMPLATE,
   LOGIN_LINK_TEMPLATE,
+  ACTIVITY_RESPONSE_TEMPLATE,
   ...RESPONSE_TEMPLATES,
   ...RESPONSE_IMAGE_TEMPLATES,
 ];
@@ -333,6 +335,7 @@ ${DIM}when somebody points the matching WHATSAPP_TEMPLATE_* line at it.${OFF}
     ['WHATSAPP_TEMPLATE_NOTICE', env.WHATSAPP_TEMPLATE_NOTICE],
     ['WHATSAPP_TEMPLATE_NOTICE_IMAGE', env.WHATSAPP_TEMPLATE_NOTICE_IMAGE],
     ['WHATSAPP_TEMPLATE_LOGIN', env.WHATSAPP_TEMPLATE_LOGIN],
+    ['WHATSAPP_TEMPLATE_ACTIVITY', env.WHATSAPP_TEMPLATE_ACTIVITY],
   ].find(([, name]) => set(name) && name === wanted);
 
   if (live !== undefined) {

@@ -150,6 +150,11 @@ describe.skipIf(dbUrl === undefined)('the "How to use" guide, on a real screen',
       'Add to Directory',
       'Posts are kept for 30 days',
       'Move to Recycle bin',
+      // The feed, reactions, comments and Respond (ADR-0044).
+      'Reading the posts',
+      'Seen, Well done and comments',
+      'Respond — a message to the officer',
+      'This is not an emergency alert',
       'Urdu or English',
       'Install this app',
       'Who was told, and who answered',
@@ -184,6 +189,9 @@ describe.skipIf(dbUrl === undefined)('the "How to use" guide, on a real screen',
       'Screens offered',
       'Administration → Screen',
       '79 departments',
+      // Six tabs of equal weight, and a list "narrowed by department, person and date" as the
+      // first thing on the page: both went with ADR-0044.
+      'The other three are for the DC office',
     ]) {
       expect(text).not.toContain(gone);
     }

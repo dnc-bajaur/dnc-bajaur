@@ -780,6 +780,42 @@ Tap the button below to choose your own password. The link works once and stops 
 };
 
 /**
+ * Respond — ADR-0044 §6, Bajaur. A message from the DC office to the officer who sent an
+ * Activities post, for when Meta's 24-hour window is shut (inside it, a plain message goes and no
+ * template is needed).
+ *
+ * Two parameters: the date of the post, so the officer knows which one, and the message itself.
+ * No button — the answer is a reply, which comes back to the post. The fixed text says **what
+ * this is and what it is not**: it must never read as an alert, and static text at both ends is
+ * what Meta requires anyway.
+ *
+ * ⚠️ A template parameter may not hold a line break, a tab or more than four spaces in a row —
+ * Meta refuses the whole message — so `sendActivityResponse` puts the message on one line.
+ */
+export const ACTIVITY_RESPONSE_TEMPLATE: TemplateShape = {
+  name: 'dnc_bajaur_activity_response',
+  language: 'en',
+  category: 'UTILITY',
+  body: [
+    { what: 'the date of the post', example: '3 October 2026' },
+    {
+      what: 'the message from the DC office',
+      example: 'Good work. Please also send the staff attendance for that day.',
+    },
+  ],
+  urlButton: null,
+  quickReplies: [],
+  header: null,
+  bodyText: `District Nerve Center — Bajaur
+
+Activities — a message from the DC office about your post of {{1}}:
+
+{{2}}
+
+This is not an emergency alert. To answer, reply to this message.`,
+};
+
+/**
  * **Every template shape this file declares, by the name Meta knows it as.**
  *
  * ⚠️ **This exists so that a name in `.env` and a button position in the source cannot
@@ -802,6 +838,7 @@ export function shapeNamed(name: string): TemplateShape | undefined {
     NOTICE_TEMPLATE_IMAGE,
     EMERGENCY_TEMPLATE,
     LOGIN_LINK_TEMPLATE,
+    ACTIVITY_RESPONSE_TEMPLATE,
     ...RESPONSE_TEMPLATES,
     ...RESPONSE_IMAGE_TEMPLATES,
   ].find((shape) => shape.name === name);

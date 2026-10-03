@@ -31,6 +31,7 @@ import { dirname, join } from 'node:path';
 
 import {
   ALERT_TEMPLATE,
+  ACTIVITY_RESPONSE_TEMPLATE,
   ALERT_TEMPLATE_IMAGE,
   ALERT_TEMPLATE_IMAGE_V3,
   EMERGENCY_TEMPLATE,
@@ -540,6 +541,19 @@ async function checkWhatsApp(env, origin) {
     'WHATSAPP_TEMPLATE_LOGIN',
     'A login given to an officer then reaches them as a WhatsApp message from the district ' +
       'number, and they choose their own password — the DC no longer sends the link by hand.',
+  );
+
+  // Respond on an Activities post (ADR-0044). Until it is approved, a Respond goes only to an
+  // officer who wrote to the district number in the last 24 hours; to anybody else it is not
+  // sent, and the screen says so.
+  gradeTappable(
+    'The Activities Respond template',
+    env.WHATSAPP_TEMPLATE_ACTIVITY,
+    env.WHATSAPP_TEMPLATE_ACTIVITY_LANG,
+    ACTIVITY_RESPONSE_TEMPLATE,
+    'WHATSAPP_TEMPLATE_ACTIVITY',
+    'A Respond on an Activities post then reaches the officer even when they have not written ' +
+      'to the district number in the last 24 hours.',
   );
 
   /**

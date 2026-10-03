@@ -41,9 +41,10 @@ them. And a post was a dead end: the DC could look at it and do nothing else.
    from the district number, and **says what it is** — it opens *"Activities — message from the DC
    office"*, quotes the post, and ends *"This is not an emergency alert."* It is not an incident:
    no SLA, no escalation, no acknowledgement, nothing in the event log.
-   - Inside Meta's 24-hour window (the officer wrote to the number in the last day — which a post
-     sent by WhatsApp always means) it is a plain message, attached under the officer's own
-     picture when the post came by WhatsApp.
+   - Inside Meta's 24-hour window (the officer wrote to the number in the last day — which a
+     fresh post sent by WhatsApp always means) it is a plain message. It is **not** attached to
+     the officer's own picture with WhatsApp's reply: Meta refuses a reply to a message that is
+     too old, and a courtesy must not be able to stop the send. The words quote the post instead.
    - Outside it, Meta accepts only an approved template: `dnc_bajaur_activity_response`
      (`WHATSAPP_TEMPLATE_ACTIVITY`). **With no template, nothing is sent and the screen says so**
      — a Respond is never dropped quietly.
@@ -55,10 +56,11 @@ them. And a post was a dead end: the DC could look at it and do nothing else.
      themselves stay on the post and go when it does.
 7. **The officer's answer comes back to the same post.**
    - Sent with WhatsApp's own *reply* to our message → that post, exactly.
-   - Plain words with no reply, when the last thing the district sent that number was a Respond in
-     the last 24 hours → that Respond's post, **marked as matched by time**. (Without this the
-     words would be dropped, or guessed onto an emergency.) If an emergency alert was sent to the
-     number after the Respond, today's path is unchanged.
+   - Plain words with no reply → the post of the last Respond sent to that number in the last 24
+     hours, **marked as matched by time** — and only when **no alert went to that number in those
+     24 hours**. With an alert, the words may be about the emergency and take today's path
+     unchanged: an answer to an emergency is never diverted into Activities. Without one, today's
+     path would have dropped them.
    - A photo or a voice note sent as a reply is kept **on the answer**, seen only by those who can
      respond. A video sent as a reply, and any picture, video or voice note sent **without**
      replying, is a new post as today.

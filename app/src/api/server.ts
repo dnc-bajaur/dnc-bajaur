@@ -178,6 +178,13 @@ import {
   uploadState,
   type ActivitiesResult,
 } from './activities.js';
+import { addComment, listComments, react, removeComment } from './activitySocial.js';
+import {
+  listResponses,
+  respond,
+  serveResponseMedia,
+  type RespondDeps,
+} from './activityResponses.js';
 import {
   addToDirectory,
   approvePending,
@@ -1131,6 +1138,7 @@ async function handleActivities(
   onVideoUploaded: (() => void) | undefined,
   tellSender: ((phone: string, text: string) => Promise<void>) | undefined,
   linkDeps: LinkDeps,
+  respondDeps: RespondDeps,
 ): Promise<void> {
   const pathname = url.pathname;
   const fromWhatsApp: WhatsAppActivities = {
@@ -1273,13 +1281,36 @@ async function handleActivities(
     return send(await approvePending(pool, fromWhatsApp, identity, pending[1]!, input, tellSender));
   }
 
-  const post = /^\/activities\/posts\/([^/]+)(?:\/(photos|videos|hide|restore|date))?$/.exec(
-    pathname,
-  );
+  const post =
+    /^\/activities\/posts\/([^/]+)(?:\/(photos|videos|hide|restore|date|reaction|comments|responses))?$/.exec(
+      pathname,
+    );
   if (post !== null) {
     const postId = post[1]!;
     const action = post[2];
     if (!UUID_RE.test(postId)) return void json(res, 404, { error: 'no such post' });
+    // Reactions and comments (ADR-0044 §4–§5): in the app only, nothing sent anywhere.
+    if (action === 'reaction') {
+      if (req.method !== 'PUT') return notAllowed();
+      const input = await bodyOf(req);
+      if (input === null) return bad();
+      return send(await react(pool, identity, postId, input));
+    }
+    if (action === 'comments') {
+      if (req.method === 'GET') return send(await listComments(pool, identity, postId));
+      if (req.method !== 'POST') return notAllowed();
+      const input = await bodyOf(req);
+      if (input === null) return bad();
+      return send(await addComment(pool, identity, postId, input), 201);
+    }
+    // Respond (ADR-0044 §6): a WhatsApp message to the post's sender — the DC and control room.
+    if (action === 'responses') {
+      if (req.method === 'GET') return send(await listResponses(pool, identity, postId));
+      if (req.method !== 'POST') return notAllowed();
+      const input = await bodyOf(req);
+      if (input === null) return bad();
+      return send(await respond(pool, identity, postId, input, respondDeps), 201);
+    }
     if (req.method === 'DELETE' && action === undefined) {
       return send(await deletePost(pool, root, identity, postId));
     }
@@ -1300,6 +1331,21 @@ async function handleActivities(
       return send(await changeDate(pool, identity, postId, input));
     }
     return notAllowed();
+  }
+
+  const comment = /^\/activities\/comments\/([^/]+)$/.exec(pathname);
+  if (comment !== null) {
+    if (req.method !== 'DELETE') return notAllowed();
+    return send(await removeComment(pool, identity, comment[1]!));
+  }
+
+  // A photo or a voice note an officer sent in answer to a Respond (ADR-0044 §7).
+  const responseMedia = /^\/activities\/responses\/([^/]+)\/media$/.exec(pathname);
+  if (responseMedia !== null) {
+    if (req.method !== 'GET') return notAllowed();
+    const reply = await serveResponseMedia(pool, root, req, res, identity, responseMedia[1]!);
+    if (reply !== null && !reply.ok) json(res, reply.status, { error: reply.error });
+    return;
   }
 
   // A video arriving in chunks (ADR-0039 §4): GET says how much arrived, PUT sends the next.
@@ -2341,6 +2387,7 @@ export function createSyncServer(options: ServerOptions): Server {
                     : { onVideo: options.onVideoUploaded }),
                 }
               : undefined,
+            activitiesRoot,
           );
           res.writeHead(reply.status, { 'content-type': reply.contentType });
           res.end(reply.body);
@@ -3508,6 +3555,7 @@ export function createSyncServer(options: ServerOptions): Server {
             options.onVideoUploaded,
             senderTeller(pool, whatsapp, options.whatsappFetch ?? fetch),
             linkDepsFor(req),
+            { whatsapp, fetchImpl: options.whatsappFetch ?? fetch },
           );
           return;
         }

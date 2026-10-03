@@ -95,6 +95,52 @@ interface Post {
   /** Sent to the district's WhatsApp number rather than posted here (ADR-0040). */
   readonly source: 'app' | 'whatsapp';
   readonly mayChangeDate: boolean;
+  /** Reactions and comments (ADR-0044 §4–§5). */
+  readonly reactions: Social['reactions'];
+  readonly myReaction: ReactionKind | null;
+  readonly commentCount: number;
+  readonly comments: readonly Comment[];
+  readonly mayComment: boolean;
+  /** Respond (ADR-0044 §6): the DC and the control room only; empty for everybody else. */
+  readonly mayRespond: boolean;
+  readonly responses: readonly PostResponse[];
+}
+
+type ReactionKind = 'seen' | 'well_done';
+
+interface Comment {
+  readonly commentId: string;
+  readonly authorName: string;
+  readonly authorDesignation: string | null;
+  readonly body: string;
+  readonly createdAt: string;
+  readonly mayDelete: boolean;
+}
+
+/** What a reaction or a comment hands back: the post's social part as it now stands. */
+interface Social {
+  readonly reactions: readonly {
+    readonly kind: ReactionKind;
+    readonly count: number;
+    readonly names: readonly string[];
+  }[];
+  readonly myReaction: ReactionKind | null;
+  readonly commentCount: number;
+  readonly comments: readonly Comment[];
+  readonly mayComment: boolean;
+}
+
+/** A message the DC office sent to a post's author (`out`), or the author's answer (`in`). */
+interface PostResponse {
+  readonly responseId: string;
+  readonly direction: 'out' | 'in';
+  readonly body: string;
+  readonly createdAt: string;
+  readonly byName: string | null;
+  readonly status: 'sent' | 'delivered' | 'read' | 'failed' | null;
+  readonly failure: string | null;
+  readonly matchedBy: 'reply' | 'latest' | null;
+  readonly media: 'photo' | 'audio' | null;
 }
 
 /** WhatsApp media waiting for the DC (ADR-0040). */
@@ -530,6 +576,284 @@ function videoTile(video: Video, post: Post, refresh: () => void): HTMLElement {
   return tile;
 }
 
+//------------------------------------------------------------------------------
+// Reactions and comments (ADR-0044 §4–§5) — in the app only
+//------------------------------------------------------------------------------
+
+const REACTION_LABEL: Readonly<Record<ReactionKind, string>> = {
+  seen: 'Seen',
+  well_done: 'Well done',
+};
+
+const REACTION_MARK: Readonly<Record<ReactionKind, string>> = { seen: '✓', well_done: '👏' };
+
+/**
+ * The marks and the comments under a post. It redraws itself from what each action hands back, so
+ * a tap changes one card and the feed stays where the reader left it. `extra` is the Respond
+ * button, drawn on the same row for those who have it.
+ */
+function socialBox(post: Post, extra: HTMLButtonElement | null): HTMLElement {
+  const box = make('div', 'social');
+  const error = make('p', 'error');
+  error.hidden = true;
+  let all: readonly Comment[] | null = null;
+
+  const run = (go: () => Promise<Social>): void => {
+    error.hidden = true;
+    void go()
+      .then(draw)
+      .catch((e: unknown) => showError(error, e));
+  };
+
+  const commentRow = (c: Comment): HTMLElement => {
+    const row = make('div', 'comment');
+    const head = make('div', 'meta');
+    head.append(
+      untranslated(
+        make(
+          'span',
+          'author',
+          c.authorDesignation ? `${c.authorName} — ${c.authorDesignation}` : c.authorName,
+        ),
+      ),
+      ' · ',
+      make('span', undefined, when(c.createdAt)),
+    );
+    row.append(head, untranslated(make('p', 'caption', c.body)));
+    if (c.mayDelete) {
+      const del = button('Delete', 'link');
+      del.addEventListener('click', () => {
+        if (!confirm('Delete this comment?')) return;
+        all = null;
+        run(() => api<Social>('DELETE', `/activities/comments/${c.commentId}`));
+      });
+      head.append(' · ', del);
+    }
+    return row;
+  };
+
+  function draw(s: Social): void {
+    const marks = make('div', 'row marks');
+    for (const r of s.reactions) {
+      const b = button('', 'mark');
+      b.dataset['kind'] = r.kind;
+      b.setAttribute('aria-pressed', String(s.myReaction === r.kind));
+      b.disabled = !s.mayComment;
+      if (r.names.length > 0) b.title = r.names.join(', ');
+      b.append(
+        `${REACTION_MARK[r.kind]} `,
+        make('span', undefined, REACTION_LABEL[r.kind]),
+        ...(r.count > 0 ? [' ', make('span', 'count', String(r.count))] : []),
+      );
+      b.addEventListener('click', () =>
+        run(() =>
+          api<Social>('PUT', `/activities/posts/${post.postId}/reaction`, {
+            kind: s.myReaction === r.kind ? null : r.kind,
+          }),
+        ),
+      );
+      marks.append(b);
+    }
+    if (extra !== null) marks.append(extra);
+
+    const list = make('div', 'comments');
+    const shown = all ?? s.comments;
+    if (all === null && s.commentCount > s.comments.length) {
+      const more = button(`Show all ${s.commentCount} comments`, 'link');
+      more.addEventListener('click', () => {
+        error.hidden = true;
+        void api<Comment[]>('GET', `/activities/posts/${post.postId}/comments`)
+          .then((comments) => {
+            all = comments;
+            draw({ ...s, comments, commentCount: comments.length });
+          })
+          .catch((e: unknown) => showError(error, e));
+      });
+      list.append(more);
+    }
+    list.append(...shown.map(commentRow));
+
+    const parts: HTMLElement[] = [marks, list];
+    if (s.mayComment) {
+      const form = make('form', 'comment-form');
+      const input = make('input');
+      input.maxLength = 1000;
+      input.placeholder = 'Write a comment…';
+      input.setAttribute('aria-label', 'Write a comment');
+      const send = make('button', undefined, 'Comment');
+      send.type = 'submit';
+      form.append(input, send);
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (input.value.trim() === '') return input.focus();
+        send.disabled = true;
+        // The full list, if it was open, is asked for again: somebody else may have written too.
+        const open = all !== null;
+        error.hidden = true;
+        void api<Social>('POST', `/activities/posts/${post.postId}/comments`, { body: input.value })
+          .then(async (next) => {
+            if (!open) return draw(next);
+            all = await api<Comment[]>('GET', `/activities/posts/${post.postId}/comments`);
+            draw(next);
+          })
+          .catch((err: unknown) => {
+            send.disabled = false;
+            showError(error, err);
+          });
+      });
+      parts.push(form);
+    }
+    box.replaceChildren(...parts, error);
+  }
+
+  draw(post);
+  return box;
+}
+
+//------------------------------------------------------------------------------
+// Respond (ADR-0044 §6–§7) — drawn only for those the server says may
+//------------------------------------------------------------------------------
+
+const DELIVERY: Readonly<Record<NonNullable<PostResponse['status']>, string>> = {
+  sent: 'Sent',
+  delivered: 'Delivered',
+  read: 'Read',
+  failed: 'Not sent',
+};
+
+function responseRow(r: PostResponse): HTMLElement {
+  const row = make('div', `response ${r.direction}`);
+  const head = make('div', 'meta');
+  if (r.direction === 'out') {
+    head.append(
+      untranslated(make('span', 'author', r.byName ?? '')),
+      ' · ',
+      make('span', undefined, when(r.createdAt)),
+      ' · ',
+      make('span', r.status === 'failed' ? 'state failed' : 'state', DELIVERY[r.status ?? 'sent']),
+    );
+  } else {
+    head.append(
+      make('span', 'author', 'Answer'),
+      ' · ',
+      make('span', undefined, when(r.createdAt)),
+    );
+  }
+  row.append(head);
+  if (r.body !== '') row.append(untranslated(make('p', 'caption', r.body)));
+  const src = `/activities/responses/${r.responseId}/media`;
+  if (r.media === 'photo') {
+    const img = make('img');
+    img.loading = 'lazy';
+    img.alt = 'Photo sent in answer';
+    img.src = src;
+    img.addEventListener('click', () => openViewer(src));
+    row.append(img);
+  }
+  if (r.media === 'audio') row.append(audioTile(src));
+  if (r.status === 'failed' && r.failure !== null) {
+    // Meta's own words: shown as they are, never put into Urdu.
+    row.append(untranslated(make('p', 'error', r.failure)));
+  }
+  if (r.matchedBy === 'latest') {
+    row.append(
+      make('p', 'meta', 'Not sent as a reply — matched to the last message sent to this number.'),
+    );
+  }
+  return row;
+}
+
+/**
+ * The messages the DC office sent to this post's author, their answers, and the form to send
+ * another. Opened by the Respond button on the card.
+ */
+function responseBox(post: Post, open: HTMLButtonElement | null): HTMLElement {
+  const box = make('div', 'responses');
+  const list = make('div');
+  const error = make('p', 'error');
+  error.hidden = true;
+
+  const draw = (responses: readonly PostResponse[]): void => {
+    list.replaceChildren(
+      ...(responses.length === 0
+        ? []
+        : [
+            make('h3', undefined, 'Messages to the sender'),
+            make('p', 'meta', 'Seen by the DC office and the control room only.'),
+            ...responses.map(responseRow),
+          ]),
+    );
+  };
+  draw(post.responses);
+  box.append(list);
+
+  if (open !== null) {
+    const form = make('form', 'respond-form');
+    form.hidden = true;
+    const to = make('p', 'meta');
+    to.append(
+      make('span', undefined, 'A WhatsApp message to the sender only:'),
+      ' ',
+      untranslated(
+        make(
+          'span',
+          undefined,
+          post.authorPhone === '' ? post.authorName : `${post.authorName} (${post.authorPhone})`,
+        ),
+      ),
+    );
+    const input = make('textarea');
+    input.maxLength = 1000;
+    input.setAttribute('aria-label', 'Message to the sender');
+    const note = make(
+      'p',
+      'meta',
+      'It is marked as an Activities message from the DC office — not an emergency alert.',
+    );
+    const send = make('button', 'primary', 'Send on WhatsApp');
+    send.type = 'submit';
+    const cancel = button('Cancel');
+    const buttons = make('div', 'row');
+    buttons.append(send, cancel);
+    form.append(to, input, note, buttons);
+    box.append(form);
+
+    open.addEventListener('click', () => {
+      form.hidden = false;
+      input.focus();
+    });
+    cancel.addEventListener('click', () => {
+      form.hidden = true;
+      error.hidden = true;
+    });
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (input.value.trim() === '') return input.focus();
+      send.disabled = true;
+      error.hidden = true;
+      const path = `/activities/posts/${post.postId}/responses`;
+      void api<PostResponse[]>('POST', path, { message: input.value })
+        .then((responses) => {
+          draw(responses);
+          input.value = '';
+          form.hidden = true;
+        })
+        .catch(async (err: unknown) => {
+          showError(error, err);
+          // A send Meta refused is kept on the post, with the reason: show it.
+          await api<PostResponse[]>('GET', path)
+            .then(draw)
+            .catch(() => {});
+        })
+        .finally(() => {
+          send.disabled = false;
+        });
+    });
+  }
+  box.append(error);
+  return box;
+}
+
 function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement {
   const card = make('article');
   // Who sent it, first (ADR-0044 §2): name, post, department, number, when.
@@ -592,6 +916,12 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
     card.append(make('p', 'meta', 'No photos, videos or voice notes.'));
   }
 
+  const respondButton = post.mayRespond ? button('Respond') : null;
+  card.append(socialBox(post, respondButton));
+  if (respondButton !== null || post.responses.length > 0) {
+    card.append(responseBox(post, respondButton));
+  }
+
   const actions = make('div', 'row');
   const error = make('p', 'error');
   error.hidden = true;
@@ -644,7 +974,16 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
       'Delete this post, its photos and its videos for good? This cannot be undone.',
     );
   }
-  if (actions.childElementCount > 0) card.append(actions, error);
+  if (actions.childElementCount === 0) return card;
+  if (inBin) {
+    card.append(actions, error);
+    return card;
+  }
+  // In the feed, what manages a post is folded away: a red "Delete permanently" on every card is
+  // not what the reader came for (ADR-0044). The Recycle bin keeps its buttons in view.
+  const menu = make('details', 'post-menu');
+  menu.append(make('summary', undefined, 'Options'), actions, error);
+  card.append(menu);
   return card;
 }
 
@@ -1168,6 +1507,8 @@ const LOG_TEXT: Readonly<Record<string, string>> = {
   pending_expired: 'removed pictures sent on WhatsApp after 30 days',
   audio_added: 'added a voice note',
   contact_added: 'added a WhatsApp number to the Directory',
+  comment_removed: "removed somebody's comment",
+  responded: "sent a message to a post's sender",
 };
 
 async function loadLog(): Promise<void> {

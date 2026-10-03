@@ -77,6 +77,7 @@ The ones most often needed:
 | 0038 | **Bajaur:** `member` role — officers sign in for Activities only; one gate (`requireSeat`) keeps them out of every operational route. |
 | 0039 | **Bajaur:** Activities — a separate module (own tables, own Department list), soft/hard delete, 30-day retention. Never touches incidents or evidence. |
 | 0040 | **Bajaur:** WhatsApp media to the district number becomes Activities; unknown senders → Pending list. |
+| 0044 | **Bajaur:** Activities is a feed — reactions and comments stay in the app; **Respond** is one labelled WhatsApp message to a post's sender (DC + control room only), never an incident. |
 
 **Note on older text:** the ADRs, `docs/` and many code comments were written while building
 the original deployment. Their *reasoning* applies here; their *examples, counts and dated
@@ -136,10 +137,21 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   (English + Urdu; `activitiesUrdu.e2e` fails if a guide paragraph has no key in `ur.json`);
   installer keeps hand-added `.env` lines (`installer/runtime/env-merge.mjs`); a viewer is
   offered no write control; Pending count refreshes itself; Record table fits its own width
-  (container query); Activities ZIP writes ZIP64 past 4 GB. Shell v273 — **bump `CACHE` in
-  `web/src/sw.ts` before `npm run shell:record`**, never record alone.
+  (container query); Activities ZIP writes ZIP64 past 4 GB.
+- **2026-10-03, Activities as a feed (ADR-0044, `PLAN.md` §4b G1–G4), all done:** the page opens
+  on the posts (All / Departments, Filter folded away; Pending only while something waits;
+  Officers, History, My account under More); a card names its sender with their number;
+  *Seen* / *Well done* and comments (`api/activitySocial.ts`, migration 0057, in the app only);
+  **Respond** (`api/activityResponses.ts`, migration 0058, `activities.respond` = owner, admin,
+  operator): plain inside the 24-hour window, template `WHATSAPP_TEMPLATE_ACTIVITY` outside it,
+  delivery shown, the officer's answer returns to the post (`takeAnswer` in the webhook, before
+  everything else; plain words only for a number with no alert in 24 h). Stubbed Meta only.
+  Shell v275 — **bump `CACHE` in `web/src/sw.ts` before `npm run shell:record`**, never record
+  alone. A test (`deployable.e2e`) runs `tsc` on the whole tree: an unfinished `.ts` file left
+  in `src/` fails it.
 - **Next:** nothing buildable is left. Everything waits on the owner — the ordered list is at
-  the top of `OWNER-QUESTIONS.md` (Meta account first, then server/domain, then §2 facts).
+  the top of `OWNER-QUESTIONS.md` (Meta account first, then server/domain, then §2 facts;
+  items 17–24 are the choices made for the feed).
 
 ## 6. Repository map
 

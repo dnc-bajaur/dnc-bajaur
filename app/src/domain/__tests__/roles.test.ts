@@ -53,8 +53,8 @@ describe('base role sets', () => {
   });
 
   /**
-   * ADR-0038 §3 as amended by ADR-0041 §7, row for row. A change here is an access decision for
-   * the DC, not a refactor.
+   * ADR-0038 §3 as amended by ADR-0041 §7 and ADR-0044, row for row. A change here is an access
+   * decision for the DC, not a refactor.
    */
   it('sets the Activities defaults the ADR states', () => {
     const activities = (role: Role): string[] =>
@@ -63,14 +63,24 @@ describe('base role sets', () => {
 
     expect(activities('owner')).toEqual(everything);
     expect(activities('admin')).toEqual(everything);
-    // Every account sees every post and manages its own (ADR-0041 §7).
-    for (const role of ['operator', 'viewer', 'member'] as const) {
+    // Every account sees every post, manages its own (ADR-0041 §7), and reacts and comments
+    // (ADR-0044 §5) — a viewer included.
+    for (const role of ['viewer', 'member'] as const) {
       expect(activities(role), role).toEqual([
+        'activities.comment',
         'activities.delete_own',
         'activities.read_all',
         'activities.upload',
       ]);
     }
+    // Respond is the DC's and the control room's (ADR-0044 §6): an operator, never a viewer.
+    expect(activities('operator')).toEqual([
+      'activities.comment',
+      'activities.delete_own',
+      'activities.read_all',
+      'activities.respond',
+      'activities.upload',
+    ]);
   });
 
   it('lets the DC widen or narrow one account', () => {

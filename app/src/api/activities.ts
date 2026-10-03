@@ -57,25 +57,27 @@ import {
   clearOverride,
   grantLogin,
   loadOverrides,
-  permissionsOf,
   requirePermission,
   setOverride,
 } from './settings.js';
 import type { LinkDeps, LinkOutcome } from './loginLinks.js';
+import {
+  caller,
+  designationSql,
+  maySee,
+  refuse,
+  UUID_RE,
+  type ActivitiesResult,
+  type Caller,
+} from './activitiesAccess.js';
+import { socialFor, type SocialView } from './activitySocial.js';
+import { responsesFor, type ResponseView } from './activityResponses.js';
 
-export type ActivitiesResult<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly status: number; readonly error: string };
-
-function refuse<T>(status: number, error: string): ActivitiesResult<T> {
-  return { ok: false, status, error };
-}
+export type { ActivitiesResult } from './activitiesAccess.js';
 
 function text(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
 }
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Up to ten photos on one post (ADR-0039 §3). */
 export const MAX_PHOTOS_PER_POST = 10;
@@ -154,19 +156,6 @@ export function inside(root: string, relative: string): string {
     throw new Error('refusing to touch a file outside the Activities root');
   }
   return absolute;
-}
-
-//------------------------------------------------------------------------------
-// Who is asking
-//------------------------------------------------------------------------------
-
-interface Caller {
-  readonly identity: Identity;
-  readonly can: ReadonlySet<Permission>;
-}
-
-async function caller(pool: Pool, identity: Identity): Promise<Caller> {
-  return { identity, can: await permissionsOf(pool, identity) };
 }
 
 /** One line in `activity_log`. Also written by WhatsApp → Activities (`whatsappActivities.ts`). */
@@ -744,7 +733,14 @@ export async function giveOfficerLogin(
 // Posts
 //------------------------------------------------------------------------------
 
-export interface PostView {
+export interface PostView extends PostCore, SocialView {
+  /** May the caller send a message to its author (ADR-0044 §6)? */
+  readonly mayRespond: boolean;
+  /** Messages sent to its author and their answers — empty unless the caller may respond. */
+  readonly responses: readonly ResponseView[];
+}
+
+interface PostCore {
   readonly postId: string;
   readonly unitId: string;
   readonly unitName: string;
@@ -811,10 +807,7 @@ interface PostRow {
 const POST_SELECT = `
   SELECT p.post_id, p.unit_id, u.name AS unit_name, p.author_person_id,
          a.full_name AS author_name, a.phone AS author_phone,
-         COALESCE(a.designation,
-                  (SELECT s.title FROM duty_assignment d JOIN seat s ON s.seat_id = d.seat_id
-                    WHERE d.person_id = a.person_id AND d.to_at IS NULL AND s.retired_at IS NULL
-                    ORDER BY d.from_at DESC LIMIT 1)) AS author_designation,
+         ${designationSql('a')} AS author_designation,
          to_char(p.activity_date, 'YYYY-MM-DD') AS activity_date,
          p.caption, p.place, p.created_at, p.hidden_at, p.source,
          p.created_at + make_interval(days => ${RETENTION_DAYS}) AS expires_at,
@@ -835,7 +828,7 @@ const POST_SELECT = `
     JOIN activity_unit u ON u.unit_id = p.unit_id
     JOIN person a        ON a.person_id = p.author_person_id`;
 
-function toView(c: Caller, r: PostRow): PostView {
+function toView(c: Caller, r: PostRow): PostCore {
   const own = r.author_person_id === c.identity.personId;
   const photos = r.photos ?? [];
   const videos = r.videos ?? [];
@@ -869,12 +862,32 @@ function toView(c: Caller, r: PostRow): PostView {
 }
 
 /**
- * May this caller see this post at all? Hidden posts only in the Recycle bin, and only to a
- * moderator. Otherwise: everyone's with `read_all`, one's own without it.
+ * Posts as the caller is to see them: each with its reactions and comments (ADR-0044 §4–§5), and
+ * — for a caller who may respond, and nobody else — the messages sent to its author and their
+ * answers (§6). Two more queries for the whole page, not per post.
  */
-function maySee(c: Caller, authorPersonId: string, hiddenAt: string | null): boolean {
-  if (hiddenAt !== null) return c.can.has('activities.moderate');
-  return c.can.has('activities.read_all') || authorPersonId === c.identity.personId;
+async function views(pool: Pool, c: Caller, rows: readonly PostRow[]): Promise<PostView[]> {
+  const social = await socialFor(
+    pool,
+    c,
+    rows.map((r) => ({ postId: r.post_id, hidden: r.hidden_at !== null })),
+  );
+  const responses = await responsesFor(
+    pool,
+    c,
+    rows.map((r) => r.post_id),
+  );
+  return rows.map((r) => ({
+    ...toView(c, r),
+    ...social.get(r.post_id)!,
+    mayRespond: c.can.has('activities.respond') && r.hidden_at === null,
+    responses: responses.get(r.post_id) ?? [],
+  }));
+}
+
+async function viewOf(pool: Pool, c: Caller, postId: string): Promise<PostView> {
+  const row = await pool.query<PostRow>(`${POST_SELECT} WHERE p.post_id = $1`, [postId]);
+  return (await views(pool, c, row.rows))[0]!;
 }
 
 const PAGE_SIZE = 30;
@@ -943,7 +956,7 @@ export async function listPosts(
   return {
     ok: true,
     value: {
-      posts: rows.slice(0, PAGE_SIZE).map((r) => toView(c, r)),
+      posts: await views(pool, c, rows.slice(0, PAGE_SIZE)),
       more: rows.length > PAGE_SIZE,
     },
   };
@@ -999,8 +1012,7 @@ export async function createPost(
   const postId = res.rows[0]!.post_id;
   await writeLog(pool, { type: 'posted', actor: identity.personId, postId, unitId });
 
-  const row = await pool.query<PostRow>(`${POST_SELECT} WHERE p.post_id = $1`, [postId]);
-  return { ok: true, value: toView(c, row.rows[0]!) };
+  return { ok: true, value: await viewOf(pool, c, postId) };
 }
 
 /**
@@ -1051,8 +1063,7 @@ export async function changeDate(
       detail: { from: post.activity_date, to: activityDate },
     });
   }
-  const row = await pool.query<PostRow>(`${POST_SELECT} WHERE p.post_id = $1`, [postId]);
-  return { ok: true, value: toView(c, row.rows[0]!) };
+  return { ok: true, value: await viewOf(pool, c, postId) };
 }
 
 /**

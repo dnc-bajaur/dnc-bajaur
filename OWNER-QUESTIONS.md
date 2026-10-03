@@ -6,7 +6,7 @@ answered.
 
 ## Your tasks, in the order that saves the most time (updated 2026-10-03)
 
-Everything that could be built without you is built (`PLAN.md` §4 and §4a). What is left is
+Everything that could be built without you is built (`PLAN.md` §4, §4a and §4b). What is left is
 yours. Details for each are in `PLAN.md` §2 and §3.
 
 | # | What you do | Why this order |
@@ -21,10 +21,40 @@ yours. Details for each are in `PLAN.md` §2 and §3.
 | 8 | **Run one full installer build** (item 10 below), only if the Windows installer will be used | I could not build `setup.exe` here |
 | 9 | **Make the repository private** (PLAN §3 step 12) | it is public now |
 
+## From the Activities feed — reactions, comments, Respond (2026-10-03, PLAN §4b, ADR-0044)
+
+Built as you decided in conversation. What I chose where you had not said, for you to change:
+
+17. **Respond outside 24 hours needs one more Meta template**, `dnc_bajaur_activity_response`
+    (text in `docs/whatsapp-template.md`). It goes to Meta with the others (task 1 above); then
+    set `WHATSAPP_TEMPLATE_ACTIVITY`. Until then a Respond reaches only an officer who wrote to
+    the district number in the last 24 hours; to anybody else **nothing is sent and the screen
+    says so**. Tested with a stubbed Meta only.
+18. **The message an officer receives** opens *"Activities — message from the DC office"*, quotes
+    their post, and ends *"This is not an emergency alert. To answer, reply to this message."*
+    (English, like every WhatsApp message the app sends). Say if you want other words.
+19. **"DC and control room"** = accounts with the role `owner`, `admin` or `operator`. A `viewer`
+    and an officer (`member`) do not see Respond, the messages or the answers. Per account this
+    can be changed in Settings (*Activities: send a WhatsApp message to a post's sender*).
+20. **The two marks are *Seen* and *Well done*** (Urdu: "دیکھ لیا", "شاباش"); the Respond button
+    reads "پیغام بھیجیں" in Urdu. A comment is at most 1000 characters. Say if you want others.
+21. **An answer typed without WhatsApp's reply** is put under the post only if that officer was
+    sent **no emergency alert in the last 24 hours**. If they were, the words go to the emergency
+    as before — an answer to an emergency must never land in Activities by mistake. It is marked
+    *"matched to the last message"* when it was placed by time rather than by reply.
+22. **A video sent as an answer becomes an ordinary post** (everyone sees it), with a line under
+    the Respond saying so. A photo or a voice note sent as an answer stays with the answer, seen
+    only by the DC and the control room.
+23. **Change date / Move to Recycle bin / Delete are now under "Options"** on each post, so the
+    feed is not a row of red buttons. The Recycle bin itself still shows them openly.
+24. **12 guide paragraphs are new or changed** (the Activities chapter), in English and my Urdu
+    draft — please read them with the rest (task 6 above).
+
 ## From E3 — fewer tabs (2026-10-03)
 
 1. **Where should Departments live?** Your E3 list did not name it. It is now a section at the
    bottom of the **Officers** tab (same people may use it). Say if you want it elsewhere.
+   *(Since ADR-0044, Officers, History and My account open from **More**.)*
 2. **History opens on the Log** (Recycle bin is one tap away). Say if the bin should come first.
 
 ## From E4 — Urdu / English (2026-10-03)

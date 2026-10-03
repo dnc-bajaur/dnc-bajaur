@@ -289,3 +289,32 @@ Tap the button below to choose your own password. The link works once and stops 
 - **Turn on:** once approved, set `WHATSAPP_TEMPLATE_LOGIN=dnc_bajaur_login_link` in `app/.env`.
   `npm run doctor` checks the approved template against this one. Until then the DC is shown the
   link to send by hand — "Give login" works either way.
+
+## `dnc_bajaur_activity_response` — Respond, on an Activities post (ADR-0044, Bajaur G3)
+
+Sent when the DC office presses **Respond** on an Activities post and the officer has **not**
+written to the district number in the last 24 hours. Inside those 24 hours no template is used: a
+plain message goes, and says the same thing.
+
+- **Category:** Utility · **Language:** English (`en`)
+- **Body** (two parameters: the date of the post, and the message):
+
+```
+District Nerve Center — Bajaur
+
+Activities — a message from the DC office about your post of {{1}}:
+
+{{2}}
+
+This is not an emergency alert. To answer, reply to this message.
+```
+
+- **No button.** The officer answers by replying, and the answer appears under the post.
+- **The message goes as one line.** Meta refuses a parameter with a line break in it, so the
+  software joins the lines with spaces on this path.
+- **Submit:** `npm run submit:template -- --name dnc_bajaur_activity_response`.
+- **Turn on:** once approved, set `WHATSAPP_TEMPLATE_ACTIVITY=dnc_bajaur_activity_response` in
+  `app/.env`. Until then, a Respond to an officer outside the 24 hours is **not sent**, and the
+  screen says so.
+- ⚠️ If Meta files it under *Marketing* instead of *Utility*, do not use it as it is — tell the
+  developer; the wording will need changing (this happened to six other templates).

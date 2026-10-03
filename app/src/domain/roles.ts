@@ -76,7 +76,14 @@ export type Permission =
   /** Activities: create, rename and retire the Department list. */
   | 'activities.departments'
   /** Activities: approve or reject media that arrived from an unknown number (ADR-0040). */
-  | 'activities.pending';
+  | 'activities.pending'
+  /** Activities: react to a post and comment on it — in the app only (ADR-0044 §4–§5). */
+  | 'activities.comment'
+  /**
+   * Activities: send a WhatsApp message to the person who made a post, and see such messages and
+   * their answers (ADR-0044 §6). The DC and the control room.
+   */
+  | 'activities.respond';
 
 export const PERMISSIONS: readonly Permission[] = [
   'accounts.read',
@@ -98,6 +105,8 @@ export const PERMISSIONS: readonly Permission[] = [
   'activities.moderate',
   'activities.departments',
   'activities.pending',
+  'activities.comment',
+  'activities.respond',
 ];
 
 export function isPermission(value: string): value is Permission {
@@ -105,12 +114,18 @@ export function isPermission(value: string): value is Permission {
 }
 
 /**
- * Activities defaults, ADR-0038 §3 as amended by ADR-0041 §7. Every role may upload, delete its
- * own posts and see everyone's; only the DC (`owner`) and DNC (`admin`) moderate, keep the
- * Department list and clear the Pending list. Any of these is changed per account by an override.
+ * Activities defaults, ADR-0038 §3 as amended by ADR-0041 §7 and ADR-0044. Every role may upload,
+ * delete its own posts, see everyone's, and react and comment; only the DC (`owner`) and DNC
+ * (`admin`) moderate, keep the Department list and clear the Pending list. Respond is the DC's
+ * and the control room's: `owner`, `admin` and `operator`. Any of these is changed per account by
+ * an override.
  */
 const ACTIVITIES_OWN: readonly Permission[] = ['activities.upload', 'activities.delete_own'];
-const ACTIVITIES_ALL: readonly Permission[] = [...ACTIVITIES_OWN, 'activities.read_all'];
+const ACTIVITIES_ALL: readonly Permission[] = [
+  ...ACTIVITIES_OWN,
+  'activities.read_all',
+  'activities.comment',
+];
 
 /**
  * The base permission set for each role.
@@ -130,7 +145,7 @@ const ACTIVITIES_ALL: readonly Permission[] = [...ACTIVITIES_OWN, 'activities.re
 const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   owner: PERMISSIONS,
   admin: PERMISSIONS,
-  operator: ACTIVITIES_ALL,
+  operator: [...ACTIVITIES_ALL, 'activities.respond'],
   viewer: ACTIVITIES_ALL,
   // ADR-0041 §7: every account sees every post; the DC can deny `read_all` to one account.
   member: ACTIVITIES_ALL,

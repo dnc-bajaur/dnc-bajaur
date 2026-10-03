@@ -201,8 +201,12 @@ describe.skipIf(dbUrl === undefined)('Activities — fewer tabs (E3)', () => {
       'Departments',
     ]);
     expect(await page.locator('#filterBox').isVisible()).toBe(false);
+    // Nothing to choose or fill before the posts: no list to pick from, no date to enter. (A
+    // card's own comment box is not a form in the way.)
     expect(
-      await page.locator('#view-posts select:visible, #view-posts input:visible').count(),
+      await page
+        .locator('#view-posts select:visible, #view-posts input[type="date"]:visible')
+        .count(),
     ).toBe(0);
 
     // The card names its sender, with the number (ADR-0044 §2).

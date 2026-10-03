@@ -150,15 +150,42 @@ const CONTENT = `
       <div class="hbody">
         <div class="htabs">
           <span class="htab on">Activities</span><span class="htab">New post</span>
-          <span class="htab">Pending</span><span class="htab">Officers</span>
-          <span class="htab">History</span><span class="htab">My account</span>
+          <span class="htab">Pending</span><span class="htab">More</span>
         </div>
       </div>
     </div>
     <p>An officer sees <kbd class="uilabel">Activities</kbd>, <kbd class="uilabel">New
-    post</kbd> and <kbd class="uilabel">My account</kbd>. The other three are for the DC office.
-    <b>Every account reads every post</b>; the list can be narrowed by department, person and
-    date.</p>
+    post</kbd> and <kbd class="uilabel">My account</kbd>. The DC office also has <kbd
+    class="uilabel">Pending</kbd> — shown only while something is waiting — and <kbd
+    class="uilabel">More</kbd>, which holds <kbd class="uilabel">Officers</kbd>, <kbd
+    class="uilabel">History</kbd> and <kbd class="uilabel">My account</kbd>. <b>Every account
+    reads every post.</b></p>
+
+    <h3>Reading the posts</h3>
+    <p>Activities opens on the posts, newest first. Each one says <b>who sent it</b> — name,
+    post, department and mobile number — then what they wrote, then the photos, videos and voice
+    notes. <kbd class="uilabel">All</kbd> shows every department. <kbd
+    class="uilabel">Departments</kbd> lists each department with how many posts it holds; tap one
+    to see only its posts. <kbd class="uilabel">Filter</kbd> narrows by person and date.</p>
+
+    <h3>Seen, Well done and comments</h3>
+    <p>Under a post, anybody who can see it can mark it <kbd class="uilabel">Seen</kbd> or <kbd
+    class="uilabel">Well done</kbd> — one mark each; tap it again to take it off — and write a
+    comment. <b>These stay inside the app.</b> Nothing is sent to the officer on WhatsApp, so an
+    officer who posts by WhatsApp and never signs in does not see them.</p>
+
+    <h3>Respond — a message to the officer</h3>
+    <p>The DC and the control room have one more button under a post: <kbd
+    class="uilabel">Respond</kbd>. It sends your message on WhatsApp, from the district's number,
+    <b>only to the person who sent that post</b>. The message says it is from Activities and ends
+    <i>This is not an emergency alert</i> — there is no clock and nothing to acknowledge.</p>
+    <p>Under the post you then see whether it was <i>Sent</i>, <i>Delivered</i>, <i>Read</i> or
+    <i>Not sent</i>, with the reason. When the officer answers — best with WhatsApp's own reply
+    on that message — the answer appears under the same post. <b>Only the DC and the control
+    room see Respond, the messages and the answers.</b></p>
+    <div class="note"><b>WhatsApp allows a free message only within 24 hours of the officer's
+    last message to the district's number.</b> After that it needs a message form approved by
+    Meta; until that is approved, the screen says that nothing was sent.</div>
 
     <h3>Posting from the app</h3>
     <p><kbd class="uilabel">New post</kbd> asks for the department, the date of the activity and
@@ -185,13 +212,15 @@ const CONTENT = `
     <p>What arrived on WhatsApp and needs the DC office — mostly from numbers that are not in the
     Directory. Each one can be approved under somebody already there, deleted, or its number can
     be added with <kbd class="uilabel">Add to Directory</kbd>, after which that number's pictures
-    post by themselves. The number on the tab is how many are waiting.</p>
+    post by themselves. The number on the tab is how many are waiting; with nothing waiting, the
+    tab is not shown.</p>
     <div class="note warn"><b>Adding a number to the Directory is more than Activities.</b> A
     Directory contact can be chosen on <kbd class="uilabel">Who should know?</kbd> and sent
     emergency alerts. Add only somebody the district means to reach.</div>
 
     <h3>Officers</h3>
-    <p>Every Directory contact and every account, with three controls: the <b>department</b>
+    <p>Under <kbd class="uilabel">More</kbd>. Every Directory contact and every account, with
+    three controls: the <b>department</b>
     their posts are filed under, <b>Activities on or off</b> (off: what they send waits on
     Pending instead of posting), and <kbd class="uilabel">Give login</kbd>, which always gives a
     <i>member</i> login — Activities only. The <b>Department list</b> sits below: add one, or
@@ -203,11 +232,12 @@ const CONTENT = `
     <kbd class="uilabel">Download ZIP</kbd> to keep a copy.</p>
 
     <h3>Removing a post, and History</h3>
-    <p>An officer can delete their own post. The DC office can <kbd class="uilabel">Move to
-    Recycle bin</kbd> — which hides it and can be undone with <kbd
-    class="uilabel">Restore</kbd> — or <kbd class="uilabel">Delete permanently</kbd>, which
-    cannot. <kbd class="uilabel">History</kbd> opens on the log of who posted, hid, restored or
-    deleted what, with the Recycle bin one tap away.</p>
+    <p>An officer can delete their own post, under <kbd class="uilabel">Options</kbd> on the
+    post. There the DC office can <kbd class="uilabel">Move to Recycle bin</kbd> — which hides it
+    and can be undone with <kbd class="uilabel">Restore</kbd> — or <kbd class="uilabel">Delete
+    permanently</kbd>, which cannot; its comments and messages go with it. <kbd
+    class="uilabel">History</kbd>, under <kbd class="uilabel">More</kbd>, opens on the log of who
+    posted, hid, restored or deleted what, with the Recycle bin one tap away.</p>
     <div class="note"><b>This is the one place in the system where something can be
     deleted.</b> An emergency's record never can be — see <a href="#help-correct">correcting
     something sent in error</a>.</div>

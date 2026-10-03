@@ -196,6 +196,79 @@
       .byline a {
         color: inherit;
       }
+      article details.post-menu summary {
+        color: var(--muted);
+        font-size: 0.9rem;
+        cursor: pointer;
+        width: fit-content;
+      }
+      /* Reactions and comments (ADR-0044 §4–§5). */
+      .social {
+        margin-top: 12px;
+        padding-top: 4px;
+        border-top: 1px solid var(--line);
+      }
+      .mark[aria-pressed='true'] {
+        border-color: var(--primary);
+        color: var(--primary);
+        font-weight: 600;
+      }
+      .comments {
+        margin-top: 10px;
+      }
+      .comment,
+      .response {
+        padding: 8px 10px;
+        margin-top: 6px;
+        border-radius: 8px;
+        background: var(--paper);
+      }
+      .comment .caption,
+      .response .caption {
+        margin: 2px 0 0;
+      }
+      .comment-form {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .comment-form input {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      button.link {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--primary);
+        text-decoration: underline;
+      }
+      /* Respond (ADR-0044 §6): the DC office's messages to the sender, and the answers. */
+      .responses h3 {
+        margin-bottom: 0;
+      }
+      .response.out {
+        border-inline-start: 3px solid var(--primary);
+      }
+      .response.in {
+        border-inline-start: 3px solid var(--line);
+        margin-inline-start: 16px;
+      }
+      .response .state.failed {
+        color: var(--critical);
+        font-weight: 600;
+      }
+      .response img {
+        display: block;
+        max-width: 240px;
+        max-height: 240px;
+        margin-top: 6px;
+        border-radius: 6px;
+        cursor: zoom-in;
+      }
+      .respond-form {
+        margin-top: 10px;
+      }
       #historyPick {
         margin-bottom: 12px;
       }
