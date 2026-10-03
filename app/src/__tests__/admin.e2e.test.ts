@@ -462,6 +462,51 @@ describe.skipIf(dbUrl === undefined)('M1a: the administration console', () => {
   });
 
   /**
+   * The administration tick had a route and no control (PLAN, inherited gap). From the drawer
+   * now: asked about first, in words; the post's seat carries it afterwards; and it comes off the
+   * same way. (The last ticked post cannot be unticked — the server's guard, pinned in
+   * `roster.test.ts`; the drawer says so instead of offering the box.)
+   */
+  it('4g. ticks a post as the administration from its drawer, and takes it off again', async () => {
+    const designation = `Canal Contact e2e ${RUN}`;
+    const card = page.locator('#adminDepartments .g-card', { hasText: designation });
+    const drawer = page.locator('#adminDrawerBackdrop');
+    const tick = drawer.getByLabel('This post is the administration');
+    const seatTick = async (): Promise<boolean> =>
+      (
+        await pool.query<{ is_administration: boolean }>(
+          'SELECT is_administration FROM seat WHERE title = $1 AND retired_at IS NULL',
+          [designation],
+        )
+      ).rows[0]!.is_administration;
+
+    await card.waitFor({ timeout: 5000 });
+    await card.getByText('Edit in Drawer →').click({ timeout: 5000 });
+    await drawer.waitFor({ state: 'visible', timeout: 5000 });
+    expect(await tick.isChecked({ timeout: 5000 })).toBe(false);
+
+    await tick.check({ timeout: 5000 });
+    await page
+      .locator('dialog.ask')
+      .getByRole('button', { name: 'Make it the administration' })
+      .click({ timeout: 5000 });
+    // Closed: the backdrop stays in the page, without `open`.
+    await page.waitForSelector('#adminDrawerBackdrop:not(.open)', { timeout: 5000 });
+    expect(await seatTick()).toBe(true);
+
+    await card.getByText('Edit in Drawer →').click({ timeout: 5000 });
+    await drawer.waitFor({ state: 'visible', timeout: 5000 });
+    expect(await tick.isChecked({ timeout: 5000 })).toBe(true);
+    await tick.uncheck({ timeout: 5000 });
+    await page
+      .locator('dialog.ask')
+      .getByRole('button', { name: 'Take it away' })
+      .click({ timeout: 5000 });
+    await page.waitForSelector('#adminDrawerBackdrop:not(.open)', { timeout: 5000 });
+    expect(await seatTick()).toBe(false);
+  });
+
+  /**
    * The Directory and Groups cards were built with `innerHTML` from the contact's name, post and
    * number and the group's name — unescaped. Markup typed into one of them ran in every admin's
    * console. Entered here through the real drawers, and read back as text with nothing run.

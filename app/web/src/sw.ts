@@ -1277,7 +1277,8 @@ declare const self: ServiceWorkerGlobalScope;
 // stylesheet's left/right margins, paddings, borders and alignment made logical for right-to-left.
 // v269: Bajaur E5 (ADR-0043) — "Give login" sends a sign-in link; the set-password page;
 // `/set-password` never cached. `admin.ts`, `activities.ts`, `office.css` and `ur.json` moved.
-const CACHE = 'dnc-shell-v269';
+// v270: the administration tick gets its control in the contact drawer. `admin.ts` moved.
+const CACHE = 'dnc-shell-v270';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.

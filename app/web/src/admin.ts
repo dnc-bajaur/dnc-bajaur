@@ -1032,6 +1032,13 @@ export function mountAdmin(): AdminConsole {
       })();
     });
 
+    form.append(
+      administrationSection(contact, soleAdministration, () => {
+        drawer.close();
+        onChanged();
+      }),
+    );
+
     if (!contact.hasLogin) {
       form.append(
         giveLoginSection(contact, () => {
@@ -1042,6 +1049,87 @@ export function mountAdmin(): AdminConsole {
     }
 
     drawer.open(title, sub, form);
+  }
+
+  /**
+   * The administration tick — ADR-0029 §2, and PLAN's inherited gap: the route existed
+   * (`POST /roster/contacts/:id/administration`) with no control anywhere in the app.
+   *
+   * 🔴 The single most consequential write in the roster: a ticked post sees the whole district
+   * and may issue advisories and orders. So the change is asked about first, in words that say
+   * what it does, and the last ticked post is shown as such — the server refuses to untick it
+   * (a district where nobody is the administration cannot issue an advisory), and offering a box
+   * that can only fail would teach people to distrust it.
+   */
+  function administrationSection(
+    contact: DirectoryContact,
+    soleAdministration: boolean,
+    onDone: () => void,
+  ): HTMLElement {
+    const section = document.createElement('div');
+    section.className = 'd-field';
+    section.append(
+      text('label', 'd-label', 'Administration'),
+      text(
+        'p',
+        'note',
+        'The administration offices (the DC Office and AC Headquarter) see the whole district and can issue advisories and orders. At least one post must always have this.',
+      ),
+    );
+
+    const tick = document.createElement('label');
+    tick.className = 'd-check';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = contact.isAdministration;
+    tick.append(box, document.createTextNode(' This post is the administration'));
+    section.append(tick);
+
+    if (contact.isAdministration && soleAdministration) {
+      box.disabled = true;
+      section.append(
+        text(
+          'p',
+          'note',
+          'This is the only administration post, so it cannot be unticked. Tick another post first.',
+        ),
+      );
+      return section;
+    }
+
+    box.addEventListener('change', () => {
+      void (async () => {
+        const on = box.checked;
+        const ok = await ask({
+          title: on
+            ? `Make ${contact.role} the administration?`
+            : `Take the administration from ${contact.role}?`,
+          body: on
+            ? 'Whoever holds this post will see the whole district and can issue advisories and orders. The change is recorded.'
+            : 'Whoever holds this post will see only their own work. The change is recorded.',
+          confirm: on ? 'Make it the administration' : 'Take it away',
+          danger: !on,
+        });
+        if (ok === null) {
+          box.checked = !on;
+          return;
+        }
+        box.disabled = true;
+        const done = await api(
+          'POST',
+          `/roster/contacts/${contact.id}/administration`,
+          { on },
+          drawer.sink,
+        );
+        box.disabled = false;
+        if (done === null) {
+          box.checked = !on;
+          return;
+        }
+        onDone();
+      })();
+    });
+    return section;
   }
 
   /**

@@ -1336,5 +1336,13 @@
   "Cannot reach the server. Check your connection and reload this page.": "سرور تک رسائی نہیں ہو سکی۔ اپنا کنکشن چیک کریں اور یہ صفحہ دوبارہ کھولیں۔",
   "password must be at least {n} characters": "پاس ورڈ کم از کم {n} حروف کا ہونا چاہیے",
   "login_link_issued": "سائن اِن لنک جاری",
-  "login_link_used": "سائن اِن لنک استعمال"
+  "login_link_used": "سائن اِن لنک استعمال",
+  "The administration offices (the DC Office and AC Headquarter) see the whole district and can issue advisories and orders. At least one post must always have this.": "انتظامیہ کے دفاتر (ڈی سی آفس اور اے سی ہیڈکوارٹر) پورا ضلع دیکھتے ہیں اور ایڈوائزری اور احکامات جاری کر سکتے ہیں۔ کم از کم ایک عہدے کے پاس یہ ہمیشہ ہونا چاہیے۔",
+  "This post is the administration": "یہ عہدہ انتظامیہ ہے",
+  "This is the only administration post, so it cannot be unticked. Tick another post first.": "یہ انتظامیہ کا واحد عہدہ ہے، اس لیے اسے ہٹایا نہیں جا سکتا۔ پہلے کسی اور عہدے کو ٹک کریں۔",
+  "Make {post} the administration?": "{post} کو انتظامیہ بنائیں؟",
+  "Take the administration from {post}?": "{post} سے انتظامیہ واپس لیں؟",
+  "Whoever holds this post will see the whole district and can issue advisories and orders. The change is recorded.": "اس عہدے پر جو بھی ہوگا وہ پورا ضلع دیکھے گا اور ایڈوائزری اور احکامات جاری کر سکے گا۔ یہ تبدیلی درج ہوتی ہے۔",
+  "Whoever holds this post will see only their own work. The change is recorded.": "اس عہدے پر جو بھی ہوگا وہ صرف اپنا کام دیکھے گا۔ یہ تبدیلی درج ہوتی ہے۔",
+  "Make it the administration": "انتظامیہ بنائیں"
 }

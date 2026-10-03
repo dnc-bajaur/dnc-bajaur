@@ -128,10 +128,9 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   Departments under Officers, Log + Recycle bin under History, Pending count. E4a Urdu switch
   (ADR-0042): `web/src/i18n.ts` + word list `web/ur.json`; the whole app and the guide in Urdu
   (E4b/E4c), wording awaits the owner. E5 sign-in link (ADR-0043, migration 0055): login given
-  by a single-use link the officer uses to set their own password. Shell v269.
+  by a single-use link the officer uses to set their own password. Shell v270.
   Tested with a stubbed Meta only. ⚠️ Any role other than `member` is the full control room.
-- **Next:** §4 is built. Remaining open items: the administration tick has no control in the app;
-  failed-video remove button; server-side HEIC; ffmpeg in the Windows installer; trim
+- **Next:** §4 is built. Remaining open items: failed-video remove button; server-side HEIC; ffmpeg in the Windows installer; trim
   `docs/06-open-questions.md` — `PLAN.md`. Owner's open questions: `OWNER-QUESTIONS.md`.
 
 ## 6. Repository map

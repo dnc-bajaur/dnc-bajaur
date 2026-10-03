@@ -188,8 +188,9 @@ Known inherited bugs (found 2026-10-02):
 - [x] `npm run dev:account` and `npm run demo` used the dropped `department` table — fixed.
 - [x] `web/src/admin.ts` contact **and group** cards were built with unescaped `innerHTML` —
       fixed 2026-10-02 (built with `textContent`; pinned by `admin.e2e.test.ts` 4f).
-- [ ] The administration tick (`seat.is_administration`) has an API route
-      (`POST /roster/contacts/:id/administration`) but no control in the app.
+- [x] The administration tick (`seat.is_administration`) had an API route but no control —
+      fixed 2026-10-03: a tick in the contact drawer (Administration → Directory → Edit), asked
+      about first; the last ticked post is shown as such instead of offering the box (`admin.e2e` 4g).
 
 ## 5. To verify (open points)
 
