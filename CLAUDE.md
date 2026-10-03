@@ -129,7 +129,7 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   (ADR-0042): `web/src/i18n.ts` + word list `web/ur.json`; the whole app and the guide in Urdu
   (E4b/E4c), wording awaits the owner. E5 sign-in link (ADR-0043, migration 0055): login given
   by a single-use link the officer uses to set their own password. Shell v272.
-  Tested with a stubbed Meta only. ⚠️ Any role other than `member` is the full control room.
+  Tested with a stubbed Meta only. A `viewer` is read-only (gate in `resolveSession`).
 - **Next:** the plan's buildable work is done. What remains waits on the owner: §2 facts, §3
   go-live, and `OWNER-QUESTIONS.md` (Urdu wording, git-history decision, installer build).
 

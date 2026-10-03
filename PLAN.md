@@ -182,8 +182,11 @@ C2 notes (2026-10-02):
 Rules that hold until these ship:
 - **B1 shipped (2026-10-02):** a `member` account is refused every operational route. Accounts
   of the other roles (`operator`, `viewer`, `admin`) still act as the full control room.
-- Existing gap: the `viewer` role is not enforced on operational writes. Do not issue viewer
-  accounts until it is.
+- [x] The `viewer` role is enforced (2026-10-03): every operational write refuses a viewer, on
+  the same deny-by-default door as the member gate (`viewerGate.test.ts` walks the router). Its
+  own password, sign-out and Activities still work. UI follow-up: the screens still offer a
+  viewer the Report form and other write buttons, which then refuse — hide them if viewers are
+  issued; a report a viewer's handset queued stays in its outbox (INV-01).
 - WhatsApp setup and template submission happen **only** on Bajaur's new Meta business
   portfolio — never on any other district's.
 

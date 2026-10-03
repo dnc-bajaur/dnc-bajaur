@@ -419,9 +419,35 @@ const MEMBER_REFUSED = 'this account may use Activities only';
 
 class MemberRefused extends Error {}
 
-async function resolveSession(pool: Pool, token: string): Promise<Identity | null> {
+/**
+ * ADR-0032 — a `viewer` is read-only: it sees the operational screens and every write refuses.
+ *
+ * Until 2026-10-03 nothing enforced it (PLAN: "do not issue viewer accounts until it is") — a
+ * viewer was the full control room. Enforced here, on the same door as the member gate, so it is
+ * deny by default: every operational route authenticates through `resolveSession`, and any method
+ * that is not a read is refused for a viewer, including a route added next year. What a viewer may
+ * still do goes through other doors on purpose: change its own password and sign out (`/auth/…`),
+ * and Activities (`resolveAnySession`), which is not the operational record.
+ *
+ * A report a viewer's handset queued offline is not lost: the outbox treats a 403 as "signed in
+ * as somebody who may not send this" and keeps it (INV-01, `httpTransport.ts`).
+ */
+const VIEWER_REFUSED = 'this account is read-only (viewer)';
+
+class ViewerRefused extends Error {}
+
+const READS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+async function resolveSession(
+  pool: Pool,
+  token: string,
+  method: string | undefined,
+): Promise<Identity | null> {
   const identity = await resolveAnySession(pool, token);
   if (identity?.role === 'member') throw new MemberRefused(MEMBER_REFUSED);
+  if (identity?.role === 'viewer' && !READS.has(method ?? 'GET')) {
+    throw new ViewerRefused(VIEWER_REFUSED);
+  }
   return identity;
 }
 
@@ -2816,7 +2842,7 @@ export function createSyncServer(options: ServerOptions): Server {
          */
         if (url.pathname.startsWith('/contacts/')) {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -2836,7 +2862,7 @@ export function createSyncServer(options: ServerOptions): Server {
          */
         if (url.pathname === '/summary') {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -2903,7 +2929,7 @@ export function createSyncServer(options: ServerOptions): Server {
          */
         if (url.pathname === '/board/live') {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -2967,7 +2993,7 @@ export function createSyncServer(options: ServerOptions): Server {
          */
         if (url.pathname === '/search') {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3027,7 +3053,7 @@ export function createSyncServer(options: ServerOptions): Server {
          */
         if (url.pathname === '/reports/daily') {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3091,7 +3117,7 @@ export function createSyncServer(options: ServerOptions): Server {
           url.pathname === '/export/resolutions.csv'
         ) {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3144,7 +3170,7 @@ export function createSyncServer(options: ServerOptions): Server {
 
         if (url.pathname === '/export/incidents.csv') {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3249,7 +3275,7 @@ export function createSyncServer(options: ServerOptions): Server {
          */
         if (url.pathname === '/export/performance.csv') {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3298,7 +3324,7 @@ export function createSyncServer(options: ServerOptions): Server {
 
         if (url.pathname === '/dashboard') {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3323,7 +3349,7 @@ export function createSyncServer(options: ServerOptions): Server {
          */
         if (url.pathname === '/status' || url.pathname.startsWith('/status/')) {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3342,7 +3368,7 @@ export function createSyncServer(options: ServerOptions): Server {
         // lives inside each handler in `api/admin.ts`.
         if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3358,7 +3384,7 @@ export function createSyncServer(options: ServerOptions): Server {
         // handler — never here (INV-05).
         if (url.pathname === '/settings' || url.pathname.startsWith('/settings/')) {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3377,7 +3403,7 @@ export function createSyncServer(options: ServerOptions): Server {
             return;
           }
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
             return;
@@ -3395,7 +3421,7 @@ export function createSyncServer(options: ServerOptions): Server {
         // What a department can send (M1-02). Same gate as the roster.
         if (url.pathname === '/fleet' || url.pathname.startsWith('/fleet/')) {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3410,7 +3436,7 @@ export function createSyncServer(options: ServerOptions): Server {
         // offices may edit any. The scoping itself lives in `api/roster.ts` → `reach`.
         if (url.pathname === '/roster' || url.pathname.startsWith('/roster/')) {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3425,7 +3451,7 @@ export function createSyncServer(options: ServerOptions): Server {
 
         if (incidentRoute !== null) {
           const token = readToken(req);
-          const identity = token === null ? null : await resolveSession(pool, token);
+          const identity = token === null ? null : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3484,8 +3510,12 @@ export function createSyncServer(options: ServerOptions): Server {
           const token = readToken(req);
           // `/auth/me` is open to a member (ADR-0038): the client needs the role to know which
           // screen to draw. `/sync` is the incident record, and is not.
-          const resolve = url.pathname === '/auth/me' ? resolveAnySession : resolveSession;
-          const identity = token === null ? null : await resolve(pool, token);
+          const identity =
+            token === null
+              ? null
+              : url.pathname === '/auth/me'
+                ? await resolveAnySession(pool, token)
+                : await resolveSession(pool, token, req.method);
 
           if (identity === null) {
             json(res, 401, { error: 'authentication required' });
@@ -3551,6 +3581,11 @@ export function createSyncServer(options: ServerOptions): Server {
         // ADR-0038: a member reached an operational route. Refused, not an error.
         if (err instanceof MemberRefused) {
           if (!res.headersSent) json(res, 403, { error: MEMBER_REFUSED });
+          return;
+        }
+        // ADR-0032: a viewer tried to write. Refused, not an error.
+        if (err instanceof ViewerRefused) {
+          if (!res.headersSent) json(res, 403, { error: VIEWER_REFUSED });
           return;
         }
         // Never leak internals to a caller, but never swallow the cause either. The
