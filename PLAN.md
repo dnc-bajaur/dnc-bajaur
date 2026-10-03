@@ -202,6 +202,20 @@ Known inherited bugs (found 2026-10-02):
       fixed 2026-10-03: a tick in the contact drawer (Administration → Directory → Edit), asked
       about first; the last ticked post is shown as such instead of offering the box (`admin.e2e` 4g).
 
+## 4a. Loose ends (owner said 2026-10-03: do them all, one by one, no approval needed)
+
+Each is built, tested, committed and pushed on its own. What then needs the owner goes to
+`OWNER-QUESTIONS.md`.
+
+| Step | What | Done when |
+|---|---|---|
+| F1 ✅ | **"How to use" guide rewritten for Bajaur** — officers' logins, Activities, WhatsApp → Activities, Settings, Urdu, sign-in link; what no longer exists removed. English and Urdu. No Bajaur fact invented | the guide names every screen in the navigation and nothing that is gone; `help.e2e` pins it; no paragraph falls back to English in Urdu |
+| F2 | **Installer keeps hand-added `.env` settings** on a reinstall (WhatsApp keys, backup bucket) | re-running first-run keeps every line the installer does not own; tested |
+| F3 | **Viewer sees no write buttons** — the server already refuses; the screens stop offering | a viewer's screens show no Report form or write control; e2e |
+| F4 | **Pending count updates by itself** in Activities | the count changes without reopening the page; e2e |
+| F5 | **Record's "Action" header** hangs past the right edge at 1366 px | nothing overflows at 1366 px, English and Urdu; e2e |
+| F6 | **Activities ZIP past 4 GB** (ZIP64) instead of refusing | a ZIP past the old limit is written and readable; test |
+
 ## 5. To verify (open points)
 
 - Legal pages (`installer/cloud/*.html`) name the controller of the data — re-read them with the

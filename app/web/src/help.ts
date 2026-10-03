@@ -31,11 +31,13 @@ export interface HelpPanel {
 
 const CONTENT = `
   <p class="lede">What each screen is for, and what happens when you use it — written for
-  whoever is running the control room, not for whoever built it.</p>
+  whoever is running the control room, and for the officers who post their work in
+  Activities, not for whoever built it.</p>
 
   <ul class="jump">
     <li><a href="#help-overview">Overview</a></li>
     <li><a href="#help-signin">Signing in</a></li>
+    <li><a href="#help-activities">Activities</a></li>
     <li><a href="#help-report">Report screen</a></li>
     <li><a href="#help-whotell">Who should know</a></li>
     <li><a href="#help-communications">Meetings and notices</a></li>
@@ -44,10 +46,12 @@ const CONTENT = `
     <li><a href="#help-board">Record</a></li>
     <li><a href="#help-dashboard">Dashboard</a></li>
     <li><a href="#help-admin">Administration</a></li>
+    <li><a href="#help-settings">Settings</a></li>
     <li><a href="#help-reports">Reports</a></li>
     <li><a href="#help-daily">The daily report</a></li>
     <li><a href="#help-other">Other screens</a></li>
     <li><a href="#help-whatsapp">WhatsApp — today and once it is live</a></li>
+    <li><a href="#help-language">Urdu, and installing the app</a></li>
     <li><a href="#help-glossary">Glossary</a></li>
   </ul>
 
@@ -89,10 +93,10 @@ const CONTENT = `
         later. Nothing here can be quietly edited.</p></li>
     </ol>
 
-    <div class="note"><b>Worth knowing:</b> only the control room signs in to this system.
-    Departments do not have their own logins — they are a directory the control room reaches,
-    not a separate audience. Every department's numbers and roster are in the system so they can
-    be told; they are simply told by the control room rather than logging in themselves.</div>
+    <div class="note"><b>Worth knowing:</b> only the control room works an emergency in this
+    system. Officers are in the Directory so they can be told, and they answer from the WhatsApp
+    message itself — no login is needed for that. An officer may also be given a login of their
+    own, but it opens <b>Activities only</b>: the control room's screens stay closed to it.</div>
   </section>
 
   <section class="hchapter" id="help-signin">
@@ -100,7 +104,7 @@ const CONTENT = `
     <h2>Signing in</h2>
     <p>The address opens a short form — a phone number and a password, nothing else.</p>
     <div class="hscreen">
-      <div class="hbar">dnc.example.com</div>
+      <div class="hbar" translate="no">dnc.example.com</div>
       <div class="hbody">
         <div class="htiles"><span class="htile">Phone number: 03XXXXXXXXX</span></div>
         <div class="htiles"><span class="htile">Password: ••••••••••</span></div>
@@ -108,12 +112,105 @@ const CONTENT = `
       </div>
     </div>
     <p><b>The phone number is the username</b> — there is no separate name or email to
-    remember. Which designation you hold, and therefore what you can see, is worked out fresh every
-    time you sign in — a district-wide seat (the DC Office or AC HQ Bajaur) sees the whole
-    district; any other seat sees its own department.</p>
+    remember. What you can see is decided by the role your account was given, and it is worked
+    out fresh every time you sign in.</p>
+    <div class="htwrap">
+      <table class="htable">
+        <tr><th>Role</th><th>What it opens</th></tr>
+        <tr><td>owner, admin</td><td>Every screen, Settings included.</td></tr>
+        <tr><td>operator</td><td>The control room's screens — reporting, telling people, the
+          Record.</td></tr>
+        <tr><td>viewer</td><td>The same screens, to read only. Anything that would change the
+          record is refused.</td></tr>
+        <tr><td>member</td><td>Activities only. This is the login an officer is given.</td></tr>
+      </table>
+    </div>
+
+    <h3>A new login arrives as a link</h3>
+    <p>When somebody is given a login, they are sent <b>a sign-in link</b>. Opening it asks them
+    to choose their own password, and signs them in. The link <b>works once and lasts 3
+    days</b>. Until the district's WhatsApp message for it is approved, whoever gave the login is
+    shown the link with a <kbd class="uilabel">Copy</kbd> button, to send by hand.</p>
+    <p><b>Forgotten your password?</b> Ask the control room. <kbd class="uilabel">Send sign-in
+    link</kbd> on the Officers tab of Activities sends a fresh link; the old password stops
+    working when the new one is chosen.</p>
     <div class="note warn"><b>Repeated wrong passwords slow down, they do not lock out.</b> Each
     wrong attempt adds a short delay rather than blocking the account — enough to stop someone
     guessing, without ever being able to shut a real officer out on a real night.</div>
+  </section>
+
+  <section class="hchapter" id="help-activities">
+    <p class="heyebrow">Activities</p>
+    <h2>The district's daily work, in pictures</h2>
+    <p>Activities is where officers show what was done that day — a visit, an inspection, a
+    meeting — with photos, videos or a voice note. <b>It is separate from emergencies.</b>
+    Nothing posted here raises an alarm, starts a clock or reaches the Record.</p>
+    <div class="hscreen">
+      <div class="hbar">Activities · Bajaur</div>
+      <div class="hbody">
+        <div class="htabs">
+          <span class="htab on">Activities</span><span class="htab">New post</span>
+          <span class="htab">Pending</span><span class="htab">Officers</span>
+          <span class="htab">History</span><span class="htab">My account</span>
+        </div>
+      </div>
+    </div>
+    <p>An officer sees <kbd class="uilabel">Activities</kbd>, <kbd class="uilabel">New
+    post</kbd> and <kbd class="uilabel">My account</kbd>. The other three are for the DC office.
+    <b>Every account reads every post</b>; the list can be narrowed by department, person and
+    date.</p>
+
+    <h3>Posting from the app</h3>
+    <p><kbd class="uilabel">New post</kbd> asks for the department, the date of the activity and
+    what was done; a place is optional. Add <b>up to 10 photos</b> and <b>up to 3 videos, each
+    at most 3 minutes</b>. Photos are made smaller on the phone before they are sent, and a
+    video shows as <i>processing</i> until the server has prepared it.</p>
+    <p>This part <b>needs a connection</b>. If a photo fails on a weak signal, the post itself is
+    already saved — <kbd class="uilabel">Try the failed ones again</kbd> sends only what is
+    missing.</p>
+
+    <h3>Posting by WhatsApp, with no login</h3>
+    <p>Anybody in the Directory can send a photo, a video or a voice note to the district's
+    WhatsApp number, and it becomes a post under their name. The words sent with it become the
+    caption. It is filed under their department, or under <b>General</b> when they have
+    none.</p>
+    <p><b>If an emergency they were told about is still open</b>, the reply asks which it is,
+    with two buttons: <kbd class="uilabel">Emergency report</kbd> and <kbd class="uilabel">Daily
+    activity</kbd>. With no answer in an hour it goes to the emergency — a picture from a scene
+    must never be lost in the daily pictures.</p>
+    <div class="note"><b>This works once the district's WhatsApp account is live.</b> Until
+    then, posting from the app is the way.</div>
+
+    <h3>Pending</h3>
+    <p>What arrived on WhatsApp and needs the DC office — mostly from numbers that are not in the
+    Directory. Each one can be approved under somebody already there, deleted, or its number can
+    be added with <kbd class="uilabel">Add to Directory</kbd>, after which that number's pictures
+    post by themselves. The number on the tab is how many are waiting.</p>
+    <div class="note warn"><b>Adding a number to the Directory is more than Activities.</b> A
+    Directory contact can be chosen on <kbd class="uilabel">Who should know?</kbd> and sent
+    emergency alerts. Add only somebody the district means to reach.</div>
+
+    <h3>Officers</h3>
+    <p>Every Directory contact and every account, with three controls: the <b>department</b>
+    their posts are filed under, <b>Activities on or off</b> (off: what they send waits on
+    Pending instead of posting), and <kbd class="uilabel">Give login</kbd>, which always gives a
+    <i>member</i> login — Activities only. The <b>Department list</b> sits below: add one, or
+    retire one and its old posts stay under its name.</p>
+
+    <h3>Posts are kept for 30 days</h3>
+    <p>Thirty days after it was uploaded, a post and its photos and videos are deleted — the
+    Recycle bin included. Three days before, the DC office is shown what is about to go, with
+    <kbd class="uilabel">Download ZIP</kbd> to keep a copy.</p>
+
+    <h3>Removing a post, and History</h3>
+    <p>An officer can delete their own post. The DC office can <kbd class="uilabel">Move to
+    Recycle bin</kbd> — which hides it and can be undone with <kbd
+    class="uilabel">Restore</kbd> — or <kbd class="uilabel">Delete permanently</kbd>, which
+    cannot. <kbd class="uilabel">History</kbd> opens on the log of who posted, hid, restored or
+    deleted what, with the Recycle bin one tap away.</p>
+    <div class="note"><b>This is the one place in the system where something can be
+    deleted.</b> An emergency's record never can be — see <a href="#help-correct">correcting
+    something sent in error</a>.</div>
   </section>
 
   <section class="hchapter" id="help-report">
@@ -164,9 +261,9 @@ const CONTENT = `
     <div class="hscreen">
       <div class="hbar">Who should know?</div>
       <div class="hbody">
-        <div class="hrow"><span>☑ Rescue 1122</span><span class="why">proposed — told for fire, 9 out of the last 9 times</span></div>
-        <div class="hrow"><span>☑ TMO Bajaur</span><span class="why">matched — the word "bazaar"</span></div>
-        <div class="hrow"><span>☐ Police Station Khar</span><span class="why">vacant designation — nobody currently holds it</span></div>
+        <div class="hrow"><span translate="no">☑ Rescue 1122</span><span class="why">proposed — told for fire, 9 out of the last 9 times</span></div>
+        <div class="hrow"><span translate="no">☑ TMO Bajaur</span><span class="why">matched — the word "bazaar"</span></div>
+        <div class="hrow"><span translate="no">☐ Police Station Khar</span><span class="why">vacant designation — nobody currently holds it</span></div>
         <div style="margin-top:.8rem"><span class="hbtn primary">Tell them</span></div>
       </div>
     </div>
@@ -199,7 +296,7 @@ const CONTENT = `
       <div class="hbar">Who was told · 17 told · 9 confirmed · 8 silent</div>
       <div class="hbody">
         <div class="hrow"><span>Rescue 1122 — Duty Officer</span><span class="hpill ok">Confirmed</span></div>
-        <div class="hrow"><span>TMO Bajaur</span><span class="hpill wait">Waiting</span></div>
+        <div class="hrow"><span translate="no">TMO Bajaur</span><span class="hpill wait">Waiting</span></div>
         <div class="hrow"><span>Health Department</span><span class="hpill bad">No answer</span></div>
       </div>
     </div>
@@ -366,54 +463,72 @@ const CONTENT = `
       </div>
     </div>
     <p>There are more panels than fit on one screen at once, so <b>the district chooses which
-    ones show</b> — see <kbd class="uilabel">Administration → Screen</kbd> below. <kbd
-    class="uilabel">This system</kbd> is only shown to the DC Office and AC HQ, because it is
-    theirs to fix — showing every department something it cannot act on teaches it to stop
+    ones show</b> — see <kbd class="uilabel">Settings → Dashboard layout</kbd> below. <kbd
+    class="uilabel">This system</kbd> is only shown to the district's administration, because it
+    is theirs to fix — showing everybody something they cannot act on teaches them to stop
     reading red numbers.</p>
   </section>
 
   <section class="hchapter" id="help-admin">
     <p class="heyebrow">Administration</p>
-    <h2>Where the system is configured</h2>
-    <p>Visible only to the DC Office and AC HQ Bajaur. Everything here can be changed without
+    <h2>Where the district is set up</h2>
+    <p>Visible only to the district's administration. Everything here can be changed without
     anyone writing code.</p>
     <div class="hscreen">
       <div class="hbar">Administration</div>
       <div class="hbody">
         <div class="htabs">
-          <span class="htab on">Departments</span><span class="htab">Deadlines</span>
-          <span class="htab">Rosters</span><span class="htab">Performance</span>
-          <span class="htab">Groups</span><span class="htab">Screen</span>
-          <span class="htab">Screens offered</span><span class="htab">Backups</span>
+          <span class="htab on">Overview</span><span class="htab">Directory</span>
+          <span class="htab">Deadlines</span><span class="htab">Rosters</span>
+          <span class="htab">Groups</span><span class="htab">Backups</span>
           <span class="htab">History</span>
         </div>
       </div>
     </div>
     <dl class="hglossary">
-      <div class="hglossrow"><dt>Departments</dt><dd>Add or retire a department, and set the
-        words that trigger an automatic suggestion for it.</dd></div>
-      <div class="hglossrow"><dt>Deadlines</dt><dd>How long each department has to answer, by
+      <div class="hglossrow"><dt>Overview</dt><dd>What needs attention, each line leading to
+        the place it is fixed.</dd></div>
+      <div class="hglossrow"><dt>Directory</dt><dd>Everybody the control room can tell — name,
+        number and designation — and a check of whether an emergency reported now would reach
+        somebody.</dd></div>
+      <div class="hglossrow"><dt>Deadlines</dt><dd>How long there is to answer, by
         severity.</dd></div>
-      <div class="hglossrow"><dt>Rosters</dt><dd>Every department's own designations and people, who
-        holds each one and their number — all 79 departments from one place.</dd></div>
-      <div class="hglossrow"><dt>Performance</dt><dd>How quickly each department answers, side
-        by side.</dd></div>
+      <div class="hglossrow"><dt>Rosters</dt><dd>The designations and the people holding them,
+        with their numbers — a designation that reaches nobody is given a number here.</dd></div>
       <div class="hglossrow"><dt>Groups</dt><dd>Saved sets of recipients that are usually told
         together, so they can be ticked in one go.</dd></div>
-      <div class="hglossrow"><dt>Screen</dt><dd>Which dashboard panels show, and at what size —
-        arranged against a preview of the actual screen it will appear on.</dd></div>
-      <div class="hglossrow"><dt>Screens offered</dt><dd>Which optional screens this
-        installation shows at all — Search, My shift, and a few others start off, and are
-        turned on here in a click.</dd></div>
       <div class="hglossrow"><dt>Backups</dt><dd>Whether last night's backup ran, and whether a
         copy exists outside the district as well.</dd></div>
       <div class="hglossrow"><dt>History</dt><dd>A permanent record of what was changed here,
         when, and by whom.</dd></div>
     </dl>
-    <div class="note warn"><b>Every override needs a reason.</b> If the DC Office or AC HQ
-    changes something a department already entered — its severity, for instance — a reason is
-    required, and the department's own original entry stays visible underneath rather than
-    being replaced.</div>
+    <p>Two things that used to be here have moved: <b>Performance is in the Record</b>, and the
+    screens and the dashboard's layout are in <a href="#help-settings">Settings</a>.</p>
+    <div class="note warn"><b>Every override needs a reason.</b> If the administration changes
+    something that was already entered — a severity, for instance — a reason is required, and
+    the original entry stays visible underneath rather than being replaced.</div>
+  </section>
+
+  <section class="hchapter" id="help-settings">
+    <p class="heyebrow">Settings</p>
+    <h2>Accounts, and how this installation is arranged</h2>
+    <p>Shown only to the <i>owner</i> and <i>admin</i> roles.</p>
+    <dl class="hglossary">
+      <div class="hglossrow"><dt>Accounts</dt><dd>Who can sign in, and with which role. An
+        account can be suspended, signed out everywhere, or given one permission more or less
+        than its role carries.</dd></div>
+      <div class="hglossrow"><dt>Access log</dt><dd>Every sign-in and every change to an
+        account, with who did it and when.</dd></div>
+      <div class="hglossrow"><dt>Security policy</dt><dd>The rules every password and session
+        follows.</dd></div>
+      <div class="hglossrow"><dt>Which screens are on</dt><dd>Which optional screens this
+        installation shows at all. Some start off, and are turned on here in a click.</dd></div>
+      <div class="hglossrow"><dt>Dashboard layout</dt><dd>Which dashboard panels show, and at
+        what size — arranged against a preview of the actual screen it will appear on.</dd></div>
+    </dl>
+    <div class="note"><b>An officer's login is not made here.</b> It is given from the Officers
+    tab of Activities, or from the contact's own drawer in the Directory, so the login always
+    belongs to somebody the Directory already knows.</div>
   </section>
 
   <section class="hchapter" id="help-reports">
@@ -453,7 +568,6 @@ const CONTENT = `
         corner.</li>
       <li>A day where nothing happened <b>says so in a sentence</b>. It is never a blank page:
         a blank page is a fault somebody has to chase.</li>
-      <li>Your office sees the district's day; a department sees its own.</li>
     </ul>
   </section>
 
@@ -462,10 +576,8 @@ const CONTENT = `
     <h2>The rest, briefly</h2>
     <dl class="hglossary">
       <div class="hglossrow"><dt>Search</dt><dd>Finding an older emergency — last year's flood,
-        for instance. Off by default on a new installation; turned on from Administration →
-        Screens offered.</dd></div>
-      <div class="hglossrow"><dt>My shift</dt><dd>What one department is holding right now, in
-        one place — its open incidents, its vehicles, its roster.</dd></div>
+        for instance. It is the find box on the Record. Off by default on a new installation;
+        turned on from Settings → Which screens are on.</dd></div>
       <div class="hglossrow"><dt>Status</dt><dd>Where the district states its own condition —
         power, water, roads, markets — so the dashboard shows more than just emergencies.</dd></div>
     </dl>
@@ -534,6 +646,23 @@ const CONTENT = `
     about the record itself.</div>
   </section>
 
+  <section class="hchapter" id="help-language">
+    <p class="heyebrow">Urdu, and installing the app</p>
+    <h2>Two things that make it easier to use</h2>
+    <h3>Urdu or English</h3>
+    <p>The language button at the top switches every screen, this guide included, between
+    English and Urdu. The choice is kept <b>on that device</b>, so one officer's phone can be in
+    Urdu while the control room's screen stays in English.</p>
+    <p>What people typed is never translated — names, captions, incident details — and neither is
+    the WhatsApp message, whose wording is approved as it stands. Numbers stay 0-9, because phone
+    and incident numbers are read out and typed back.</p>
+    <h3>Install this app</h3>
+    <p>On an Android phone or a Windows computer, the <kbd class="uilabel">Install this
+    app</kbd> banner puts the system on the home screen in one tap. On an iPhone, use <b>Share →
+    Add to Home Screen</b>; the banner shows the steps. It then opens like any other app, with
+    no address to type.</p>
+  </section>
+
   <section class="hchapter" id="help-glossary">
     <p class="heyebrow">Glossary</p>
     <h2>A short list of terms</h2>
@@ -551,8 +680,14 @@ const CONTENT = `
         about it — by tapping a link, replying, or the operator recording it on their behalf.</dd></div>
       <div class="hglossrow"><dt>Escalate</dt><dd>If nobody answers in time, the system tells
         the next person up the chain on its own — nobody has to remember to.</dd></div>
-      <div class="hglossrow"><dt>Override</dt><dd>A correction made by the DC Office or AC HQ,
+      <div class="hglossrow"><dt>Override</dt><dd>A correction made by the administration,
         with a reason attached — kept alongside the original entry, never in place of it.</dd></div>
+      <div class="hglossrow"><dt>Activity</dt><dd>A post of the day's work — photos, videos or a
+        voice note. Kept for 30 days, and never part of an emergency's record.</dd></div>
+      <div class="hglossrow"><dt>Member</dt><dd>An officer's login. It opens Activities and
+        nothing else.</dd></div>
+      <div class="hglossrow"><dt>Directory</dt><dd>Everybody the district can reach: a name, a
+        number and a designation.</dd></div>
       <div class="hglossrow"><dt>Off-site backup</dt><dd>A copy of the record kept outside
         Bajaur, so the district's history survives even if the server here does not.</dd></div>
       <div class="hglossrow"><dt>Vacant</dt><dd>A designation with nobody currently holding it — shown

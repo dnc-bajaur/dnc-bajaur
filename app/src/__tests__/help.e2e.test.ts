@@ -139,7 +139,19 @@ describe.skipIf(dbUrl === undefined)('the "How to use" guide, on a real screen',
       // no longer there under a name that was never quite what it counted.
       'no one chosen',
       'Administration',
-      'Screens offered',
+      // Settings' own label for it. The guide said `Screens offered` and placed it under
+      // Administration long after the tab had moved and been renamed.
+      'Which screens are on',
+      'Dashboard layout',
+      // Bajaur's own (ADR-0038 to ADR-0043): officers' logins, Activities, WhatsApp into it.
+      'Activities only',
+      'A new login arrives as a link',
+      'Posting by WhatsApp, with no login',
+      'Add to Directory',
+      'Posts are kept for 30 days',
+      'Move to Recycle bin',
+      'Urdu or English',
+      'Install this app',
       'Who was told, and who answered',
       'WhatsApp',
       'Acknowledged',
@@ -155,6 +167,38 @@ describe.skipIf(dbUrl === undefined)('the "How to use" guide, on a real screen',
     ]) {
       expect(text).toContain(mustMention);
     }
+  });
+
+  it('teaches nothing that is no longer on a screen', async () => {
+    await page.click('#navHelp');
+    await page.waitForSelector('#helpView:not([hidden])');
+    await waitForGuide();
+    const text = ((await page.locator('#helpBody').textContent()) ?? '').replace(/\s+/g, ' ');
+
+    // What the guide said until 2026-10-03: no logins for officers (they have `member` logins
+    // now), a retired screen, two tabs that moved to Settings, and a count of departments that
+    // was never Bajaur's.
+    for (const gone of [
+      'Departments do not have their own logins',
+      'My shift',
+      'Screens offered',
+      'Administration → Screen',
+      '79 departments',
+    ]) {
+      expect(text).not.toContain(gone);
+    }
+  });
+
+  it('warns that a number added to the Directory can be sent emergency alerts', async () => {
+    await page.click('#navHelp');
+    await page.waitForSelector('#helpView:not([hidden])');
+    await waitForGuide();
+    const text = ((await page.locator('#helpBody').textContent()) ?? '').replace(/\s+/g, ' ');
+
+    // "Add to Directory" sits on the Activities Pending list and reads like an Activities
+    // action. It is not only that: the contact becomes someone the control room can alert.
+    expect(text).toContain('Adding a number to the Directory is more than Activities');
+    expect(text).toContain('sent emergency alerts');
   });
 
   it('never lets an operator believe a correction unsent the message', async () => {

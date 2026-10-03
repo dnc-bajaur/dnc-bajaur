@@ -153,6 +153,15 @@ describe.skipIf(dbUrl === undefined)('Urdu / English (E4)', () => {
     expect(await page.locator('#help-overview h2').textContent()).toBe('یہ سسٹم کس لیے ہے');
     const rule = page.locator('#help-overview p b').first();
     expect(await rule.textContent()).toContain('ایمرجنسی، جہاں سے بھی رپورٹ ہو');
+    // And no paragraph of it is left in English: a block the word list has no key for stays
+    // marked `html`. Changing a sentence in `help.ts` without its key in `ur.json` fails here.
+    const leftInEnglish = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('#helpBody [data-i18n="html"]'))
+        .filter((el) => el.closest('[translate="no"]') === null)
+        .map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim())
+        .filter((text) => /[A-Za-z]{3}/.test(text)),
+    );
+    expect(leftInEnglish).toEqual([]);
 
     // A dialog the screens raise in English is shown in Urdu.
     const said = new Promise<string>((resolve) => {
