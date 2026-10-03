@@ -1344,5 +1344,9 @@
   "Take the administration from {post}?": "{post} سے انتظامیہ واپس لیں؟",
   "Whoever holds this post will see the whole district and can issue advisories and orders. The change is recorded.": "اس عہدے پر جو بھی ہوگا وہ پورا ضلع دیکھے گا اور ایڈوائزری اور احکامات جاری کر سکے گا۔ یہ تبدیلی درج ہوتی ہے۔",
   "Whoever holds this post will see only their own work. The change is recorded.": "اس عہدے پر جو بھی ہوگا وہ صرف اپنا کام دیکھے گا۔ یہ تبدیلی درج ہوتی ہے۔",
-  "Make it the administration": "انتظامیہ بنائیں"
+  "Make it the administration": "انتظامیہ بنائیں",
+  "Remove this video": "یہ ویڈیو ہٹائیں",
+  "Remove this video from the post? The rest of the post stays.": "یہ ویڈیو پوسٹ سے ہٹا دیں؟ باقی پوسٹ رہے گی۔",
+  "The video could not be removed.": "ویڈیو ہٹائی نہیں جا سکی۔",
+  "removed a video that could not be used": "نے ایک ناقابلِ استعمال ویڈیو ہٹائی"
 }

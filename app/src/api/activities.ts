@@ -1575,6 +1575,98 @@ export async function removePost(
   return true;
 }
 
+/**
+ * Take a video that could not be used off its post (PLAN C3 open item). Until now it stayed there,
+ * shown as failed, until the whole post went.
+ *
+ * Only a **failed** video: a ready one is part of the post (delete the post), and one still being
+ * sent or prepared may yet become ready. The same people as deleting the post — its author, or a
+ * moderator — and one log line says who, with the reason it failed.
+ */
+export async function removeFailedVideo(
+  pool: Pool,
+  root: string,
+  identity: Identity,
+  mediaId: string,
+): Promise<ActivitiesResult<{ readonly mediaId: string }>> {
+  const c = await caller(pool, identity);
+  const found = await pool.query<{
+    post_id: string;
+    unit_id: string;
+    author_person_id: string;
+    hidden_at: string | null;
+    kind: string;
+    status: string;
+    failure: string | null;
+  }>(
+    `SELECT m.post_id, p.unit_id, p.author_person_id, p.hidden_at, m.kind, m.status, m.failure
+       FROM activity_media m JOIN activity_post p ON p.post_id = m.post_id
+      WHERE m.media_id = $1`,
+    [mediaId],
+  );
+  const row = found.rows[0];
+  const own = row?.author_person_id === identity.personId;
+  if (row === undefined || !(own || maySee(c, row.author_person_id, row.hidden_at))) {
+    return refuse(404, 'no such video');
+  }
+  const allowed = c.can.has('activities.moderate') || (own && c.can.has('activities.delete_own'));
+  if (!allowed) return refuse(403, 'you do not have permission to remove this video');
+  if (row.kind !== 'video' || row.status !== 'failed') {
+    return refuse(409, 'only a video that could not be used can be removed on its own');
+  }
+
+  const client = await pool.connect();
+  let files: { stored_path: string; thumb_path: string | null; upload_path: string | null }[];
+  try {
+    await client.query('BEGIN');
+    // Still failed when we come to it: a second tap, or a moderator at the same moment, finds
+    // nothing to remove rather than writing a second log line.
+    const removed = await client.query<{
+      stored_path: string;
+      thumb_path: string | null;
+      upload_path: string | null;
+      backup_key: string | null;
+      thumb_backup_key: string | null;
+    }>(
+      `DELETE FROM activity_media WHERE media_id = $1 AND status = 'failed'
+       RETURNING stored_path, thumb_path, upload_path, backup_key, thumb_backup_key`,
+      [mediaId],
+    );
+    if (removed.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return refuse(404, 'no such video');
+    }
+    files = removed.rows;
+    const keys = removed.rows
+      .flatMap((m) => [m.backup_key, m.thumb_backup_key])
+      .filter((k): k is string => k !== null);
+    if (keys.length > 0) {
+      await client.query(
+        `INSERT INTO activity_backup_removal (object_key)
+         SELECT unnest($1::text[]) ON CONFLICT (object_key) DO NOTHING`,
+        [keys],
+      );
+    }
+    await client.query(
+      `INSERT INTO activity_log (type, actor_person_id, post_id, unit_id, detail)
+       VALUES ('video_removed', $1, $2, $3, $4)`,
+      [identity.personId, row.post_id, row.unit_id, JSON.stringify({ reason: row.failure })],
+    );
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  await removeFiles(
+    root,
+    files.flatMap((f) => [f.stored_path, f.thumb_path, f.upload_path]),
+  );
+  return { ok: true, value: { mediaId } };
+}
+
 /** Soft delete (`hide`) or `restore` — moderators only, both logged. */
 export async function moderatePost(
   pool: Pool,

@@ -429,6 +429,32 @@ maybe('Activities videos (ADR-0039, phase C3)', () => {
       }
     });
 
+    it('takes a failed video off its post on its own — never a ready one, never somebody else’s', async () => {
+      const postId = await newPost();
+      const failed = await upload(postId, mp4(1200));
+      await runConversions({ pool, root, tools: fakeTools(185) });
+      const ready = await upload(postId, mp4(800));
+      await runConversions({ pool, root, tools: fakeTools() });
+
+      expect((await call(author.token, `/activities/media/${ready}`, 'DELETE')).status).toBe(409);
+      expect((await call(other.token, `/activities/media/${failed}`, 'DELETE')).status).toBe(403);
+
+      const removed = await call(author.token, `/activities/media/${failed}`, 'DELETE');
+      expect(removed.status).toBe(200);
+      const view = await postView(postId);
+      expect(view.videos.map((v) => v.mediaId)).toEqual([ready]);
+
+      const logged = await pool.query<{ actor_person_id: string; detail: { reason: string } }>(
+        `SELECT actor_person_id, detail FROM activity_log WHERE type = 'video_removed' AND post_id = $1`,
+        [postId],
+      );
+      expect(logged.rows).toHaveLength(1);
+      expect(logged.rows[0]!.actor_person_id).toBe(author.personId);
+      expect(logged.rows[0]!.detail.reason).toMatch(/3:05 long/);
+
+      expect((await call(author.token, `/activities/media/${failed}`, 'DELETE')).status).toBe(404);
+    });
+
     it('fails one ffmpeg refuses, with ffmpeg’s own words', async () => {
       const postId = await newPost();
       const mediaId = await upload(postId, mp4(800));

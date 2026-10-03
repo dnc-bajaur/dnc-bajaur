@@ -157,6 +157,7 @@ import {
   defaultActivitiesRoot,
   deletePost,
   giveOfficerLogin,
+  removeFailedVideo,
   listOfficers,
   listPeople,
   listPosts,
@@ -1282,8 +1283,12 @@ async function handleActivities(
 
   const media = /^\/activities\/media\/([^/]+)$/.exec(pathname);
   if (media !== null) {
-    if (req.method !== 'GET') return notAllowed();
     if (!UUID_RE.test(media[1]!)) return void json(res, 404, { error: 'no such photo' });
+    // A video that could not be used, taken off its post on its own (PLAN C3 open item).
+    if (req.method === 'DELETE') {
+      return send(await removeFailedVideo(pool, root, identity, media[1]!));
+    }
+    if (req.method !== 'GET') return notAllowed();
     const reply = await serveMedia(
       pool,
       root,

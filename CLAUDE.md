@@ -115,7 +115,7 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   Never use the other district's cluster on this machine. Full suite runs locally (files run one
   at a time). Rarely a test process dies mid-run here ("Worker exited unexpectedly"; cause
   unknown, never seen in CI). The run's end now names the file (`testing/crashTrace.ts`,
-  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement`, `takeAction`, `contrast`, `authPassword`, `activitiesVideo`, `log` —
+  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement`, `takeAction`, `contrast`, `authPassword`, `activitiesVideo`, `log`, `whatsappActivities`, `words` —
   different files, dying before any test runs, no exit code; not reproducible on demand.
 - **Built (ADR-0038/0039/0040/0041):** `member` role + one gate (`memberGate.test.ts`);
   Activities — photos, 30-day expiry + ZIP + media backup (no bucket yet), videos via ffmpeg
@@ -128,9 +128,9 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   Departments under Officers, Log + Recycle bin under History, Pending count. E4a Urdu switch
   (ADR-0042): `web/src/i18n.ts` + word list `web/ur.json`; the whole app and the guide in Urdu
   (E4b/E4c), wording awaits the owner. E5 sign-in link (ADR-0043, migration 0055): login given
-  by a single-use link the officer uses to set their own password. Shell v270.
+  by a single-use link the officer uses to set their own password. Shell v271.
   Tested with a stubbed Meta only. ⚠️ Any role other than `member` is the full control room.
-- **Next:** §4 is built. Remaining open items: failed-video remove button; server-side HEIC; ffmpeg in the Windows installer; trim
+- **Next:** §4 is built. Remaining open items: server-side HEIC; ffmpeg in the Windows installer; trim
   `docs/06-open-questions.md` — `PLAN.md`. Owner's open questions: `OWNER-QUESTIONS.md`.
 
 ## 6. Repository map

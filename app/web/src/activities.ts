@@ -440,11 +440,30 @@ const VIDEO_STATE: Readonly<Record<Exclude<Video['status'], 'ready'>, string>> =
   failed: 'This video could not be used',
 };
 
-function videoTile(video: Video): HTMLElement {
+function videoTile(video: Video, post: Post, refresh: () => void): HTMLElement {
   const tile = make('div', 'video');
   if (video.status !== 'ready') {
-    const why = video.status === 'failed' && video.failure !== null ? `: ${video.failure}` : '';
-    tile.append(make('div', 'state', `${VIDEO_STATE[video.status]}${why}`));
+    const state = make('div', 'state', VIDEO_STATE[video.status]);
+    if (video.status === 'failed' && video.failure !== null) {
+      // ffmpeg's or the length rule's own words: shown as they are, never put into Urdu.
+      state.append(untranslated(make('span', 'why', video.failure)));
+    }
+    tile.append(state);
+    // A video that could not be used comes off on its own — by whoever may delete the post.
+    if (video.status === 'failed' && post.mayDelete) {
+      const remove = button('Remove this video', 'danger');
+      remove.addEventListener('click', () => {
+        if (!confirm('Remove this video from the post? The rest of the post stays.')) return;
+        remove.disabled = true;
+        void api('DELETE', `/activities/media/${video.mediaId}`)
+          .then(refresh)
+          .catch((e: unknown) => {
+            remove.disabled = false;
+            alert(e instanceof Error ? e.message : 'The video could not be removed.');
+          });
+      });
+      tile.append(remove);
+    }
     return tile;
   }
   const src = `/activities/media/${video.mediaId}`;
@@ -495,7 +514,7 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
   }
   if (post.videos.length > 0) {
     const grid = make('div', 'videos');
-    grid.append(...post.videos.map(videoTile));
+    grid.append(...post.videos.map((v) => videoTile(v, post, refresh)));
     card.append(grid);
   }
   for (const a of post.audios) card.append(audioTile(`/activities/media/${a.mediaId}`));
@@ -968,6 +987,7 @@ const LOG_TEXT: Readonly<Record<string, string>> = {
   photo_added: 'added a photo',
   video_added: 'added a video',
   video_failed: 'could not prepare a video',
+  video_removed: 'removed a video that could not be used',
   hidden: 'moved a post to the Recycle bin',
   restored: 'restored a post',
   deleted: 'deleted a post permanently',
@@ -1009,7 +1029,9 @@ async function loadLog(): Promise<void> {
           extra.push(`(by ${d['author']}, ${String(d['activityDate'] ?? '')})`);
         }
         if (l.type === 'unit_renamed') extra.push(`(was ${String(d['from'] ?? '')})`);
-        if (l.type === 'video_failed') extra.push(`(${String(d['reason'] ?? '')})`);
+        if (l.type === 'video_failed' || l.type === 'video_removed') {
+          extra.push(`(${String(d['reason'] ?? '')})`);
+        }
         if (l.type === 'date_changed') {
           extra.push(`(${String(d['from'] ?? '')} to ${String(d['to'] ?? '')})`);
         }

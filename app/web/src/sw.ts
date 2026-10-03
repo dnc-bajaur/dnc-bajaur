@@ -1278,7 +1278,8 @@ declare const self: ServiceWorkerGlobalScope;
 // v269: Bajaur E5 (ADR-0043) — "Give login" sends a sign-in link; the set-password page;
 // `/set-password` never cached. `admin.ts`, `activities.ts`, `office.css` and `ur.json` moved.
 // v270: the administration tick gets its control in the contact drawer. `admin.ts` moved.
-const CACHE = 'dnc-shell-v270';
+// v271: "Remove this video" on an Activities video that could not be used. `activities.*` moved.
+const CACHE = 'dnc-shell-v271';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.

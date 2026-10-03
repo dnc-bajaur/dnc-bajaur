@@ -163,8 +163,9 @@ C3 notes (2026-10-02):
 - Fixed on the way: the service worker answered `/activities/…` reads from its cache since C1
   (a new post did not appear in the list). `/activities` is now never cached (shell v263).
 - Open: the **Windows installer** does not ship ffmpeg yet; server-side **HEIC** conversion
-  (ADR-0039 §4) is not built; no "remove this failed video" button — a failed video stays on
-  its post (shown as failed) until the post is deleted or expires.
+  (ADR-0039 §4) is not built.
+- [x] "Remove this video" on a video that could not be used (2026-10-03): the author or a
+  moderator, a failed video only, logged `video_removed` with the reason (migration 0056).
 
 C2 notes (2026-10-02):
 - Housekeeping runs **hourly** (expire → bucket deletes → copy), not once a night; see the
