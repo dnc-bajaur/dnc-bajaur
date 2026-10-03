@@ -210,7 +210,7 @@ Each is built, tested, committed and pushed on its own. What then needs the owne
 | Step | What | Done when |
 |---|---|---|
 | F1 ✅ | **"How to use" guide rewritten for Bajaur** — officers' logins, Activities, WhatsApp → Activities, Settings, Urdu, sign-in link; what no longer exists removed. English and Urdu. No Bajaur fact invented | the guide names every screen in the navigation and nothing that is gone; `help.e2e` pins it; no paragraph falls back to English in Urdu |
-| F2 | **Installer keeps hand-added `.env` settings** on a reinstall (WhatsApp keys, backup bucket) | re-running first-run keeps every line the installer does not own; tested |
+| F2 ✅ | **Installer keeps hand-added `.env` settings** on a reinstall (WhatsApp keys, backup bucket) | `installer/runtime/env-merge.mjs` carries every line the installer does not own; `installerEnv.test.ts`. ⚠️ Not tried in a real `setup.exe` run |
 | F3 | **Viewer sees no write buttons** — the server already refuses; the screens stop offering | a viewer's screens show no Report form or write control; e2e |
 | F4 | **Pending count updates by itself** in Activities | the count changes without reopening the page; e2e |
 | F5 | **Record's "Action" header** hangs past the right edge at 1366 px | nothing overflows at 1366 px, English and Urdu; e2e |

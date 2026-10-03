@@ -29,6 +29,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { INSTALLER_KEYS, keptLines } from './env-merge.mjs';
+
 //------------------------------------------------------------------------------------------
 // Arguments and layout
 //------------------------------------------------------------------------------------------
@@ -394,7 +396,19 @@ const databaseUrl = `postgres://dnc:${encodeURIComponent(state.appPassword)}@127
  * Off-site backup is R-06 and waiting on the district; a passphrase this installer invented
  * and nobody wrote down would encrypt every copy that ever leaves the building with a secret
  * that exists only on the machine the copies are protecting against losing.
+ *
+ * **A reinstall keeps what the district added.** The file is written afresh each run, but every
+ * setting in the old one that is not the installer's own (`env-merge.mjs`) — the WhatsApp keys,
+ * the backup bucket and passphrase — is carried into the new one. Before that, a reinstall
+ * silently switched WhatsApp and off-site backup off.
  */
+const bundledFfmpeg = existsSync(join(ffmpegDir, 'ffmpeg.exe'));
+const carried = keptLines(
+  existsSync(envFile) ? readFileSync(envFile, 'utf8') : '',
+  // With no ffmpeg in this release, an ffmpeg the district installed itself is theirs to keep.
+  bundledFfmpeg ? INSTALLER_KEYS : INSTALLER_KEYS.filter((key) => !key.startsWith('FF')),
+);
+
 writeFileSync(
   envFile,
   [
@@ -413,8 +427,8 @@ writeFileSync(
     '',
     // Activities videos are converted by the ffmpeg the installer carries (ADR-0039 §4). A
     // release built with -NoFfmpeg has none: videos then wait, and the DC's screen says so.
-    ...(existsSync(join(ffmpegDir, 'ffmpeg.exe'))
-      ? [`FFMPEG_PATH=${join(ffmpegDir, 'ffmpeg.exe')}`, `FFPROBE_PATH=${join(ffmpegDir, 'ffprobe.exe')}`]
+    ...(bundledFfmpeg
+      ?[`FFMPEG_PATH=${join(ffmpegDir, 'ffmpeg.exe')}`, `FFPROBE_PATH=${join(ffmpegDir, 'ffprobe.exe')}`]
       : ['# FFMPEG_PATH= and FFPROBE_PATH= — no ffmpeg was installed; Activities videos will wait.']),
     '',
     '# Off-site backup — R-06, waiting on the district.',
@@ -427,6 +441,9 @@ writeFileSync(
     '# GCS_TOKEN=',
     '# BACKUP_PASSPHRASE=',
     '',
+    ...(carried.length > 0
+      ? ['# Added on this machine — kept when Setup is run again.', ...carried, '']
+      : []),
   ].join('\n'),
   'utf8',
 );
