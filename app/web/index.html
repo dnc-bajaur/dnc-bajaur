@@ -7198,7 +7198,12 @@
       #boardHead {
         display: none;
       }
-      @media (min-width: 48rem) {
+      /*
+        56rem, where the shell itself widens (`--shell`, further up) — not 48rem. Between the two
+        the page is still as narrow as a form (34rem), and seven columns in ~510px pushed half
+        the table off the screen. Up to 56rem the rows stay cards, as on a phone.
+      */
+      @media (min-width: 56rem) {
         #boardTable {
           /* Seven tracks, one declaration (the alignment e2e checks each cell lands under its
              title). Response is the widest flexible track now; wider gutter — 2026-08-31, the
@@ -7217,6 +7222,34 @@
           grid-template-columns: var(--board-cols);
           gap: 0 1.4rem;
           align-items: center;
+        }
+        /*
+          The table is measured by ITS OWN width, not the window's. Beside the filter column it
+          is ~855px wide on a 1366px laptop, and the seven tracks above need 1038px: the Action
+          column — the header and every row's "Inspect →" — hung off the right edge and the page
+          scrolled sideways. Two tighter sets of tracks, chosen by the table's width, so the same
+          rule holds with the filter column, without it, and with an incident open beside it.
+          Set on the header and the rows (a container cannot restyle itself), which also outranks
+          the `data-pane='open'` tracks further up when the table is this narrow.
+        */
+        #boardTable {
+          container-type: inline-size;
+        }
+        @container (max-width: 1045px) {
+          #boardHead,
+          #boardTable .row {
+            --board-cols: 96px minmax(110px, 1.1fr) minmax(76px, auto) minmax(100px, 1fr) 68px
+              minmax(120px, 1.4fr) 92px;
+            gap: 0 0.75rem;
+          }
+        }
+        @container (max-width: 790px) {
+          #boardHead,
+          #boardTable .row {
+            --board-cols: 84px minmax(90px, 1.1fr) minmax(70px, auto) minmax(84px, 1fr) 60px
+              minmax(100px, 1.4fr) 84px;
+            gap: 0 0.5rem;
+          }
         }
         #boardHead {
           position: sticky;

@@ -1282,7 +1282,11 @@ declare const self: ServiceWorkerGlobalScope;
 // v272: officer names from the original deployment's directory replaced with placeholders in the
 // web client's comments and the contact form's example (isolation rule 3). `admin.ts`, `dispatch.*`,
 // `duplicates.ts` and `main.ts` moved.
-const CACHE = 'dnc-shell-v272';
+// v273: Bajaur's loose ends (PLAN §4a) — the guide rewritten for Bajaur (`help.ts`, `ur.json`;
+// recorded under v272 without a bump, so it reaches cached browsers only now); a viewer is shown
+// no Report tab and an inert Status (`main.ts`, `index.html`); the Activities Pending count keeps
+// itself current (`activities.ts`); the Record's tracks follow the table's own width (`index.html`).
+const CACHE = 'dnc-shell-v273';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.
