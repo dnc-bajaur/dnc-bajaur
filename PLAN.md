@@ -24,6 +24,8 @@ The isolation rules in `CLAUDE.md` apply to every step below.
       moves it to `responding`). **Owner decided: an Acknowledge tap goes straight to Responding**,
       as the code does — the tests were updated to match.
       Note: `board.e2e` test 24 failed once and passed on re-run (flaky; untouched).
+      2026-10-03: tests 2 and 24 failed together in CI on two pushes in a row (neither touched
+      the board) and passed on re-run. Both read the board one fetch too early; not fixed yet.
 
 ## 2. Information needed from the owner
 
