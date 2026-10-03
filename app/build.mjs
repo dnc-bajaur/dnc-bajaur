@@ -422,6 +422,23 @@ export async function buildWeb(out = dist) {
   );
 
   /**
+   * The sign-in link's page (ADR-0043, Bajaur E5): an officer sets their own password. Its own
+   * small page, reached from a WhatsApp button by someone who has never opened the app.
+   */
+  await build({
+    ...common,
+    entryPoints: [join(web, 'src', 'setPassword.ts')],
+    outfile: join(out, 'set-password.js'),
+  });
+  await writeFile(
+    join(out, 'set-password.html'),
+    stripShellComments(
+      (await readFile(join(web, 'set-password.html'), 'utf8')).replace(/\r\n/g, '\n'),
+    ),
+    'utf8',
+  );
+
+  /**
    * `index.html`, with its comments left behind — M9-20.
    *
    * **This file is the single largest thing the district downloads**, and it was not close:

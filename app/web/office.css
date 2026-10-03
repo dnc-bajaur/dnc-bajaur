@@ -577,6 +577,15 @@ img.avatar-sm.avatar-pic {
 .d-input:focus {
   border-color: var(--primary);
 }
+/* A tick box with its words, in a drawer form — "Send a sign-in link" (ADR-0043). */
+.d-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 6px 0;
+  font-size: var(--t4);
+  color: var(--ink);
+}
 .member-item {
   display: flex;
   justify-content: space-between;

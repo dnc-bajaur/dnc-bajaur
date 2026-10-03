@@ -61,6 +61,7 @@ import {
   requirePermission,
   setOverride,
 } from './settings.js';
+import type { LinkDeps, LinkOutcome } from './loginLinks.js';
 
 export type ActivitiesResult<T> =
   | { readonly ok: true; readonly value: T }
@@ -497,6 +498,11 @@ export interface OfficerView {
   readonly placeholder: boolean;
   /** May post Activities — in the app with a login, and by WhatsApp either way. */
   readonly activitiesOn: boolean;
+  /** The newest sign-in link (ADR-0043): is one waiting to be used, and how did it go out? */
+  readonly link: {
+    readonly state: 'waiting' | 'used' | 'expired' | 'cancelled';
+    readonly sentVia: 'whatsapp' | 'by_hand' | 'failed';
+  } | null;
 }
 
 interface OfficerRow {
@@ -510,6 +516,8 @@ interface OfficerRow {
   role: Role;
   suspended: boolean;
   placeholder: boolean;
+  link_state: 'waiting' | 'used' | 'expired' | 'cancelled' | null;
+  link_sent_via: 'whatsapp' | 'by_hand' | 'failed' | null;
 }
 
 const OFFICER_SQL = `
@@ -521,8 +529,17 @@ const OFFICER_SQL = `
                     ORDER BY d.from_at DESC LIMIT 1)) AS designation,
          ${IS_CONTACT_SQL} AS in_directory,
          p.password_hash IS NOT NULL AS has_login,
-         (p.suspended_at IS NOT NULL OR p.disabled_at IS NOT NULL) AS suspended
+         (p.suspended_at IS NOT NULL OR p.disabled_at IS NOT NULL) AS suspended,
+         l.state AS link_state, l.sent_via AS link_sent_via
     FROM person p
+    LEFT JOIN LATERAL (
+      SELECT CASE WHEN ll.used_at IS NOT NULL THEN 'used'
+                  WHEN ll.revoked_at IS NOT NULL THEN 'cancelled'
+                  WHEN ll.expires_at <= now() THEN 'expired'
+                  ELSE 'waiting' END AS state,
+             ll.sent_via
+        FROM login_link ll WHERE ll.person_id = p.person_id
+       ORDER BY ll.created_at DESC LIMIT 1) l ON true
     LEFT JOIN activity_unit u ON u.unit_id = p.activity_unit_id AND u.retired_at IS NULL
    WHERE p.removed_at IS NULL
      AND (p.password_hash IS NOT NULL OR ${IS_CONTACT_SQL})`;
@@ -539,6 +556,10 @@ function officerView(r: OfficerRow, overrides: readonly PermissionOverride[]): O
     suspended: r.suspended,
     placeholder: r.placeholder,
     activitiesOn: mayPostActivities({ hasLogin: r.has_login, role: r.role }, overrides),
+    link:
+      r.link_state === null || r.link_sent_via === null
+        ? null
+        : { state: r.link_state, sentVia: r.link_sent_via },
   };
 }
 
@@ -666,15 +687,26 @@ export async function giveOfficerLogin(
   identity: Identity,
   personId: string,
   input: Record<string, unknown>,
-): Promise<ActivitiesResult<OfficerView>> {
-  const granted = await grantLogin(pool, identity, personId, {
-    password: input['password'],
-    activityUnitId: input['activityUnitId'],
-    role: 'member',
-  });
+  linkDeps?: LinkDeps,
+): Promise<ActivitiesResult<OfficerView & { readonly sent?: LinkOutcome }>> {
+  const granted = await grantLogin(
+    pool,
+    identity,
+    personId,
+    {
+      password: input['password'],
+      activityUnitId: input['activityUnitId'],
+      role: 'member',
+      // With no password: a sign-in link the officer uses to set their own (ADR-0043).
+      link: input['link'] === true,
+    },
+    linkDeps,
+  );
   if (!granted.ok) return granted;
   const after = await loadOfficer(pool, personId);
-  return after === null ? refuse(404, 'no such officer') : { ok: true, value: after };
+  if (after === null) return refuse(404, 'no such officer');
+  const sent = granted.value.link;
+  return { ok: true, value: sent === undefined ? after : { ...after, sent } };
 }
 
 //------------------------------------------------------------------------------

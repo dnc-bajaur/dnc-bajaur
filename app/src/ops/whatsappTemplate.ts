@@ -755,6 +755,31 @@ export function responseImageTemplateFor(category: string): TemplateShape | unde
 }
 
 /**
+ * The sign-in link — ADR-0043, Bajaur E5.
+ *
+ * A login was made for an officer; the button lets them set their own password. One parameter,
+ * the officer's name, so the message is plainly theirs on a shared handset. The link is the
+ * button, as with the acknowledge link: Meta appends the token to the approved prefix, so the
+ * prefix must be exactly `{PUBLIC_ORIGIN}/set-password/`.
+ *
+ * Utility, like the rest: it is about an account the recipient has, not an offer.
+ */
+export const LOGIN_LINK_TEMPLATE: TemplateShape = {
+  name: 'dnc_bajaur_login_link',
+  language: 'en',
+  category: 'UTILITY',
+  body: [{ what: "the officer's name", example: 'Amina Khan' }],
+  urlButton: { label: 'Set my password', base: '{PUBLIC_ORIGIN}/set-password/', index: 0 },
+  quickReplies: [],
+  header: null,
+  bodyText: `District Nerve Center — Bajaur
+
+{{1}}, a login to the district's Activities app has been made for you.
+
+Tap the button below to choose your own password. The link works once and stops working after 3 days. If you did not expect this message, ignore it.`,
+};
+
+/**
  * **Every template shape this file declares, by the name Meta knows it as.**
  *
  * ⚠️ **This exists so that a name in `.env` and a button position in the source cannot
@@ -776,6 +801,7 @@ export function shapeNamed(name: string): TemplateShape | undefined {
     NOTICE_TEMPLATE,
     NOTICE_TEMPLATE_IMAGE,
     EMERGENCY_TEMPLATE,
+    LOGIN_LINK_TEMPLATE,
     ...RESPONSE_TEMPLATES,
     ...RESPONSE_IMAGE_TEMPLATES,
   ].find((shape) => shape.name === name);

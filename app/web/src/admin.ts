@@ -225,6 +225,49 @@ function agoHours(hours: number | null): string {
   return `${String(Math.round(hours))}h ago`;
 }
 
+/** How a sign-in link went out (ADR-0043). */
+interface LinkSent {
+  readonly sentVia: 'whatsapp' | 'by_hand' | 'failed';
+  readonly failure: string | null;
+  readonly url: string | null;
+}
+
+/**
+ * What happened to a sign-in link, said at once (INV-03): sent — or the link itself, to send by
+ * hand, when WhatsApp cannot (no login template yet) or Meta refused.
+ */
+function linkSentNote(sent: LinkSent): HTMLElement {
+  const box = document.createElement('div');
+  if (sent.sentVia === 'whatsapp') {
+    box.append(text('p', 'note', 'Sign-in link sent on WhatsApp. It works once, for 3 days.'));
+    return box;
+  }
+  box.append(
+    text(
+      'p',
+      'note warn',
+      sent.sentVia === 'failed'
+        ? 'The sign-in link could not be sent on WhatsApp. Send this link to them yourself — it works once, for 3 days:'
+        : 'WhatsApp cannot send sign-in links yet. Send this link to them yourself — it works once, for 3 days:',
+    ),
+  );
+  if (sent.failure !== null) {
+    const why = text('p', 'note', sent.failure);
+    why.setAttribute('translate', 'no');
+    box.append(why);
+  }
+  const url = document.createElement('input');
+  url.className = 'd-input';
+  url.readOnly = true;
+  url.value = sent.url ?? '';
+  url.dir = 'ltr';
+  url.setAttribute('translate', 'no');
+  url.setAttribute('aria-label', 'Sign-in link');
+  url.addEventListener('focus', () => url.select());
+  box.append(url);
+  return box;
+}
+
 function text(tag: string, className: string, content: string): HTMLElement {
   const node = document.createElement(tag);
   node.className = className;
@@ -1017,7 +1060,7 @@ export function mountAdmin(): AdminConsole {
       text(
         'p',
         'note',
-        'Lets this person sign in with their phone number. A member uses Activities only; any other role is the control room. They must change the temporary password at first sign-in.',
+        'Lets this person sign in with their phone number. A member uses Activities only; any other role is the control room. A sign-in link lets them choose their own password; a temporary password must be changed at first sign-in.',
       ),
     );
 
@@ -1058,11 +1101,27 @@ export function mountAdmin(): AdminConsole {
       }
     });
 
+    // A sign-in link is the default (ADR-0043): nobody, the DC included, sees their password.
+    const byLink = document.createElement('label');
+    byLink.className = 'd-check';
+    const linkBox = document.createElement('input');
+    linkBox.type = 'checkbox';
+    linkBox.checked = true;
+    byLink.append(
+      linkBox,
+      document.createTextNode(' Send a sign-in link — they choose their own password'),
+    );
+
     const password = document.createElement('input');
     password.type = 'password';
     password.className = 'd-input';
     password.autocomplete = 'new-password';
     password.placeholder = 'Temporary password (at least 12 characters)';
+    password.hidden = true;
+    linkBox.addEventListener('change', () => {
+      password.hidden = linkBox.checked;
+      if (!linkBox.checked) password.focus();
+    });
 
     const give = document.createElement('button');
     give.type = 'button';
@@ -1070,20 +1129,34 @@ export function mountAdmin(): AdminConsole {
     give.textContent = 'Give login';
     give.addEventListener('click', () => {
       void (async () => {
-        if (password.value === '') return password.focus();
+        if (!linkBox.checked && password.value === '') return password.focus();
         give.disabled = true;
-        const done = await api(
+        const done = await api<{ personId: string; link?: LinkSent }>(
           'POST',
           `/settings/accounts/${contact.personId}/grant`,
-          { role: role.value, password: password.value, activityUnitId: unit.value },
+          linkBox.checked
+            ? { role: role.value, link: true, activityUnitId: unit.value }
+            : { role: role.value, password: password.value, activityUnitId: unit.value },
           drawer.sink,
         );
         give.disabled = false;
-        if (done !== null) onDone();
+        if (done === null) return;
+        if (done.link === undefined) {
+          onDone();
+          return;
+        }
+        // Say what happened to the link before the drawer redraws (INV-03).
+        section.replaceChildren(text('label', 'd-label', 'Give login'), linkSentNote(done.link));
+        const ok = document.createElement('button');
+        ok.type = 'button';
+        ok.className = 'd-btn';
+        ok.textContent = 'Done';
+        ok.addEventListener('click', onDone);
+        section.append(ok);
       })();
     });
 
-    section.append(role, unit, password, give);
+    section.append(role, unit, byLink, password, give);
     return section;
   }
 

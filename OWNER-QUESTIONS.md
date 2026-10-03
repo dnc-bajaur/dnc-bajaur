@@ -42,3 +42,10 @@ answered.
    **Activities** or the WhatsApp → Activities path, and it speaks of "all 79 departments".
    I translated it faithfully as it stands. **Should I rewrite it for Bajaur** (add an
    Activities chapter, drop what no longer applies)? I will not invent Bajaur facts in it.
+
+## From E5 — sign-in link (2026-10-03)
+
+8. **A sign-in link lasts 72 hours** and works once. Say if you want it shorter or longer.
+9. **To send it by WhatsApp**, the new template `dnc_bajaur_login_link` must be submitted to Meta
+   with the others (text in `docs/whatsapp-template.md`) and `WHATSAPP_TEMPLATE_LOGIN` set once
+   approved. Until then "Give login" shows the DC the link with a Copy button — it works today.

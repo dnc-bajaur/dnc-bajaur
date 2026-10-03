@@ -38,6 +38,7 @@ import {
   ALERT_TEMPLATE_IMAGE,
   ALERT_TEMPLATE,
   EMERGENCY_TEMPLATE,
+  LOGIN_LINK_TEMPLATE,
   NOTICE_TEMPLATE,
   NOTICE_TEMPLATE_IMAGE,
   RESPONSE_IMAGE_TEMPLATE_BY_CATEGORY,
@@ -94,6 +95,11 @@ export interface WhatsAppConfig {
    * PDF always will, as a single-use link in the body (M9-18).
    */
   readonly imageTemplate?: { readonly name: string; readonly language: string };
+  /**
+   * The sign-in link's template (ADR-0043), once Meta has approved it. Absent: no sign-in link is
+   * sent by WhatsApp, and the DC is handed the link to send by hand instead.
+   */
+  readonly loginTemplate?: { readonly name: string; readonly language: string };
   /**
    * The template whose buttons an officer can **tap to answer** — 2026-08-19.
    *
@@ -222,6 +228,14 @@ export function whatsappFromEnv(
      * Two independent reads mean the half that is approved starts being used the day it is,
      * rather than waiting on the other.
      */
+    ...(set(env['WHATSAPP_TEMPLATE_LOGIN'])
+      ? {
+          loginTemplate: {
+            name: env['WHATSAPP_TEMPLATE_LOGIN'].trim(),
+            language: env['WHATSAPP_TEMPLATE_LOGIN_LANG'] ?? LOGIN_LINK_TEMPLATE.language,
+          },
+        }
+      : {}),
     ...(set(env['WHATSAPP_TEMPLATE_EMERGENCY'])
       ? {
           emergencyTemplate: {
@@ -1057,6 +1071,47 @@ export async function sendWhatsApp(
  * and a shut service window are both *Meta refused this and said why*, and the caller's job is
  * to have not made the mistake, not to have a bespoke error for it.
  */
+/**
+ * Send a sign-in link (ADR-0043) on the district's login template.
+ *
+ * The token only — Meta appends it to the approved button prefix `{PUBLIC_ORIGIN}/set-password/`,
+ * exactly as with the acknowledge link (see `OutboundMessage.ackToken` for the defect that rule
+ * came from). The caller checks `config.loginTemplate` first: with none, nothing is sent.
+ */
+export async function sendLoginLink(
+  config: WhatsAppConfig,
+  message: { readonly toPhone: string; readonly name: string; readonly token: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<SendResult> {
+  const template = config.loginTemplate;
+  if (template === undefined) {
+    return { ok: false, failure: 'no_login_template', retryable: false };
+  }
+  return post(
+    config,
+    `${config.baseUrl ?? GRAPH}/${config.phoneNumberId}/messages`,
+    {
+      messaging_product: 'whatsapp',
+      to: toE164(message.toPhone),
+      type: 'template',
+      template: {
+        name: template.name,
+        language: { code: template.language },
+        components: [
+          { type: 'body', parameters: [{ type: 'text', text: message.name }] },
+          {
+            type: 'button',
+            sub_type: 'url',
+            index: String(LOGIN_LINK_TEMPLATE.urlButton?.index ?? 0),
+            parameters: [{ type: 'text', text: message.token }],
+          },
+        ],
+      },
+    },
+    fetchImpl,
+  );
+}
+
 async function post(
   config: WhatsAppConfig,
   url: string,

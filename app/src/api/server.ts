@@ -83,6 +83,7 @@ import {
   clearOverride,
   createAccount,
   grantLogin,
+  sendSignInLink,
   dashboardLayout,
   forceLogout,
   installationCapabilities,
@@ -98,6 +99,8 @@ import {
   toggleCapability,
   type SettingsResult,
 } from './settings.js';
+import type { LinkDeps } from './loginLinks.js';
+import { peekLoginLink, redeemLoginLink } from '../auth/loginLink.js';
 import { dailyCsv, dailyHtml, dailyReport } from './dailyReport.js';
 import {
   groupsForConsole,
@@ -940,6 +943,7 @@ async function handleSettings(
   res: ServerResponse,
   url: URL,
   identity: Identity,
+  linkDeps: LinkDeps,
 ): Promise<void> {
   const pathname = url.pathname;
   const send = <T>(result: SettingsResult<T>, okStatus = 200): void => {
@@ -1057,7 +1061,13 @@ async function handleSettings(
       return;
     }
     if (req.method === 'POST' && action === 'grant') {
-      send(await grantLogin(pool, identity, subjectId, input), 201);
+      send(await grantLogin(pool, identity, subjectId, input, linkDeps), 201);
+      return;
+    }
+    // A sign-in link for an existing account — a new login's first, or a forgotten password
+    // (ADR-0043).
+    if (req.method === 'POST' && action === 'login-link') {
+      send(await sendSignInLink(pool, identity, subjectId, linkDeps));
       return;
     }
     if (req.method === 'POST' && action === 'reset-password') {
@@ -1092,6 +1102,7 @@ async function handleActivities(
   backup: { readonly configured: boolean; readonly why: string | null },
   onVideoUploaded: (() => void) | undefined,
   tellSender: ((phone: string, text: string) => Promise<void>) | undefined,
+  linkDeps: LinkDeps,
 ): Promise<void> {
   const pathname = url.pathname;
   const fromWhatsApp: WhatsAppActivities = {
@@ -1152,15 +1163,20 @@ async function handleActivities(
     return send(await listOfficers(pool, identity));
   }
 
-  const officer = /^\/activities\/officers\/([^/]+)\/(activities|login)$/.exec(pathname);
+  const officer = /^\/activities\/officers\/([^/]+)\/(activities|login|login-link)$/.exec(pathname);
   if (officer !== null) {
     if (req.method !== 'POST') return notAllowed();
     if (!UUID_RE.test(officer[1]!)) return void json(res, 404, { error: 'no such officer' });
+    // A new sign-in link for an officer who has a login — ADR-0043. Settings' own rule
+    // (`accounts.reset_password`) decides; the Officers tab is only another door to it.
+    if (officer[2] === 'login-link') {
+      return send(await sendSignInLink(pool, identity, officer[1]!, linkDeps));
+    }
     const input = await bodyOf(req);
     if (input === null) return bad();
     return officer[2] === 'activities'
       ? send(await setOfficerActivities(pool, identity, officer[1]!, input))
-      : send(await giveOfficerLogin(pool, identity, officer[1]!, input), 201);
+      : send(await giveOfficerLogin(pool, identity, officer[1]!, input, linkDeps), 201);
   }
 
   if (pathname === '/activities/log') {
@@ -2152,6 +2168,18 @@ export function createSyncServer(options: ServerOptions): Server {
   const authMode = options.authMode ?? 'stub';
   const nodeEnv = options.nodeEnv ?? process.env['NODE_ENV'] ?? 'development';
   const whatsapp = options.whatsapp ?? null;
+
+  /**
+   * How a sign-in link is sent, and the address it lives at (ADR-0043). The configured public
+   * origin when there is one — it must be, for a link that goes by WhatsApp; otherwise the
+   * address this request came in on, which is right for a link the DC sends by hand on a
+   * development machine.
+   */
+  const linkDepsFor = (req: IncomingMessage): LinkDeps => ({
+    whatsapp,
+    publicOrigin: options.publicOrigin ?? `http://${req.headers.host ?? '127.0.0.1'}`,
+    ...(options.whatsappFetch === undefined ? {} : { fetchImpl: options.whatsappFetch }),
+  });
   /**
    * The same channel the scheduler uses, built once here for the immediate pass.
    *
@@ -2657,6 +2685,59 @@ export function createSyncServer(options: ServerOptions): Server {
             sessionCookie(result.token, nodeEnv === 'production', SESSION_TTL_HOURS * 3600),
           );
           json(res, 200, { token: result.token, identity: result.identity });
+          return;
+        }
+
+        /**
+         * The sign-in link (ADR-0043). No session — the link is the credential. A GET only
+         * reads whose link it is (WhatsApp fetches links to draw previews; that must spend
+         * nothing); the POST, from the page's form, uses it.
+         */
+        const linkRoute = /^\/auth\/link\/([A-Za-z0-9_-]{20,100})$/.exec(url.pathname);
+        if (linkRoute !== null) {
+          const linkToken = linkRoute[1]!;
+          if (req.method === 'GET') {
+            const peeked = await peekLoginLink(pool, linkToken);
+            if (!peeked.ok) json(res, 410, { error: peeked.message, reason: peeked.reason });
+            else json(res, 200, { fullName: peeked.fullName });
+            return;
+          }
+          if (req.method !== 'POST') {
+            json(res, 405, { error: 'method not allowed' });
+            return;
+          }
+          let body: { password?: unknown };
+          try {
+            body = JSON.parse(await readBody(req)) as typeof body;
+          } catch {
+            json(res, 400, { error: 'invalid json' });
+            return;
+          }
+          if (typeof body.password !== 'string') {
+            json(res, 400, { error: 'password is required' });
+            return;
+          }
+          const newPassword = body.password;
+          // Bounded scrypt work, like signing in: an emergency must never queue behind this.
+          const slot = await withScryptSlot(() => redeemLoginLink(pool, linkToken, newPassword));
+          if (!slot.ran) {
+            res.setHeader('retry-after', '5');
+            json(res, 503, { error: 'busy — try again in a moment' });
+            return;
+          }
+          const redeemed = slot.value;
+          if (!redeemed.ok) {
+            json(res, redeemed.reason === 'weak' ? 400 : 410, {
+              error: redeemed.message,
+              reason: redeemed.reason,
+            });
+            return;
+          }
+          res.setHeader(
+            'set-cookie',
+            sessionCookie(redeemed.token, nodeEnv === 'production', SESSION_TTL_HOURS * 3600),
+          );
+          json(res, 200, { identity: redeemed.identity });
           return;
         }
 
@@ -3279,7 +3360,7 @@ export function createSyncServer(options: ServerOptions): Server {
             return;
           }
 
-          await handleSettings(pool, req, res, url, identity);
+          await handleSettings(pool, req, res, url, identity, linkDepsFor(req));
           return;
         }
 
@@ -3389,6 +3470,7 @@ export function createSyncServer(options: ServerOptions): Server {
             activitiesBackup,
             options.onVideoUploaded,
             senderTeller(pool, whatsapp, options.whatsappFetch ?? fetch),
+            linkDepsFor(req),
           );
           return;
         }
@@ -3446,6 +3528,11 @@ export function createSyncServer(options: ServerOptions): Server {
 
         // Static assets last, so an API route can never be shadowed by a file on disk.
         if (webRoot !== undefined && req.method === 'GET') {
+          // The sign-in link's page (ADR-0043): one static page for every token, which reads
+          // the token from its own address.
+          if (/^\/set-password\/[A-Za-z0-9_-]{20,100}$/.test(url.pathname)) {
+            if (await serveStatic(webRoot, res, '/set-password.html')) return;
+          }
           if (await serveStatic(webRoot, res, url.pathname)) return;
           // Unknown path with no matching file: fall back to the shell so client-side
           // routes work, both online and from the service worker cache.

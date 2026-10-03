@@ -55,7 +55,8 @@ Accounts and services must be **new and Bajaur's own** — never reuse the other
        (`npm run setup:whatsapp`). Note: the number must not already be on a WhatsApp app.
 6. [ ] **WhatsApp templates** — their text now says *Bajaur*, so every template must be
        **submitted again and approved by Meta** (`npm run submit:template`; texts in
-       `docs/whatsapp-template.md`). This takes days — start early.
+       `docs/whatsapp-template.md`), the sign-in link's `dnc_bajaur_login_link` included.
+       This takes days — start early.
 7. [ ] **Offsite backups** — new S3/R2 bucket + new `BACKUP_PASSPHRASE` (store it offline).
 8. [ ] **Directory** — load D-01; mark the administration offices (D-07).
 9. [ ] **First account** — owner login (`installer/cloud/grant-login.mjs`).
@@ -83,7 +84,16 @@ Everything below can be built and tested on `localhost:3100` now; only go-live w
 | E2 ✅ | **Officers tab** in Activities: every Directory contact — department, Activities on/off, Give login (always member) — and Departments becomes the folder list only | [ADR-0041 §9](docs/adr/ADR-0041-directory-contacts-post-activities.md) | — |
 | E3 ✅ | **Fewer tabs:** DC — Activities · New post · Pending (with count) · Officers · History (Log + Recycle bin) · My account; member — Activities · New post · My account | — | — |
 | E4 ✅ | **Urdu / English toggle**, across the whole app (control room too). Urdu wording checked by the owner; right-to-left layout. **E4a ✅** switch + engine + Activities in Urdu; **E4b ✅** sign-in and control room screens; **E4c ✅** the How-to-use guide | [ADR-0042](docs/adr/ADR-0042-urdu-english.md) | owner reads `app/web/ur.json` |
-| E5 | **Sign-in link on WhatsApp** when a login is given — the officer sets their own password | ADR (to write) | Meta account + an approved template |
+| E5 ✅ | **Sign-in link on WhatsApp** when a login is given — the officer sets their own password; also "Send sign-in link" for a forgotten password. Until the template is approved the DC is shown the link to send by hand | [ADR-0043](docs/adr/ADR-0043-sign-in-link.md) | Meta account + approved `dnc_bajaur_login_link` template (`WHATSAPP_TEMPLATE_LOGIN`) |
+
+E5 notes (2026-10-03):
+- "Give login" (Officers tab and the contact drawer) sends a sign-in link by default; a typed
+  temporary password is still possible. The link: single-use, 72 hours, only its hash stored;
+  opening it spends nothing; using it sets the password, signs other sessions out and signs in.
+- Without the login template the DC is shown the link and a Copy button (works today, no Meta);
+  with it, the link goes from the district number and the DC is told sent / failed (INV-03).
+- Migration 0055 (`login_link`, two access-log types). Pinned by `loginLink.test.ts` (stubbed
+  Meta) and `setPassword.e2e.test.ts`. Not tried against Meta itself.
 
 E4 notes (2026-10-03):
 - `web/src/i18n.ts` replaces whole known English phrases with Urdu from `web/ur.json` as they

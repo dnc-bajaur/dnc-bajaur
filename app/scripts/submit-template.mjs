@@ -53,14 +53,19 @@ import {
   ALERT_TEMPLATE_IMAGE_V3,
   ALERT_TEMPLATE_TEXT,
   EMERGENCY_TEMPLATE,
+  LOGIN_LINK_TEMPLATE,
   NOTICE_TEMPLATE,
   NOTICE_TEMPLATE_IMAGE,
   RESPONSE_TEMPLATES,
   RESPONSE_IMAGE_TEMPLATES,
-  ackBase,
 } from '../dist/ops/whatsappTemplate.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+/** The approved button's prefix for this installation: the shape's `{PUBLIC_ORIGIN}` filled in. */
+function urlBase(shape, origin) {
+  return shape.urlButton.base.replace('{PUBLIC_ORIGIN}', origin.replace(/\/+$/, ''));
+}
 const appRoot = join(here, '..');
 
 const GREEN = '[32m';
@@ -84,6 +89,7 @@ const SUBMITTABLE = [
   NOTICE_TEMPLATE,
   NOTICE_TEMPLATE_IMAGE,
   EMERGENCY_TEMPLATE,
+  LOGIN_LINK_TEMPLATE,
   ...RESPONSE_TEMPLATES,
   ...RESPONSE_IMAGE_TEMPLATES,
 ];
@@ -178,8 +184,10 @@ function componentsFor(shape, origin, headerHandle) {
              * and every acknowledge link in the district is dead while every send succeeds — the
              * 2026-08-12 defect, which nothing reported for as long as it lasted.
              */
-            url: `${ackBase(origin)}{{1}}`,
-            example: [`${ackBase(origin)}Rk9wcW5oTQ`],
+            // The shape's own prefix: `/ack/` for the alerts, `/set-password/` for the sign-in
+            // link (ADR-0043). `ackBase` is the alerts' — the same string, built one way.
+            url: `${urlBase(shape, origin)}{{1}}`,
+            example: [`${urlBase(shape, origin)}Rk9wcW5oTQ`],
           },
         ]),
   ];
@@ -324,6 +332,7 @@ ${DIM}when somebody points the matching WHATSAPP_TEMPLATE_* line at it.${OFF}
     ['WHATSAPP_TEMPLATE_EMERGENCY', env.WHATSAPP_TEMPLATE_EMERGENCY],
     ['WHATSAPP_TEMPLATE_NOTICE', env.WHATSAPP_TEMPLATE_NOTICE],
     ['WHATSAPP_TEMPLATE_NOTICE_IMAGE', env.WHATSAPP_TEMPLATE_NOTICE_IMAGE],
+    ['WHATSAPP_TEMPLATE_LOGIN', env.WHATSAPP_TEMPLATE_LOGIN],
   ].find(([, name]) => set(name) && name === wanted);
 
   if (live !== undefined) {

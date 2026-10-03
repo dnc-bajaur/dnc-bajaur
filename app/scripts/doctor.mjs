@@ -34,6 +34,7 @@ import {
   ALERT_TEMPLATE_IMAGE,
   ALERT_TEMPLATE_IMAGE_V3,
   EMERGENCY_TEMPLATE,
+  LOGIN_LINK_TEMPLATE,
   NOTICE_TEMPLATE,
   NOTICE_TEMPLATE_IMAGE,
   RESPONSE_IMAGE_TEMPLATE_BY_CATEGORY,
@@ -529,6 +530,18 @@ async function checkWhatsApp(env, origin) {
       'same three RSVP buttons, instead of trading the photograph for a file link.',
   );
 
+  // The sign-in link (ADR-0043). Until it is approved, "Give login" hands the DC the link to send
+  // by hand — nothing is broken, it is only one more step for the DC.
+  gradeTappable(
+    'The sign-in link template',
+    env.WHATSAPP_TEMPLATE_LOGIN,
+    env.WHATSAPP_TEMPLATE_LOGIN_LANG,
+    LOGIN_LINK_TEMPLATE,
+    'WHATSAPP_TEMPLATE_LOGIN',
+    'A login given to an officer then reaches them as a WhatsApp message from the district ' +
+      'number, and they choose their own password — the DC no longer sends the link by hand.',
+  );
+
   /**
    * **The per-category response templates the district has switched on — ADR-0034.**
    *
@@ -666,13 +679,21 @@ async function checkWhatsApp(env, origin) {
      * The origin override, exactly as the two templates above do it — and the meeting template
      * legitimately has no URL button at all, so `shape.urlButton === null` is left alone rather
      * than being treated as a missing origin.
+     *
+     * The shape's own prefix with this installation's origin in it: `/ack/` for the alerts (what
+     * `ackBase` builds), `/set-password/` for the sign-in link (ADR-0043).
      */
     const problems = templateProblems(found, {
       ...shape,
       name: wantedName,
       language,
       ...(set(origin) && shape.urlButton !== null
-        ? { urlButton: { ...shape.urlButton, base: ackBase(origin) } }
+        ? {
+            urlButton: {
+              ...shape.urlButton,
+              base: shape.urlButton.base.replace('{PUBLIC_ORIGIN}', origin.replace(/\/+$/, '')),
+            },
+          }
         : { urlButton: null }),
     });
 

@@ -1275,7 +1275,9 @@ declare const self: ServiceWorkerGlobalScope;
 // page, dialogs translated, right-to-left fixes (ticker direction, dashboard overflow).
 // v268: Bajaur E4c (ADR-0042) — the How-to-use guide in Urdu, paragraph by paragraph; every
 // stylesheet's left/right margins, paddings, borders and alignment made logical for right-to-left.
-const CACHE = 'dnc-shell-v268';
+// v269: Bajaur E5 (ADR-0043) — "Give login" sends a sign-in link; the set-password page;
+// `/set-password` never cached. `admin.ts`, `activities.ts`, `office.css` and `ur.json` moved.
+const CACHE = 'dnc-shell-v269';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.
@@ -1393,6 +1395,11 @@ const NEVER_CACHE = [
    * cacheable, found by reading this file rather than by a test noticing a hang.
    */
   '/board/live',
+  /**
+   * The sign-in link's page (ADR-0043). Each address carries a single-use token; a copy kept in
+   * a cache is a page that says "choose your password" for a link that has already been used.
+   */
+  '/set-password',
   '/admin',
   '/roster',
   '/fleet',

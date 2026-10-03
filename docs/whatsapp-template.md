@@ -265,3 +265,27 @@ WHATSAPP_TEMPLATE_IMAGE=district_message_img_v3
 stops there; until somebody changes that line, photographs go out on whatever it already names.
 A rejection costs nothing either — `_img_v2` is not edited, not resubmitted and not deleted by
 any of this, and goes on working exactly as it does today.
+
+## `dnc_bajaur_login_link` — the sign-in link (ADR-0043, Bajaur E5)
+
+Sent when the DC gives an officer a login (or a new link for a forgotten password). The officer
+taps the button and chooses their own password; nobody else ever sees it.
+
+- **Category:** Utility · **Language:** English (`en`)
+- **Body** (one parameter, the officer's name):
+
+```
+District Nerve Center — Bajaur
+
+{{1}}, a login to the district's Activities app has been made for you.
+
+Tap the button below to choose your own password. The link works once and stops working after 3 days. If you did not expect this message, ignore it.
+```
+
+- **Button:** URL, dynamic, label **Set my password**, URL `{PUBLIC_ORIGIN}/set-password/{{1}}`
+  — exactly that prefix; Meta appends the token to it.
+- **Submit:** `npm run submit:template -- --name dnc_bajaur_login_link` (reads the same text from
+  `src/ops/whatsappTemplate.ts`, so the two cannot differ).
+- **Turn on:** once approved, set `WHATSAPP_TEMPLATE_LOGIN=dnc_bajaur_login_link` in `app/.env`.
+  `npm run doctor` checks the approved template against this one. Until then the DC is shown the
+  link to send by hand — "Give login" works either way.

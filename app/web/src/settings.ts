@@ -196,6 +196,8 @@ const ACCESS_TYPES = [
   'session_revoked',
   'login_succeeded',
   'login_failed',
+  'login_link_issued',
+  'login_link_used',
 ] as const;
 
 //----------------------------------------------------------------------------

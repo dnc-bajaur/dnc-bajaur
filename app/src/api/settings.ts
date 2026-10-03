@@ -30,6 +30,8 @@ import type { Pool } from '../db/pool.js';
 import type { Identity } from '../auth/sessions.js';
 import { revokeAllForPerson, SESSION_TTL_HOURS } from '../auth/sessions.js';
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../auth/passwords.js';
+import { unknowablePassword } from '../auth/loginLink.js';
+import { issueAndSend, type LinkDeps, type LinkOutcome } from './loginLinks.js';
 import {
   ROLES,
   can,
@@ -399,25 +401,27 @@ export async function grantLogin(
   identity: Identity,
   subjectId: string,
   input: Record<string, unknown>,
-): Promise<SettingsResult<{ readonly personId: string }>> {
-  const denied = await requirePermission<{ readonly personId: string }>(
-    pool,
-    identity,
-    'accounts.create',
-  );
+  /** Needed only for `link: true` — how to send the sign-in link (ADR-0043). */
+  deps?: LinkDeps,
+): Promise<SettingsResult<GrantedLogin>> {
+  const denied = await requirePermission<GrantedLogin>(pool, identity, 'accounts.create');
   if (denied !== null) return denied;
 
   const role = text(input['role']);
-  const roleRefused = refuseGrantedRole<{ readonly personId: string }>(identity, role);
+  const roleRefused = refuseGrantedRole<GrantedLogin>(identity, role);
   if (roleRefused !== null) return roleRefused;
+  // A sign-in link instead of a typed password: nobody — the DC included — ever sees it.
+  const byLink = input['link'] === true;
+  if (byLink && deps === undefined) return refuse(500, 'sign-in links are not available here');
 
   const found = await pool.query<{
     full_name: string;
+    phone: string;
     has_hash: boolean;
     placeholder: boolean;
     post: string | null;
   }>(
-    `SELECT p.full_name, (p.password_hash IS NOT NULL) AS has_hash, p.placeholder,
+    `SELECT p.full_name, p.phone, (p.password_hash IS NOT NULL) AS has_hash, p.placeholder,
             (SELECT s.title FROM duty_assignment d JOIN seat s ON s.seat_id = d.seat_id
               WHERE d.person_id = p.person_id AND d.to_at IS NULL AND s.retired_at IS NULL
               ORDER BY d.from_at DESC LIMIT 1) AS post
@@ -434,7 +438,9 @@ export async function grantLogin(
 
   let hash: string;
   try {
-    hash = await hashPassword(typeof input['password'] === 'string' ? input['password'] : '');
+    hash = byLink
+      ? await unknowablePassword()
+      : await hashPassword(typeof input['password'] === 'string' ? input['password'] : '');
   } catch (e) {
     return refuse(400, (e as Error).message);
   }
@@ -458,10 +464,56 @@ export async function grantLogin(
     type: 'granted',
     actorPersonId: identity.personId,
     subjectPersonId: subjectId,
-    after: { role, fullName: contact.full_name, fromContact: true },
+    after: { role, fullName: contact.full_name, fromContact: true, byLink },
   }).catch(() => {});
 
-  return { ok: true, value: { personId: subjectId } };
+  if (!byLink || deps === undefined) return { ok: true, value: { personId: subjectId } };
+  const link = await issueAndSend(
+    pool,
+    deps,
+    { personId: subjectId, fullName: contact.full_name, phone: contact.phone },
+    identity.personId,
+  );
+  return { ok: true, value: { personId: subjectId, link } };
+}
+
+export interface GrantedLogin {
+  readonly personId: string;
+  /** Present when the login was given by a sign-in link: how it went out (ADR-0043). */
+  readonly link?: LinkOutcome;
+}
+
+/**
+ * "Send sign-in link" — a new link for an existing account, which is also how a forgotten
+ * password is reset without the DC inventing one (ADR-0043). The same permission and the same
+ * owner/admin rule as resetting a password; the old password keeps working until the link is
+ * used, and using it signs every other session out.
+ */
+export async function sendSignInLink(
+  pool: Pool,
+  identity: Identity,
+  subjectId: string,
+  deps: LinkDeps,
+): Promise<SettingsResult<LinkOutcome>> {
+  const denied = await requirePermission<LinkOutcome>(pool, identity, 'accounts.reset_password');
+  if (denied !== null) return denied;
+
+  const subject = await loadAccount(pool, subjectId);
+  if (subject === null) return refuse(404, 'no such account');
+  if (subject.personId === identity.personId) {
+    return refuse(409, 'use "change my password" for your own account');
+  }
+  const scope = guardSubject(identity, subject, 'refuse');
+  if (scope !== null) return scope;
+  if (subject.suspendedAt !== null) return refuse(409, 'this account is suspended');
+
+  const link = await issueAndSend(
+    pool,
+    deps,
+    { personId: subject.personId, fullName: subject.fullName, phone: subject.phone },
+    identity.personId,
+  );
+  return { ok: true, value: link };
 }
 
 //------------------------------------------------------------------------------
@@ -858,6 +910,8 @@ const ACCESS_EVENT_TYPES: readonly AccessEventType[] = [
   'session_revoked',
   'login_succeeded',
   'login_failed',
+  'login_link_issued',
+  'login_link_used',
 ];
 
 export async function accessLog(

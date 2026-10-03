@@ -57,6 +57,20 @@ interface Officer {
   readonly suspended: boolean;
   readonly placeholder: boolean;
   readonly activitiesOn: boolean;
+  /** The newest sign-in link (ADR-0043). */
+  readonly link: {
+    readonly state: 'waiting' | 'used' | 'expired' | 'cancelled';
+    readonly sentVia: 'whatsapp' | 'by_hand' | 'failed';
+  } | null;
+}
+
+/** How a sign-in link went out — what the DC is told at once (ADR-0043, INV-03). */
+interface LinkSent {
+  readonly sentVia: 'whatsapp' | 'by_hand' | 'failed';
+  readonly failure: string | null;
+  /** Only when it did not go by WhatsApp: for the DC to send by hand. */
+  readonly url: string | null;
+  readonly expiresAt: string;
 }
 
 interface Post {
@@ -1100,14 +1114,67 @@ function loginText(o: Officer): string {
   return `Login: ${o.role} — control room`;
 }
 
-function officerRow(o: Officer): HTMLElement {
+/** A waiting link that never reached the officer is the one thing on this line worth a look. */
+function linkText(o: Officer): string {
+  if (o.link === null || o.link.state !== 'waiting') return '';
+  return o.link.sentVia === 'failed'
+    ? 'sign-in link could not be sent'
+    : 'sign-in link not used yet';
+}
+
+/**
+ * What happened to a sign-in link, said where the DC pressed the button. Sent: that is all.
+ * Not sent (no login template yet) or refused by Meta: the link itself, to send by hand — the
+ * officer must not be left waiting for a message that is not coming.
+ */
+function linkOutcome(sent: LinkSent): HTMLElement {
+  const box = make('div', 'link-sent');
+  if (sent.sentVia === 'whatsapp') {
+    box.append(make('p', 'ok', 'Sign-in link sent on WhatsApp. It works once, for 3 days.'));
+    return box;
+  }
+  box.append(
+    make(
+      'p',
+      sent.sentVia === 'failed' ? 'error' : 'meta',
+      sent.sentVia === 'failed'
+        ? 'The sign-in link could not be sent on WhatsApp. Send this link to them yourself — it works once, for 3 days:'
+        : 'WhatsApp cannot send sign-in links yet. Send this link to them yourself — it works once, for 3 days:',
+    ),
+  );
+  if (sent.failure !== null) box.append(untranslated(make('p', 'meta', sent.failure)));
+  const line = make('div', 'row');
+  const url = make('input');
+  url.readOnly = true;
+  url.value = sent.url ?? '';
+  url.setAttribute('aria-label', 'Sign-in link');
+  url.setAttribute('translate', 'no');
+  url.dir = 'ltr';
+  const copy = button('Copy link');
+  copy.addEventListener('click', () => {
+    url.select();
+    void navigator.clipboard
+      ?.writeText(url.value)
+      .then(() => {
+        copy.textContent = 'Copied';
+      })
+      .catch(() => {
+        // No clipboard (an old browser, or no permission): the link is selected to copy by hand.
+      });
+  });
+  line.append(url, copy);
+  box.append(line);
+  return box;
+}
+
+function officerRow(o: Officer, sent?: LinkSent): HTMLElement {
   const row = make('div', 'list-row officer');
   const error = make('p', 'error');
   error.hidden = true;
   const fail = (e: unknown): void => showError(error, e);
-  const replace = (next: Officer): void => {
+  const replace = (next: Officer & { readonly sent?: LinkSent }): void => {
     officers = officers.map((x) => (x.personId === next.personId ? next : x));
-    row.replaceWith(officerRow(next));
+    row.replaceWith(officerRow(next, next.sent));
   };
 
   row.append(
@@ -1115,7 +1182,7 @@ function officerRow(o: Officer): HTMLElement {
       make('div', 'officer-name', o.designation ? `${o.fullName} — ${o.designation}` : o.fullName),
     ),
   );
-  const facts = [o.phone, loginText(o)];
+  const facts = [o.phone, loginText(o), linkText(o)];
   if (!o.inDirectory) facts.push('not in the Directory');
   if (o.placeholder) facts.push('stand-in number');
   if (o.suspended) facts.push('suspended');
@@ -1167,11 +1234,29 @@ function officerRow(o: Officer): HTMLElement {
     const give = button('Give login');
     give.addEventListener('click', () => {
       give.hidden = true;
-      const form = make('div', 'row');
+      const form = make('div', 'give-login');
+      // A sign-in link is the default (ADR-0043): nobody, the DC included, sees their password.
+      const byLink = make('label', 'switch');
+      const linkBox = make('input');
+      linkBox.type = 'checkbox';
+      linkBox.checked = true;
+      byLink.append(
+        linkBox,
+        document.createTextNode('Send a sign-in link — they choose their own password'),
+      );
       const password = make('input');
       password.type = 'password';
       password.autocomplete = 'new-password';
       password.placeholder = 'Temporary password (12+ characters)';
+      password.hidden = true;
+      const note = make('span', 'meta', 'Activities only. The link works once, for 3 days.');
+      linkBox.addEventListener('change', () => {
+        password.hidden = linkBox.checked;
+        note.textContent = linkBox.checked
+          ? 'Activities only. The link works once, for 3 days.'
+          : 'Activities only. They change this password at first sign-in.';
+        if (!linkBox.checked) password.focus();
+      });
       const send = button('Give login', 'primary');
       const cancel = button('Cancel');
       cancel.addEventListener('click', () => {
@@ -1179,32 +1264,48 @@ function officerRow(o: Officer): HTMLElement {
         give.hidden = false;
       });
       send.addEventListener('click', () => {
-        if (password.value === '') return password.focus();
+        if (!linkBox.checked && password.value === '') return password.focus();
         error.hidden = true;
         send.disabled = true;
-        void api<Officer>('POST', `/activities/officers/${o.personId}/login`, {
-          password: password.value,
-          activityUnitId: unit.value,
-        })
+        void api<Officer & { readonly sent?: LinkSent }>(
+          'POST',
+          `/activities/officers/${o.personId}/login`,
+          linkBox.checked
+            ? { link: true, activityUnitId: unit.value }
+            : { password: password.value, activityUnitId: unit.value },
+        )
           .then(replace)
           .catch((e: unknown) => {
             send.disabled = false;
             fail(e);
           });
       });
-      form.append(
-        make('span', 'meta', 'Activities only. They change this password at first sign-in.'),
-        password,
-        send,
-        cancel,
-      );
+      const buttons = make('div', 'row');
+      buttons.append(send, cancel);
+      form.append(note, byLink, password, buttons);
       row.insertBefore(form, error);
-      password.focus();
     });
     controls.append(give);
   }
 
+  // A member who has a login: a new sign-in link — their first, or a forgotten password.
+  if (o.role === 'member' && !o.suspended) {
+    const again = button('Send sign-in link');
+    again.addEventListener('click', () => {
+      error.hidden = true;
+      again.disabled = true;
+      void api<LinkSent>('POST', `/activities/officers/${o.personId}/login-link`, {})
+        .then((sent) => replace({ ...o, link: { state: 'waiting', sentVia: sent.sentVia }, sent }))
+        .catch((e: unknown) => {
+          again.disabled = false;
+          fail(e);
+        });
+    });
+    controls.append(again);
+  }
+
   row.append(controls, error);
+  if (sent !== undefined) row.append(linkOutcome(sent));
   return row;
 }
 
@@ -1216,7 +1317,7 @@ function drawOfficers(): void {
       find === '' ||
       [o.fullName, o.designation ?? '', o.phone].some((t) => t.toLowerCase().includes(find)),
   );
-  list.replaceChildren(...shown.map(officerRow));
+  list.replaceChildren(...shown.map((o) => officerRow(o)));
   if (officers.length === 0) {
     list.append(
       make('p', 'muted', 'Nobody yet. Add officers to the Directory in the control room.'),

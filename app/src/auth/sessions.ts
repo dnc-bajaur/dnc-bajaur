@@ -286,6 +286,15 @@ export async function login(
     return null;
   }
 
+  return startSession(pool, identity);
+}
+
+/**
+ * A new session for someone already proven to be who they are — by their password (`login`), or
+ * by a sign-in link they have just used to set one (ADR-0043). One place, so both doors issue the
+ * same kind of session and write the same `login_succeeded` line.
+ */
+export async function startSession(pool: Pool, identity: Identity): Promise<LoginResult> {
   const token = randomBytes(32).toString('base64url');
   await pool.query(
     `INSERT INTO session (token_hash, person_id, seat_id, expires_at)

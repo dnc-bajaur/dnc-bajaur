@@ -24,7 +24,9 @@ export type AccessEventType =
   | 'removed'
   | 'session_revoked'
   | 'login_succeeded'
-  | 'login_failed';
+  | 'login_failed'
+  | 'login_link_issued'
+  | 'login_link_used';
 
 export interface AccessEventInput {
   readonly type: AccessEventType;
