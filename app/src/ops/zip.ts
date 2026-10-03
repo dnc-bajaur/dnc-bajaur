@@ -10,15 +10,27 @@
  * Each entry is written whole (a photo is at most 8 MB), so its size and CRC are known before
  * its header is written: no data descriptors, nothing a strict reader could disagree with.
  *
- * **No ZIP64.** An archive is refused past 4 GB or 65 535 entries rather than written wrong —
- * the caller checks `fits` first. Three days of a district's photos are far below either.
+ * **ZIP64 where it is needed, and only there.** The classic format stops at 4 GB and 65 535
+ * entries, and three days of a district's *videos* can pass 4 GB — the archive used to be refused
+ * there, on the one day the DC most needed it. Past either limit the central directory carries
+ * 64-bit offsets and a ZIP64 end record follows it; an archive below both is byte for byte the
+ * classic one it always was. Windows Explorer, 7-Zip and `unzip` 6 all read ZIP64.
+ *
+ * One entry is still at most 4 GB (the largest file here is a 300 MB video), so an entry's own
+ * sizes never need 64 bits — only where it sits in the archive does.
  */
 
 import { crc32 } from 'node:zlib';
 
-/** The classic format's limits, with room left for the headers themselves. */
-export const ZIP_MAX_BYTES = 0xffff_ffff - 64 * 1024 * 1024;
-export const ZIP_MAX_ENTRIES = 0xffff;
+/** Where the classic format's 32-bit and 16-bit fields run out. */
+const MAX_32 = 0xffff_ffff;
+const MAX_16 = 0xffff;
+
+/** One entry's own limit: its size is written in 32 bits. */
+export const ZIP_MAX_ENTRY_BYTES = MAX_32 - 1;
+/** Far beyond anything a server holds; the sum must stay an exact integer. */
+export const ZIP_MAX_BYTES = Number.MAX_SAFE_INTEGER;
+export const ZIP_MAX_ENTRIES = MAX_32 - 1;
 
 export interface ZipEntry {
   readonly name: string;
@@ -58,12 +70,15 @@ export function zipWriter(): ZipWriter {
   return {
     add(entry): Buffer {
       const name = Buffer.from(entry.name.replace(/\\/g, '/'), 'utf8');
-      const crc = crc32(entry.bytes);
       const size = entry.bytes.length;
-      const { time, date } = dosTime(entry.modified);
-      if (count + 1 > ZIP_MAX_ENTRIES || offset + size > ZIP_MAX_BYTES) {
-        throw new Error('this archive would need ZIP64, which this writer does not produce');
+      if (size > ZIP_MAX_ENTRY_BYTES) {
+        throw new Error('one file in a ZIP may be at most 4 GB');
       }
+      const crc = crc32(entry.bytes);
+      const { time, date } = dosTime(entry.modified);
+      // Past 4 GB into the archive, where this entry starts no longer fits in 32 bits.
+      const far = offset >= MAX_32;
+      const version = far ? 45 : 20; // 4.5 is the version that reads ZIP64
 
       const local = Buffer.alloc(30);
       local.writeUInt32LE(0x04034b50, 0);
@@ -78,10 +93,18 @@ export function zipWriter(): ZipWriter {
       local.writeUInt16LE(name.length, 26);
       local.writeUInt16LE(0, 28);
 
+      // The ZIP64 extra field: only the value that overflowed is in it — here, the offset.
+      const extra = Buffer.alloc(far ? 12 : 0);
+      if (far) {
+        extra.writeUInt16LE(0x0001, 0);
+        extra.writeUInt16LE(8, 2);
+        extra.writeBigUInt64LE(BigInt(offset), 4);
+      }
+
       const header = Buffer.alloc(46);
       header.writeUInt32LE(0x02014b50, 0);
-      header.writeUInt16LE(20, 4); // version made by
-      header.writeUInt16LE(20, 6); // version needed
+      header.writeUInt16LE(version, 4); // version made by
+      header.writeUInt16LE(version, 6); // version needed
       header.writeUInt16LE(UTF8, 8);
       header.writeUInt16LE(0, 10);
       header.writeUInt16LE(time, 12);
@@ -90,9 +113,10 @@ export function zipWriter(): ZipWriter {
       header.writeUInt32LE(size, 20);
       header.writeUInt32LE(size, 24);
       header.writeUInt16LE(name.length, 28);
-      // extra, comment, disk, internal attributes, external attributes: all zero
-      header.writeUInt32LE(offset, 42);
-      central.push(header, name);
+      header.writeUInt16LE(extra.length, 30);
+      // comment, disk, internal attributes, external attributes: all zero
+      header.writeUInt32LE(far ? MAX_32 : offset, 42);
+      central.push(header, name, extra);
 
       const out = Buffer.concat([local, name, entry.bytes]);
       offset += out.length;
@@ -102,13 +126,34 @@ export function zipWriter(): ZipWriter {
 
     finish(): Buffer {
       const directory = Buffer.concat(central);
+      const big = count >= MAX_16 || offset >= MAX_32 || directory.length >= MAX_32;
+
+      // The classic end record always closes the file; a field that overflowed holds all ones,
+      // which is what sends a reader to the ZIP64 record in front of it.
       const end = Buffer.alloc(22);
       end.writeUInt32LE(0x06054b50, 0);
-      end.writeUInt16LE(count, 8);
-      end.writeUInt16LE(count, 10);
-      end.writeUInt32LE(directory.length, 12);
-      end.writeUInt32LE(offset, 16);
-      return Buffer.concat([directory, end]);
+      end.writeUInt16LE(Math.min(count, MAX_16), 8);
+      end.writeUInt16LE(Math.min(count, MAX_16), 10);
+      end.writeUInt32LE(Math.min(directory.length, MAX_32), 12);
+      end.writeUInt32LE(Math.min(offset, MAX_32), 16);
+      if (!big) return Buffer.concat([directory, end]);
+
+      const end64 = Buffer.alloc(56);
+      end64.writeUInt32LE(0x06064b50, 0);
+      end64.writeBigUInt64LE(44n, 4); // the size of the rest of this record
+      end64.writeUInt16LE(45, 12); // version made by
+      end64.writeUInt16LE(45, 14); // version needed
+      // disk numbers: zero
+      end64.writeBigUInt64LE(BigInt(count), 24);
+      end64.writeBigUInt64LE(BigInt(count), 32);
+      end64.writeBigUInt64LE(BigInt(directory.length), 40);
+      end64.writeBigUInt64LE(BigInt(offset), 48);
+
+      const locator = Buffer.alloc(20);
+      locator.writeUInt32LE(0x07064b50, 0);
+      locator.writeBigUInt64LE(BigInt(offset + directory.length), 8); // where `end64` starts
+      locator.writeUInt32LE(1, 16); // one disk
+      return Buffer.concat([directory, end64, locator, end]);
     },
   };
 }
