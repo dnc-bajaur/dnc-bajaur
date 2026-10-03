@@ -442,6 +442,17 @@ maybe('Activities (ADR-0039, phase C1)', () => {
       const thumb = await call(memberA.token, `/activities/media/${mediaId}?size=thumb`);
       expect((await thumb.arrayBuffer()).byteLength).toBe(40);
 
+      // Shown, it is inline; asked for as a file to keep, the same bytes come named.
+      expect(full.headers.get('content-disposition')).toBeNull();
+      const kept = await call(memberA.token, `/activities/media/${mediaId}?download=1`);
+      expect(kept.headers.get('content-disposition')).toMatch(
+        new RegExp(
+          `^attachment; filename="activity-\\d{4}-\\d{2}-\\d{2}-${mediaId.slice(0, 8)}\\.jpg"$`,
+        ),
+      );
+      expect(kept.headers.get('content-type')).toBe('image/jpeg');
+      expect((await kept.arrayBuffer()).byteLength).toBe(100);
+
       const again = await call(memberA.token, `/activities/media/${mediaId}`, 'GET', undefined, {
         'if-none-match': full.headers.get('etag')!,
       });

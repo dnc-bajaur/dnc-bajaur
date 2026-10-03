@@ -58,6 +58,7 @@ import {
   MAX_AUDIO_BYTES,
   MAX_PHOTO_BYTES,
   PHOTO_TYPES,
+  attachment,
   inside,
   parseRange,
   writeLog,
@@ -576,6 +577,7 @@ export async function serveResponseMedia(
   res: ServerResponse,
   identity: Identity,
   responseId: string,
+  download = false,
 ): Promise<ActivitiesResult<null> | null> {
   if (!UUID_RE.test(responseId)) return refuse(404, 'no such file');
   const c = await caller(pool, identity);
@@ -597,7 +599,7 @@ export async function serveResponseMedia(
   if ('ok' in seen) return refuse(404, 'no such file');
 
   const etag = `"${(row.sha256 ?? '').slice(0, 32)}"`;
-  const headers = {
+  const headers: Record<string, string> = {
     'content-type': row.content_type,
     'cache-control': 'private, no-cache',
     etag,
@@ -605,6 +607,12 @@ export async function serveResponseMedia(
     'content-security-policy': "default-src 'none'; sandbox",
     'accept-ranges': 'bytes',
   };
+  if (download) {
+    headers['content-disposition'] = attachment(
+      `activity-answer-${responseId.slice(0, 8)}`,
+      row.content_type,
+    );
+  }
   if (req.headers['if-none-match'] === etag) {
     res.writeHead(304, headers).end();
     return null;

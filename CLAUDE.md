@@ -116,7 +116,7 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   Never use the other district's cluster on this machine. Full suite runs locally (files run one
   at a time). Rarely a test process dies mid-run here ("Worker exited unexpectedly"; cause
   unknown, never seen in CI). The run's end now names the file (`testing/crashTrace.ts`,
-  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement`, `takeAction`, `contrast`, `authPassword`, `activitiesVideo`, `log`, `whatsappActivities`, `words`, `reports`, `districtDay` —
+  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement`, `takeAction`, `contrast`, `authPassword`, `activitiesVideo`, `log`, `whatsappActivities`, `words`, `reports`, `districtDay`, `responsePage` —
   different files, dying before any test runs, no exit code; not reproducible on demand.
   **Never start a second `vitest` while the full suite runs** — they share one test database and
   the file running at that moment fails (seen: `dashboardLive.e2e`, 17 false failures).
@@ -146,7 +146,8 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   operator): plain inside the 24-hour window, template `WHATSAPP_TEMPLATE_ACTIVITY` outside it,
   delivery shown, the officer's answer returns to the post (`takeAnswer` in the webhook, before
   everything else; plain words only for a number with no alert in 24 h). Stubbed Meta only.
-  Shell v275 — **bump `CACHE` in `web/src/sw.ts` before `npm run shell:record`**, never record
+  G5: a ⬇ Download on every photo, video and voice note (`?download=1` on the media routes).
+  Shell v276 — **bump `CACHE` in `web/src/sw.ts` before `npm run shell:record`**, never record
   alone. A test (`deployable.e2e`) runs `tsc` on the whole tree: an unfinished `.ts` file left
   in `src/` fails it.
 - **Next:** nothing buildable is left. Everything waits on the owner — the ordered list is at

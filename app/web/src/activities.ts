@@ -496,9 +496,26 @@ async function loadPeople(): Promise<void> {
 // The feed
 //------------------------------------------------------------------------------
 
-function openViewer(src: string, kind: 'photo' | 'video' = 'photo'): void {
+/**
+ * A link that saves a photo, a video or a voice note to the device. The server names the file and
+ * sends it as one to keep (`?download=1`), so it works the same in a browser and the installed app.
+ */
+function saveLink(src: string): HTMLAnchorElement {
+  const link = make('a', 'save', '⬇');
+  link.href = `${src}?download=1`;
+  link.setAttribute('download', '');
+  link.setAttribute('aria-label', 'Download');
+  link.title = 'Download';
+  return link;
+}
+
+/** `keep` is false where the file is not yet a post's (the Pending list): nothing to download. */
+function openViewer(src: string, kind: 'photo' | 'video' = 'photo', keep = true): void {
   const img = el<HTMLImageElement>('viewerImg');
   const video = el<HTMLVideoElement>('viewerVideo');
+  const save = el<HTMLAnchorElement>('viewerSave');
+  save.hidden = !keep;
+  if (keep) save.href = `${src}?download=1`;
   img.hidden = kind !== 'photo';
   video.hidden = kind !== 'video';
   if (kind === 'photo') img.src = src;
@@ -573,6 +590,7 @@ function videoTile(video: Video, post: Post, refresh: () => void): HTMLElement {
   if (video.durationSeconds !== null) {
     tile.append(make('span', 'length', clock(video.durationSeconds)));
   }
+  tile.append(saveLink(src));
   return tile;
 }
 
@@ -748,9 +766,11 @@ function responseRow(r: PostResponse): HTMLElement {
     img.alt = 'Photo sent in answer';
     img.src = src;
     img.addEventListener('click', () => openViewer(src));
-    row.append(img);
+    const shot = make('div', 'shot');
+    shot.append(img, saveLink(src));
+    row.append(shot);
   }
-  if (r.media === 'audio') row.append(audioTile(src));
+  if (r.media === 'audio') row.append(audioTile(src, true));
   if (r.status === 'failed' && r.failure !== null) {
     // Meta's own words: shown as they are, never put into Urdu.
     row.append(untranslated(make('p', 'error', r.failure)));
@@ -902,7 +922,9 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
       const small = photo.hasThumb && n > 1;
       img.src = `/activities/media/${photo.mediaId}${small ? '?size=thumb' : ''}`;
       img.addEventListener('click', () => openViewer(`/activities/media/${photo.mediaId}`));
-      grid.append(img);
+      const shot = make('div', 'shot');
+      shot.append(img, saveLink(`/activities/media/${photo.mediaId}`));
+      grid.append(shot);
     }
     card.append(grid);
   }
@@ -911,7 +933,7 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
     grid.append(...post.videos.map((v) => videoTile(v, post, refresh)));
     card.append(grid);
   }
-  for (const a of post.audios) card.append(audioTile(`/activities/media/${a.mediaId}`));
+  for (const a of post.audios) card.append(audioTile(`/activities/media/${a.mediaId}`, true));
   if (post.photos.length === 0 && post.videos.length === 0 && post.audios.length === 0) {
     card.append(make('p', 'meta', 'No photos, videos or voice notes.'));
   }
@@ -1235,13 +1257,16 @@ function whyPending(g: PendingGroup): string {
 }
 
 /** A voice note, playable where it is. */
-function audioTile(src: string): HTMLElement {
+function audioTile(src: string, keep = false): HTMLElement {
   const player = make('audio');
   player.controls = true;
   player.preload = 'none';
   player.src = src;
   player.setAttribute('aria-label', 'Voice note');
-  return player;
+  if (!keep) return player;
+  const row = make('div', 'voice');
+  row.append(player, saveLink(src));
+  return row;
 }
 
 /** The "General" department, when it exists — where a person with none posts (ADR-0041 §2). */
@@ -1268,7 +1293,7 @@ function pendingCard(g: PendingGroup): HTMLElement {
       img.loading = 'lazy';
       img.alt = 'Photo sent on WhatsApp';
       img.src = src(m.mediaId);
-      img.addEventListener('click', () => openViewer(src(m.mediaId)));
+      img.addEventListener('click', () => openViewer(src(m.mediaId), 'photo', false));
       grid.append(img);
     }
     card.append(grid);
@@ -1280,7 +1305,7 @@ function pendingCard(g: PendingGroup): HTMLElement {
       const tile = make('div', 'video');
       const play = button('▶', 'play');
       play.setAttribute('aria-label', 'Play video');
-      play.addEventListener('click', () => openViewer(src(m.mediaId), 'video'));
+      play.addEventListener('click', () => openViewer(src(m.mediaId), 'video', false));
       tile.append(play);
       grid.append(tile);
     }

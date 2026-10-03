@@ -1343,7 +1343,15 @@ async function handleActivities(
   const responseMedia = /^\/activities\/responses\/([^/]+)\/media$/.exec(pathname);
   if (responseMedia !== null) {
     if (req.method !== 'GET') return notAllowed();
-    const reply = await serveResponseMedia(pool, root, req, res, identity, responseMedia[1]!);
+    const reply = await serveResponseMedia(
+      pool,
+      root,
+      req,
+      res,
+      identity,
+      responseMedia[1]!,
+      url.searchParams.get('download') === '1',
+    );
     if (reply !== null && !reply.ok) json(res, reply.status, { error: reply.error });
     return;
   }
@@ -1375,6 +1383,7 @@ async function handleActivities(
       identity,
       media[1]!,
       url.searchParams.get('size') === 'thumb',
+      url.searchParams.get('download') === '1',
     );
     if (reply !== null && !reply.ok) json(res, reply.status, { error: reply.error });
     return;

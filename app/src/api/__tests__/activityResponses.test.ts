@@ -636,6 +636,13 @@ describe.skipIf(dbUrl === undefined)('Activities: Respond (ADR-0044)', () => {
       expect(Buffer.from(await got.arrayBuffer()).equals(photo)).toBe(true);
       const voice = await call(dc.token, `/activities/responses/${answers[1]!.responseId}/media`);
       expect(voice.headers.get('content-type')).toBe('audio/ogg');
+      const kept = await call(
+        dc.token,
+        `/activities/responses/${answers[1]!.responseId}/media?download=1`,
+      );
+      expect(kept.headers.get('content-disposition')).toBe(
+        `attachment; filename="activity-answer-${answers[1]!.responseId.slice(0, 8)}.ogg"`,
+      );
 
       // Not a new post, and not for anybody who cannot respond.
       const posts = await pool.query('SELECT 1 FROM activity_post WHERE author_person_id = $1', [

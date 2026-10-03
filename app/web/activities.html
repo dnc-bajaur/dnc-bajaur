@@ -258,6 +258,9 @@
         color: var(--critical);
         font-weight: 600;
       }
+      .response .shot {
+        width: fit-content;
+      }
       .response img {
         display: block;
         max-width: 240px;
@@ -433,6 +436,57 @@
       .photos.many {
         grid-template-columns: repeat(3, 1fr);
       }
+      /* A photo with its Download button in the corner; a voice note with it at the end. */
+      .shot {
+        position: relative;
+        line-height: 0;
+      }
+      .save {
+        position: absolute;
+        top: 6px;
+        inset-inline-end: 6px;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        font-size: 1rem;
+        line-height: 1;
+        text-decoration: none;
+      }
+      .save[hidden] {
+        display: none;
+      }
+      .save:hover,
+      .save:focus-visible {
+        background: rgba(0, 0, 0, 0.85);
+      }
+      .voice {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .voice audio {
+        flex: 1;
+        min-width: 0;
+      }
+      .voice .save {
+        position: static;
+        flex: none;
+        margin-top: 8px;
+      }
+      .viewer .save {
+        top: 12px;
+        inset-inline-end: 12px;
+        width: 44px;
+        height: 44px;
+        font-size: 1.2rem;
+        background: rgba(255, 255, 255, 0.2);
+      }
       .pick {
         position: relative;
       }
@@ -566,8 +620,8 @@
         visibility: hidden;
       }
       :root[lang='ur'] body {
-        font-family: 'Segoe UI', 'Noto Naskh Arabic', 'Noto Sans Arabic', Tahoma, system-ui,
-          sans-serif;
+        font-family:
+          'Segoe UI', 'Noto Naskh Arabic', 'Noto Sans Arabic', Tahoma, system-ui, sans-serif;
       }
       #langSlot:empty {
         display: none;
@@ -794,6 +848,7 @@
       </div>
     </main>
     <div class="viewer" id="viewer" hidden>
+      <a id="viewerSave" class="save" download aria-label="Download" title="Download">⬇</a>
       <img id="viewerImg" alt="" />
       <video id="viewerVideo" controls playsinline preload="metadata" hidden></video>
     </div>

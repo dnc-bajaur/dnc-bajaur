@@ -1771,6 +1771,10 @@ export async function moderatePost(
  *
  * `thumb` asks for the small copy: a photo's thumbnail, or a video's poster frame.
  *
+ * `download` asks for the same bytes **as a file to keep** (`content-disposition: attachment`),
+ * named by the post's day so a folder of them sorts itself. Nothing more is handed out than the
+ * page already shows: the same permission, the same file.
+ *
  * A video answers **byte ranges** (RFC 9110 §14): an iPhone will not play a video from a server
  * that does not, and every phone uses them to start playing before the whole file has arrived.
  *
@@ -1784,6 +1788,7 @@ export async function serveMedia(
   identity: Identity,
   mediaId: string,
   thumb: boolean,
+  download = false,
 ): Promise<ActivitiesResult<null> | null> {
   const c = await caller(pool, identity);
   const found = await pool.query<{
@@ -1795,9 +1800,10 @@ export async function serveMedia(
     sha256: string | null;
     stored_path: string;
     thumb_path: string | null;
+    day: string;
   }>(
     `SELECT p.author_person_id, p.hidden_at, m.kind, m.status, m.content_type, m.sha256,
-            m.stored_path, m.thumb_path
+            m.stored_path, m.thumb_path, to_char(p.activity_date, 'YYYY-MM-DD') AS day
        FROM activity_media m JOIN activity_post p ON p.post_id = m.post_id
       WHERE m.media_id = $1`,
     [mediaId],
@@ -1813,13 +1819,17 @@ export async function serveMedia(
 
   const useThumb = thumb && row.thumb_path !== null;
   const etag = `"${row.sha256.slice(0, 32)}${useThumb ? '-t' : ''}"`;
-  const headers = {
-    'content-type': useThumb ? 'image/jpeg' : row.content_type,
+  const type = useThumb ? 'image/jpeg' : row.content_type;
+  const headers: Record<string, string> = {
+    'content-type': type,
     'cache-control': 'private, no-cache',
     etag,
     'x-content-type-options': 'nosniff',
     'content-security-policy': "default-src 'none'; sandbox",
   };
+  if (download) {
+    headers['content-disposition'] = attachment(`activity-${row.day}-${mediaId.slice(0, 8)}`, type);
+  }
   if (req.headers['if-none-match'] === etag) {
     res.writeHead(304, headers).end();
     return null;
@@ -1838,6 +1848,25 @@ export async function serveMedia(
   res.writeHead(200, { ...headers, 'content-length': bytes.length });
   res.end(bytes);
   return null;
+}
+
+/** The ending a saved file gets, by the type it is served as. Unknown types get none. */
+const EXTENSION: Readonly<Record<string, string>> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'video/mp4': 'mp4',
+  'audio/ogg': 'ogg',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'aac',
+  'audio/amr': 'amr',
+};
+
+/** `content-disposition` for a file to keep. The name is built here, never from a request. */
+export function attachment(name: string, contentType: string): string {
+  const ext = EXTENSION[contentType.split(';')[0]!.trim().toLowerCase()];
+  return `attachment; filename="${name}${ext === undefined ? '' : `.${ext}`}"`;
 }
 
 /**

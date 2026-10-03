@@ -193,6 +193,14 @@ describe.skipIf(dbUrl === undefined)('Activities — fewer tabs (E3)', () => {
       [unit.rows[0]!.unit_id, officer.personId, `School visit ${tag}`],
     );
 
+    const photoId = randomUUID();
+    await pool.query(
+      `INSERT INTO activity_media (media_id, post_id, kind, status, content_type, byte_size, sha256, stored_path)
+       SELECT $1, post_id, 'photo', 'ready', 'image/jpeg', 3, $2, $3
+         FROM activity_post WHERE caption = $4`,
+      [photoId, 'a'.repeat(64), `${photoId}.jpg`, `School visit ${tag}`],
+    );
+
     const page = await openActivities(dc.phone, false);
     // The first thing on the page is the posts: the filter's fields are folded away.
     await page.waitForSelector('#feed article');
@@ -214,6 +222,10 @@ describe.skipIf(dbUrl === undefined)('Activities — fewer tabs (E3)', () => {
     expect(await card.locator('.author').textContent()).toContain('Test Officer');
     expect(await card.locator('a.phone').textContent()).toBe(officer.phone);
     expect(await card.locator('a.phone').getAttribute('href')).toMatch(/^tel:\+?\d+$/);
+    // Every photo carries its own Download.
+    const save = card.locator('.photos a.save');
+    expect(await save.getAttribute('href')).toBe(`/activities/media/${photoId}?download=1`);
+    expect(await save.getAttribute('aria-label')).toBe('Download');
 
     // Departments: a row each with its count; one tap is that department's posts, and a way back.
     await page.locator('#feedPick button[data-feed="units"]').click();
