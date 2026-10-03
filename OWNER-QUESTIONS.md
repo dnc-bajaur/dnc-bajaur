@@ -49,3 +49,16 @@ answered.
 9. **To send it by WhatsApp**, the new template `dnc_bajaur_login_link` must be submitted to Meta
    with the others (text in `docs/whatsapp-template.md`) and `WHATSAPP_TEMPLATE_LOGIN` set once
    approved. Until then "Give login" shows the DC the link with a Copy button — it works today.
+
+## Installer (2026-10-03)
+
+10. **The installer now carries ffmpeg** (for Activities videos): about 210 MB more on disk
+    (≈ 70 MB more in `setup.exe`). ffmpeg is GPL — it is shipped unmodified, as a separate
+    program, with its licence beside it. Say if you would rather install ffmpeg separately
+    (`-NoFfmpeg`). **Please run one full `build-installer.ps1` before a release** — I could
+    only check the script, not build `setup.exe` here.
+11. ⚠️ **Inherited, worth knowing:** re-running the installer rewrites `app\.env` from scratch,
+    so settings added to it by hand afterwards (WhatsApp keys, backup bucket) would be lost on
+    a reinstall. Keep a copy of `.env` before reinstalling. I did not change this.
+12. **Server-side HEIC was not built** (iPhone photos). WhatsApp and iPhone Safari already send
+    JPEG; details in PLAN §4 C3 notes. Say if officers run into it.

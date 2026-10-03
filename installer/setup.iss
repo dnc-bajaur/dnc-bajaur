@@ -72,6 +72,8 @@ Source: "stage\app\*";     DestDir: "{app}\app";     Flags: ignoreversion recurs
 Source: "stage\node\*";    DestDir: "{app}\node";    Flags: ignoreversion
 Source: "stage\pgsql\*";   DestDir: "{app}\pgsql";   Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "stage\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs createallsubdirs
+; ffmpeg for Activities videos — absent from a build made with -NoFfmpeg, hence the skip.
+Source: "stage\ffmpeg\*";  DestDir: "{app}\ffmpeg";  Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 ; Every shortcut runs the same `open` command, which starts whatever is not running and then

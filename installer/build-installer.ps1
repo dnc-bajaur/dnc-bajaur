@@ -21,6 +21,9 @@ param(
     [string]$PostgresDir = 'D:\dnc-bajaur-postgres\pgsql',
     [string]$NodeExe     = (Get-Command node -ErrorAction SilentlyContinue).Source,
     [string]$Version     = '1.0.0',
+    # ffmpeg, for Activities videos (ADR-0039 §4): any unpacked build under this folder.
+    [string]$FfmpegDir   = 'D:\dnc-bajaur-ffmpeg',
+    [switch]$NoFfmpeg,
     [switch]$SkipBuild
 )
 
@@ -229,6 +232,40 @@ Remove-Item (Join-Path $stagePg 'share\locale') -Recurse -Force -ErrorAction Sil
 
 Get-ChildItem $PostgresDir -File -Filter '*license*' | ForEach-Object {
     Copy-Item $_.FullName (Join-Path $stagePg $_.Name)
+}
+
+# --- ffmpeg, for Activities videos (ADR-0039 §4) -----------------------------------------------
+
+<#
+    Without ffmpeg an officer's video waits for ever: it is kept, never converted, and both the
+    DC's Activities screen and `npm run doctor` say so. So the release carries it — the two
+    programs the application runs, `ffmpeg.exe` and `ffprobe.exe`, and nothing else from the
+    build (no `ffplay`, no docs). They are GPL: shipped unmodified, as separate programs, with
+    their licence beside them. `-NoFfmpeg` builds without them, for a district that installs
+    ffmpeg itself and sets FFMPEG_PATH; the installed system then says videos are waiting.
+#>
+if ($NoFfmpeg) {
+    Note 'ffmpeg       not bundled (-NoFfmpeg): videos wait until FFMPEG_PATH is set'
+} else {
+    Step 'Staging ffmpeg'
+    $ffmpegExe = Get-ChildItem $FfmpegDir -Recurse -Filter 'ffmpeg.exe' -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $ffmpegExe) {
+        throw "ffmpeg was not found under $FfmpegDir. Pass -FfmpegDir with an unpacked ffmpeg build, or -NoFfmpeg to build without it."
+    }
+    $ffBin   = $ffmpegExe.DirectoryName
+    $ffRoot  = Split-Path -Parent $ffBin
+    $stageFf = Join-Path $Stage 'ffmpeg'
+    New-Item -ItemType Directory -Force -Path $stageFf | Out-Null
+    foreach ($exe in 'ffmpeg.exe', 'ffprobe.exe') {
+        $src = Join-Path $ffBin $exe
+        if (-not (Test-Path $src)) { throw "$exe was not found beside ffmpeg.exe in $ffBin." }
+        Copy-Item $src (Join-Path $stageFf $exe)
+    }
+    Get-ChildItem $ffRoot -File | Where-Object { $_.Name -match 'LICENSE|README' } | ForEach-Object {
+        Copy-Item $_.FullName (Join-Path $stageFf $_.Name)
+    }
+    Note "ffmpeg       $((& (Join-Path $stageFf 'ffmpeg.exe') -version | Select-Object -First 1))"
 }
 
 # --- the runtime scripts and the icon ------------------------------------------------------

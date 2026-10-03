@@ -41,6 +41,11 @@ it should not be there, not because of its size. `doc`, `include`, `StackBuilder
 | PostgreSQL 17, unpacked | Defaults to the portable cluster `scripts/dev-db.ps1` uses, so a development machine needs no arguments |
 
 `-PostgresDir`, `-NodeExe`, `-Version` and `-SkipBuild` are there when the defaults are wrong.
+
+**ffmpeg** (Activities videos, ADR-0039 §4) is bundled by default from any unpacked build under
+`-FfmpegDir` (default `D:\dnc-bajaur-ffmpeg`): only `ffmpeg.exe`, `ffprobe.exe` and their GPL
+licence, installed to `{app}\ffmpeg` and written into `.env` as `FFMPEG_PATH`/`FFPROBE_PATH`.
+About 210 MB on disk. `-NoFfmpeg` builds without it; videos then wait, and the DC is told.
 **`-SkipBuild` is for iterating on the installer itself**, not for cutting a release: it stages
 whatever is in `app/dist` and `app/web/dist` already, which after a test run is a development
 build. The script checks the staged bundle for minification and refuses rather than letting that

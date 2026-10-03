@@ -130,8 +130,8 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   (E4b/E4c), wording awaits the owner. E5 sign-in link (ADR-0043, migration 0055): login given
   by a single-use link the officer uses to set their own password. Shell v271.
   Tested with a stubbed Meta only. ⚠️ Any role other than `member` is the full control room.
-- **Next:** §4 is built. Remaining open items: server-side HEIC; ffmpeg in the Windows installer; trim
-  `docs/06-open-questions.md` — `PLAN.md`. Owner's open questions: `OWNER-QUESTIONS.md`.
+- **Next:** §4 is built. Remaining: trim `docs/06-open-questions.md` to Bajaur's; then only what
+  waits on the owner (§2 facts, §3 go-live, `OWNER-QUESTIONS.md`).
 
 ## 6. Repository map
 

@@ -65,6 +65,7 @@ const dataDir = arg('data-dir');
 
 const appDir = join(installDir, 'app');
 const pgBin = join(installDir, 'pgsql', 'bin');
+const ffmpegDir = join(installDir, 'ffmpeg');
 const pgData = join(dataDir, 'pgdata');
 const backupDir = join(dataDir, 'backups');
 const logDir = join(dataDir, 'logs');
@@ -409,6 +410,12 @@ writeFileSync(
     `DATABASE_URL=${databaseUrl}`,
     `PG_BIN=${pgBin}`,
     `BACKUP_DIR=${backupDir}`,
+    '',
+    // Activities videos are converted by the ffmpeg the installer carries (ADR-0039 §4). A
+    // release built with -NoFfmpeg has none: videos then wait, and the DC's screen says so.
+    ...(existsSync(join(ffmpegDir, 'ffmpeg.exe'))
+      ? [`FFMPEG_PATH=${join(ffmpegDir, 'ffmpeg.exe')}`, `FFPROBE_PATH=${join(ffmpegDir, 'ffprobe.exe')}`]
+      : ['# FFMPEG_PATH= and FFPROBE_PATH= — no ffmpeg was installed; Activities videos will wait.']),
     '',
     '# Off-site backup — R-06, waiting on the district.',
     '#',

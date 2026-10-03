@@ -162,8 +162,14 @@ C3 notes (2026-10-02):
   `FFPROBE_PATH` in `app/.env`.
 - Fixed on the way: the service worker answered `/activities/…` reads from its cache since C1
   (a new post did not appear in the list). `/activities` is now never cached (shell v263).
-- Open: the **Windows installer** does not ship ffmpeg yet; server-side **HEIC** conversion
-  (ADR-0039 §4) is not built.
+- [x] The **Windows installer** carries ffmpeg (2026-10-03): `build-installer.ps1` stages
+  `ffmpeg.exe` + `ffprobe.exe` + licence from `-FfmpegDir` (`-NoFfmpeg` to skip); `first-run.mjs`
+  writes `FFMPEG_PATH`/`FFPROBE_PATH`. ⚠️ Not yet tried in a full `setup.exe` build — the script
+  parses and the ffmpeg lookup was dry-run; run the build once before a release.
+- Server-side **HEIC** (ADR-0039 §4): **not built, on purpose** (2026-10-03). WhatsApp sends
+  photos as JPEG; iPhone Safari decodes HEIC and the phone converts before upload; a browser that
+  cannot is asked for a JPEG/PNG. Decoding iPhone HEIC on the server needs ffmpeg ≥ 7.1 or
+  libheif — the cloud setup's distribution ffmpeg cannot. Revisit if officers report it.
 - [x] "Remove this video" on a video that could not be used (2026-10-03): the author or a
   moderator, a failed video only, logged `video_removed` with the reason (migration 0056).
 
