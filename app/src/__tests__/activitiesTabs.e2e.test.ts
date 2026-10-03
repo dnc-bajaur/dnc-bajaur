@@ -1,12 +1,16 @@
 /**
- * Activities tabs, in a real Chromium (Bajaur — PLAN §4 E3, "fewer tabs").
+ * Activities tabs and its first screen, in a real Chromium (Bajaur — PLAN §4 E3 "fewer tabs",
+ * then §4b G1 "feed first", ADR-0044).
  *
  * What is pinned:
  *
- *   * the DC sees exactly Activities · New post · Pending (with its count) · Officers · History ·
- *     My account, in that order; the Department list is under Officers;
+ *   * the DC sees Activities · New post · Pending (with its count, and only while something
+ *     waits) · More; Officers, History and My account open from More; the Department list is
+ *     under Officers;
  *   * History holds the log and the Recycle bin, one at a time;
- *   * a member sees exactly Activities · New post · My account.
+ *   * a member sees exactly Activities · New post · My account;
+ *   * the page opens on the posts — All / Departments, the filter folded away — and a card says
+ *     who sent it, with their number; Departments lists each department with its count.
  *
  * Which tabs exist is a convenience only; the server refuses the DC's routes to a member
  * (`memberGate.test.ts`, `activities.test.ts`).
@@ -82,8 +86,9 @@ describe.skipIf(dbUrl === undefined)('Activities — fewer tabs (E3)', () => {
     return page;
   }
 
+  /** The tabs as the account sees them — one not drawn (Pending at nought, More's own) is not one. */
   const tabLabels = (page: Page): Promise<string[]> =>
-    page.locator('#tabs button').allTextContents();
+    page.locator('#tabs button:visible').allTextContents();
 
   /** Something waiting on the Pending list: an unknown number's words. Returns how many wait. */
   async function addPending(): Promise<number> {
@@ -135,16 +140,20 @@ describe.skipIf(dbUrl === undefined)('Activities — fewer tabs (E3)', () => {
     await page.context().close();
   }, 120_000);
 
-  it('gives the DC six tabs, the Pending count, Departments under Officers, and History', async () => {
+  it('gives the DC Activities, New post, Pending with its count, and the rest under More', async () => {
     const dc = await seedActor(pool, { title: 'Tabs e2e DC', role: 'owner' });
     const count = await addPending();
 
     const page = await openActivities(dc.phone, false);
     await page.waitForSelector(`#tabs button[data-tab="pending"]:has-text("(${count})")`);
+    expect(await tabLabels(page)).toEqual(['Activities', 'New post', `Pending (${count})`, 'More']);
+
+    await page.locator('#tabs button[data-more]').click();
     expect(await tabLabels(page)).toEqual([
       'Activities',
       'New post',
       `Pending (${count})`,
+      'More',
       'Officers',
       'History',
       'My account',
@@ -163,6 +172,87 @@ describe.skipIf(dbUrl === undefined)('Activities — fewer tabs (E3)', () => {
     expect(
       await page.locator('#historyPick button[data-part="bin"]').getAttribute('aria-pressed'),
     ).toBe('true');
+
+    // Back on a front tab, More folds away again.
+    await page.locator('#tabs button[data-tab="posts"]').click();
+    expect(await tabLabels(page)).toEqual(['Activities', 'New post', `Pending (${count})`, 'More']);
+  }, 120_000);
+
+  it('opens on the feed: All and Departments, no form, and a card that says who sent it', async () => {
+    const dc = await seedActor(pool, { title: 'Feed e2e DC', role: 'owner' });
+    const officer = await seedActor(pool, { title: 'Feed e2e officer', role: 'member' });
+    const tag = randomUUID().slice(0, 8);
+    const unit = await pool.query<{ unit_id: string }>(
+      `INSERT INTO activity_unit (name) VALUES ($1) RETURNING unit_id`,
+      [`Feed e2e ${tag}`],
+    );
+    await pool.query(`INSERT INTO activity_unit (name) VALUES ($1)`, [`Feed e2e quiet ${tag}`]);
+    await pool.query(
+      `INSERT INTO activity_post (unit_id, author_person_id, activity_date, caption)
+       VALUES ($1, $2, CURRENT_DATE, $3)`,
+      [unit.rows[0]!.unit_id, officer.personId, `School visit ${tag}`],
+    );
+
+    const page = await openActivities(dc.phone, false);
+    // The first thing on the page is the posts: the filter's fields are folded away.
+    await page.waitForSelector('#feed article');
+    expect(await page.locator('#feedPick button').allTextContents()).toEqual([
+      'All',
+      'Departments',
+    ]);
+    expect(await page.locator('#filterBox').isVisible()).toBe(false);
+    expect(
+      await page.locator('#view-posts select:visible, #view-posts input:visible').count(),
+    ).toBe(0);
+
+    // The card names its sender, with the number (ADR-0044 §2).
+    const card = page.locator('#feed article', { hasText: `School visit ${tag}` });
+    expect(await card.locator('.author').textContent()).toContain('Test Officer');
+    expect(await card.locator('a.phone').textContent()).toBe(officer.phone);
+    expect(await card.locator('a.phone').getAttribute('href')).toMatch(/^tel:\+?\d+$/);
+
+    // Departments: a row each with its count; one tap is that department's posts, and a way back.
+    await page.locator('#feedPick button[data-feed="units"]').click();
+    const tile = page.locator(`#unitTiles button[data-unit="${unit.rows[0]!.unit_id}"]`);
+    await tile.waitFor();
+    expect(await tile.textContent()).toContain(`Feed e2e ${tag}`);
+    expect(await tile.textContent()).toContain('1 post');
+    expect(
+      await page.locator('#unitTiles button', { hasText: `Feed e2e quiet ${tag}` }).textContent(),
+    ).toContain('No posts');
+    expect(await page.locator('#feed').isVisible()).toBe(false);
+
+    await tile.click();
+    await page.waitForSelector('#unitHead:not([hidden])');
+    expect(await page.locator('#unitTitle').textContent()).toBe(`Feed e2e ${tag}`);
+    await page.waitForSelector('#feed article');
+    expect(await page.locator('#feed article').count()).toBe(1);
+
+    await page.locator('#unitBack').click();
+    await tile.waitFor();
+
+    // Filter is one tap away, and All brings every department back.
+    await page.locator('#feedPick button[data-feed="all"]').click();
+    await page.waitForSelector('#feed article');
+    await page.locator('#filterToggle').click();
+    expect(await page.locator('#fFrom').isVisible()).toBe(true);
+  }, 120_000);
+
+  it('does not draw Pending while nothing waits', async () => {
+    const dc = await seedActor(pool, { title: 'Tabs e2e DC quiet', role: 'owner' });
+    const page = await (await browser.newContext()).newPage();
+    await page.route('**/activities/pending', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+    );
+    await page.goto(origin);
+    await page.waitForSelector('#login');
+    await page.fill('#phone', dc.phone);
+    await page.fill('#password', TEST_PASSWORD);
+    await page.click('#loginSubmit');
+    await page.waitForSelector('#nav:not([hidden])');
+    await page.goto(`${origin}/activities.html`);
+    await page.waitForSelector('#feedPick button');
+    expect(await tabLabels(page)).toEqual(['Activities', 'New post', 'More']);
   }, 120_000);
 
   it('gives a member three tabs', async () => {

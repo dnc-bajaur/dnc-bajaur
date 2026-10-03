@@ -174,6 +174,7 @@ import {
   setDefaultUnit,
   setOfficerActivities,
   startVideo,
+  unitCounts,
   uploadState,
   type ActivitiesResult,
 } from './activities.js';
@@ -1157,6 +1158,11 @@ async function handleActivities(
       return send(await createUnit(pool, identity, input), 201);
     }
     return notAllowed();
+  }
+
+  if (pathname === '/activities/units/counts') {
+    if (req.method !== 'GET') return notAllowed();
+    return send(await unitCounts(pool, identity));
   }
 
   const unit = /^\/activities\/units\/([^/]+)(?:\/(retire))?$/.exec(pathname);

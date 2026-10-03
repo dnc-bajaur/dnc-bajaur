@@ -78,6 +78,8 @@ interface Post {
   readonly unitName: string;
   readonly authorName: string;
   readonly authorDesignation: string | null;
+  /** Shown to everyone who can see the post (ADR-0044 §2). */
+  readonly authorPhone: string;
   readonly activityDate: string;
   readonly caption: string;
   readonly place: string | null;
@@ -284,12 +286,37 @@ function tabsFor(): Tab[] {
   return tabs;
 }
 
+/**
+ * ADR-0044 §3: what the DC office keeps but rarely opens sits under **More**, so the front row is
+ * Activities · New post (· Pending, while something waits). An account with only My account there
+ * — an officer — keeps it in the front row: a menu of one is a tap wasted.
+ */
+const UNDER_MORE: readonly Tab[] = ['officers', 'history', 'account'];
+
+function underMore(tabs: readonly Tab[]): boolean {
+  return tabs.some((t) => t === 'officers' || t === 'history');
+}
+
+let currentTab: Tab = 'posts';
+let pendingCount = 0;
+
 function show(tab: Tab): void {
+  currentTab = tab;
   for (const t of Object.keys(TAB_LABEL) as Tab[]) el(`view-${t}`).hidden = t !== tab;
-  for (const b of Array.from(el('tabs').querySelectorAll('button'))) {
+  const nav = el('tabs');
+  const more = nav.querySelector<HTMLButtonElement>('button[data-more]');
+  const open = more !== null && UNDER_MORE.includes(tab);
+  for (const b of Array.from(nav.querySelectorAll<HTMLButtonElement>('button[data-tab]'))) {
     if (b.dataset['tab'] === tab) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
+    if (b.classList.contains('more-item')) b.hidden = !open;
   }
+  if (more !== null) {
+    more.setAttribute('aria-expanded', String(open));
+    if (open) more.setAttribute('aria-current', 'page');
+    else more.removeAttribute('aria-current');
+  }
+  drawPendingTab();
   if (tab === 'posts') {
     void loadFeed(false);
     void loadExpiring();
@@ -321,11 +348,20 @@ for (const b of Array.from(el('historyPick').querySelectorAll('button'))) {
   b.addEventListener('click', () => showHistory(b.dataset['part'] === 'bin' ? 'bin' : 'log'));
 }
 
-/** The Pending tab carries its count, so the DC sees there is something without opening it. */
-function setPendingCount(count: number): void {
+/**
+ * The Pending tab carries its count, so the DC sees there is something without opening it — and
+ * is not drawn at all while nothing waits (ADR-0044 §3), unless it is the tab being looked at.
+ */
+function drawPendingTab(): void {
   const b = el('tabs').querySelector<HTMLButtonElement>('button[data-tab="pending"]');
   if (b === null) return;
-  b.textContent = count > 0 ? `${TAB_LABEL.pending} (${count})` : TAB_LABEL.pending;
+  b.textContent = pendingCount > 0 ? `${TAB_LABEL.pending} (${pendingCount})` : TAB_LABEL.pending;
+  b.hidden = pendingCount === 0 && currentTab !== 'pending';
+}
+
+function setPendingCount(count: number): void {
+  pendingCount = count;
+  drawPendingTab();
 }
 
 async function refreshPendingCount(): Promise<void> {
@@ -376,14 +412,6 @@ function fillSelect(
 const liveUnits = (): Unit[] => units.filter((u) => !u.retired);
 
 function fillUnitSelects(): void {
-  fillSelect(
-    el<HTMLSelectElement>('fUnit'),
-    [
-      { value: '', label: 'All departments' },
-      ...units.map((u) => ({ value: u.unitId, label: u.name })),
-    ],
-    el<HTMLSelectElement>('fUnit').value,
-  );
   const live = liveUnits().map((u) => ({ value: u.unitId, label: u.name }));
   fillSelect(
     el<HTMLSelectElement>('pUnit'),
@@ -504,12 +532,34 @@ function videoTile(video: Video, post: Post, refresh: () => void): HTMLElement {
 
 function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement {
   const card = make('article');
-  card.append(make('div', 'meta', `${post.unitName} · ${day(post.activityDate)}`));
-  const by = post.authorDesignation
-    ? `${post.authorName} — ${post.authorDesignation}`
-    : post.authorName;
+  // Who sent it, first (ADR-0044 §2): name, post, department, number, when.
+  const byline = make('div', 'byline');
+  const avatar = untranslated(make('div', 'avatar', post.authorName.trim().slice(0, 1) || '?'));
+  avatar.setAttribute('aria-hidden', 'true');
+  const who = make('div');
+  who.append(
+    untranslated(
+      make(
+        'div',
+        'author',
+        post.authorDesignation ? `${post.authorName} — ${post.authorDesignation}` : post.authorName,
+      ),
+    ),
+    make('div', 'meta', `${post.unitName} · ${day(post.activityDate)}`),
+  );
+  const sent = make('div', 'meta');
+  if (post.authorPhone !== '') {
+    const phone = make('a', 'phone', post.authorPhone);
+    phone.href = `tel:${post.authorPhone.replace(/[^0-9+]/g, '')}`;
+    phone.setAttribute('translate', 'no');
+    phone.dir = 'ltr';
+    sent.append(phone, ' · ');
+  }
   const how = post.source === 'whatsapp' ? 'sent on WhatsApp' : 'posted';
-  card.append(make('div', 'meta', `${by} · ${how} ${when(post.createdAt)}`));
+  sent.append(make('span', undefined, how), ' ', make('span', undefined, when(post.createdAt)));
+  who.append(sent);
+  byline.append(avatar, who);
+  card.append(byline);
   if (post.place !== null) card.append(make('div', 'meta', `Place: ${post.place}`));
   // Within the last days of its thirty, everyone who can see the post is told (ADR-0039 §7).
   if (Date.parse(post.expiresAt) - Date.now() < WARNING_MS) {
@@ -518,12 +568,15 @@ function postCard(post: Post, inBin: boolean, refresh: () => void): HTMLElement 
   card.append(untranslated(make('p', 'caption', post.caption)));
 
   if (post.photos.length > 0) {
-    const grid = make('div', 'photos');
+    const n = post.photos.length;
+    const grid = make('div', `photos ${n === 1 ? 'n1' : n === 2 ? 'n2' : 'many'}`);
     for (const photo of post.photos) {
       const img = make('img');
       img.loading = 'lazy';
       img.alt = 'Activity photo';
-      img.src = `/activities/media/${photo.mediaId}${photo.hasThumb ? '?size=thumb' : ''}`;
+      // A photo on its own fills the card, so it is shown whole; several use the small copies.
+      const small = photo.hasThumb && n > 1;
+      img.src = `/activities/media/${photo.mediaId}${small ? '?size=thumb' : ''}`;
       img.addEventListener('click', () => openViewer(`/activities/media/${photo.mediaId}`));
       grid.append(img);
     }
@@ -673,22 +726,94 @@ async function loadExpiring(): Promise<void> {
   box.hidden = parts.length === 0;
 }
 
+/**
+ * What the feed shows (ADR-0044 §1): every post (**All**), or — under **Departments** — the list
+ * of departments, and then one department's posts once it is chosen.
+ */
+let feedMode: 'all' | 'units' = 'all';
+let feedUnit: Unit | null = null;
+
+const FILTER_IDS = ['fPerson', 'fFrom', 'fTo'] as const;
+
+function filterOn(): boolean {
+  return FILTER_IDS.some((id) => el<HTMLInputElement | HTMLSelectElement>(id).value !== '');
+}
+
 function feedQuery(): URLSearchParams {
   const q = new URLSearchParams();
-  const unit = el<HTMLSelectElement>('fUnit').value;
   const person = el<HTMLSelectElement>('fPerson').value;
   const from = el<HTMLInputElement>('fFrom').value;
   const to = el<HTMLInputElement>('fTo').value;
-  if (unit !== '') q.set('unit', unit);
+  if (feedMode === 'units' && feedUnit !== null) q.set('unit', feedUnit.unitId);
   if (person !== '' && can('read_all')) q.set('person', person);
   if (from !== '') q.set('from', from);
   if (to !== '') q.set('to', to);
   return q;
 }
 
+/** The Departments list: every department, the busiest most recently first, with its count. */
+async function loadUnitTiles(): Promise<void> {
+  const box = el('unitTiles');
+  box.replaceChildren(make('p', 'muted', 'Loading…'));
+  try {
+    const counts = await api<{ unitId: string; posts: number; latestAt: string }[]>(
+      'GET',
+      '/activities/units/counts',
+    );
+    const by = new Map(counts.map((c) => [c.unitId, c]));
+    // A retired department is listed only while it still holds posts.
+    const shown = units
+      .filter((u) => !u.retired || by.has(u.unitId))
+      .sort((a, b) => {
+        const x = by.get(a.unitId)?.latestAt ?? '';
+        const y = by.get(b.unitId)?.latestAt ?? '';
+        return x === y ? a.name.localeCompare(b.name) : x < y ? 1 : -1;
+      });
+    box.replaceChildren(
+      ...shown.map((u) => {
+        const n = by.get(u.unitId)?.posts ?? 0;
+        const tile = button('', n === 0 ? 'unit-tile empty' : 'unit-tile');
+        tile.dataset['unit'] = u.unitId;
+        tile.append(
+          untranslated(make('span', 'unit-name', u.name)),
+          make('span', 'meta', n === 0 ? 'No posts' : n === 1 ? '1 post' : `${n} posts`),
+        );
+        tile.addEventListener('click', () => {
+          feedUnit = u;
+          void loadFeed(false);
+        });
+        return tile;
+      }),
+    );
+    if (shown.length === 0) box.append(make('p', 'muted', 'No departments yet.'));
+  } catch (e) {
+    const p = make('p', 'error');
+    showError(p, e);
+    box.replaceChildren(p);
+  }
+}
+
 async function loadFeed(more: boolean): Promise<void> {
   const feed = el('feed');
   const moreBtn = el<HTMLButtonElement>('more');
+  const listing = feedMode === 'units' && feedUnit === null;
+  for (const b of Array.from(el('feedPick').querySelectorAll('button'))) {
+    b.setAttribute('aria-pressed', String(b.dataset['feed'] === feedMode));
+  }
+  el('unitTiles').hidden = !listing;
+  el('unitHead').hidden = feedMode !== 'units' || feedUnit === null;
+  el('unitTitle').textContent = feedUnit?.name ?? '';
+  // The filter narrows posts; the Departments list has none to narrow.
+  el('filterToggle').hidden = listing;
+  el('filterToggle').classList.toggle('on', filterOn());
+  if (listing) el('filterBox').hidden = true;
+  el('filterToggle').setAttribute('aria-expanded', String(!el('filterBox').hidden));
+  feed.hidden = listing;
+  if (listing) {
+    moreBtn.hidden = true;
+    await loadUnitTiles();
+    return;
+  }
   const q = feedQuery();
   if (more && oldest !== null) q.set('before', oldest);
   if (!more) {
@@ -700,7 +825,9 @@ async function loadFeed(more: boolean): Promise<void> {
     if (!more) feed.replaceChildren();
     for (const p of page.posts) feed.append(postCard(p, false, () => void loadFeed(false)));
     if (!more && page.posts.length === 0) {
-      feed.append(make('p', 'muted', 'No activities match.'));
+      feed.append(
+        make('p', 'muted', filterOn() ? 'No activities match the filter.' : 'No activities yet.'),
+      );
     }
     oldest = page.posts.at(-1)?.createdAt ?? oldest;
     moreBtn.hidden = !page.more;
@@ -711,10 +838,31 @@ async function loadFeed(more: boolean): Promise<void> {
   }
 }
 
-for (const id of ['fUnit', 'fPerson', 'fFrom', 'fTo']) {
+for (const id of FILTER_IDS) {
   el(id).addEventListener('change', () => void loadFeed(false));
 }
 el('more').addEventListener('click', () => void loadFeed(true));
+
+for (const b of Array.from(el('feedPick').querySelectorAll('button'))) {
+  b.addEventListener('click', () => {
+    feedMode = b.dataset['feed'] === 'units' ? 'units' : 'all';
+    feedUnit = null;
+    void loadFeed(false);
+  });
+}
+el('unitBack').addEventListener('click', () => {
+  feedUnit = null;
+  void loadFeed(false);
+});
+el('filterToggle').addEventListener('click', () => {
+  const box = el('filterBox');
+  box.hidden = !box.hidden;
+  el('filterToggle').setAttribute('aria-expanded', String(!box.hidden));
+});
+el('filterClear').addEventListener('click', () => {
+  for (const id of FILTER_IDS) el<HTMLInputElement | HTMLSelectElement>(id).value = '';
+  void loadFeed(false);
+});
 
 async function loadBin(): Promise<void> {
   const feed = el('binFeed');
@@ -1873,14 +2021,31 @@ function drawTabs(): void {
   // Until the temporary password is replaced, only "My account" is offered (the server refuses
   // posting too — this only saves the officer a confusing refusal).
   const tabs: Tab[] = me.mustChangePassword ? ['account'] : tabsFor();
-  nav.replaceChildren(
-    ...tabs.map((t) => {
-      const b = button(TAB_LABEL[t]);
-      b.dataset['tab'] = t;
-      b.addEventListener('click', () => show(t));
-      return b;
-    }),
-  );
+  const menu = underMore(tabs);
+  const tabButton = (t: Tab): HTMLButtonElement => {
+    const b = button(TAB_LABEL[t]);
+    b.dataset['tab'] = t;
+    b.addEventListener('click', () => show(t));
+    return b;
+  };
+  const front = tabs.filter((t) => !menu || !UNDER_MORE.includes(t)).map(tabButton);
+  if (menu) {
+    const items = tabs.filter((t) => UNDER_MORE.includes(t)).map(tabButton);
+    for (const b of items) {
+      b.classList.add('more-item');
+      b.hidden = true;
+    }
+    const more = button('More');
+    more.dataset['more'] = '1';
+    more.setAttribute('aria-expanded', 'false');
+    more.addEventListener('click', () => {
+      const open = more.getAttribute('aria-expanded') !== 'true';
+      more.setAttribute('aria-expanded', String(open));
+      for (const b of items) b.hidden = !open && b.dataset['tab'] !== currentTab;
+    });
+    front.push(more, ...items);
+  }
+  nav.replaceChildren(...front);
   nav.hidden = false;
   show(tabs[0]!);
   void refreshPendingCount();
@@ -1903,9 +2068,8 @@ async function load(): Promise<void> {
   el('backToApp').hidden = me.role === 'member';
   el('mustChange').hidden = !me.mustChangePassword;
   el('fPersonWrap').hidden = !can('read_all');
-  el('scopeNote').textContent = can('read_all')
-    ? ''
-    : 'You see your own posts. The DC office sees every department.';
+  el('scopeNote').hidden = can('read_all');
+  el('scopeNote').textContent = 'You see your own posts. The DC office sees every department.';
   const date = el<HTMLInputElement>('pDate');
   date.max = me.today;
   date.value = me.today;

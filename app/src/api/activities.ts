@@ -257,6 +257,37 @@ export async function listUnits(pool: Pool): Promise<ActivitiesResult<readonly U
   };
 }
 
+export interface UnitCount {
+  readonly unitId: string;
+  readonly posts: number;
+  /** When its newest post was uploaded. */
+  readonly latestAt: string;
+}
+
+/**
+ * How many posts each department holds — the Departments view of the feed (ADR-0044 §1). Counted
+ * over what the caller may see: everyone's with `read_all`, one's own without it. A department
+ * with none is left out.
+ */
+export async function unitCounts(
+  pool: Pool,
+  identity: Identity,
+): Promise<ActivitiesResult<readonly UnitCount[]>> {
+  const c = await caller(pool, identity);
+  const all = c.can.has('activities.read_all');
+  const { rows } = await pool.query<{ unit_id: string; posts: number; latest_at: string }>(
+    `SELECT p.unit_id, count(*)::int AS posts, max(p.created_at) AS latest_at
+       FROM activity_post p
+      WHERE p.hidden_at IS NULL AND ($1 OR p.author_person_id = $2)
+      GROUP BY p.unit_id`,
+    [all, identity.personId],
+  );
+  return {
+    ok: true,
+    value: rows.map((r) => ({ unitId: r.unit_id, posts: r.posts, latestAt: r.latest_at })),
+  };
+}
+
 function unitName(input: Record<string, unknown>): string | ActivitiesResult<never> {
   const name = text(input['name']);
   if (name === '') return refuse(400, 'a department needs a name');
@@ -719,7 +750,10 @@ export interface PostView {
   readonly unitName: string;
   readonly authorPersonId: string;
   readonly authorName: string;
+  /** The post: the account's own text, else the Directory post the contact holds. */
   readonly authorDesignation: string | null;
+  /** Shown to everyone who can see the post (ADR-0044 §2). */
+  readonly authorPhone: string;
   readonly activityDate: string;
   readonly caption: string;
   readonly place: string | null;
@@ -760,6 +794,7 @@ interface PostRow {
   unit_name: string;
   author_person_id: string;
   author_name: string | null;
+  author_phone: string | null;
   author_designation: string | null;
   activity_date: string;
   caption: string;
@@ -775,7 +810,11 @@ interface PostRow {
 
 const POST_SELECT = `
   SELECT p.post_id, p.unit_id, u.name AS unit_name, p.author_person_id,
-         a.full_name AS author_name, a.designation AS author_designation,
+         a.full_name AS author_name, a.phone AS author_phone,
+         COALESCE(a.designation,
+                  (SELECT s.title FROM duty_assignment d JOIN seat s ON s.seat_id = d.seat_id
+                    WHERE d.person_id = a.person_id AND d.to_at IS NULL AND s.retired_at IS NULL
+                    ORDER BY d.from_at DESC LIMIT 1)) AS author_designation,
          to_char(p.activity_date, 'YYYY-MM-DD') AS activity_date,
          p.caption, p.place, p.created_at, p.hidden_at, p.source,
          p.created_at + make_interval(days => ${RETENTION_DAYS}) AS expires_at,
@@ -809,6 +848,7 @@ function toView(c: Caller, r: PostRow): PostView {
     authorPersonId: r.author_person_id,
     authorName: r.author_name ?? '',
     authorDesignation: r.author_designation,
+    authorPhone: r.author_phone ?? '',
     activityDate: r.activity_date,
     caption: r.caption,
     place: r.place,

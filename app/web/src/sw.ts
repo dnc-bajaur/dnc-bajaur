@@ -1286,7 +1286,7 @@ declare const self: ServiceWorkerGlobalScope;
 // recorded under v272 without a bump, so it reaches cached browsers only now); a viewer is shown
 // no Report tab and an inert Status (`main.ts`, `index.html`); the Activities Pending count keeps
 // itself current (`activities.ts`); the Record's tracks follow the table's own width (`index.html`).
-const CACHE = 'dnc-shell-v273';
+const CACHE = 'dnc-shell-v274';
 
 // v222: "The same period, as a file" moved off the Record onto Administration's History tab
 // (2026-09-05), at the owner's request — it no longer belongs on the day-to-day working screen.

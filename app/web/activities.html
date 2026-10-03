@@ -114,10 +114,87 @@
         background: var(--card);
       }
       nav button[aria-current='page'],
-      #historyPick button[aria-pressed='true'] {
+      #historyPick button[aria-pressed='true'],
+      .seg button[aria-pressed='true'] {
         background: var(--primary);
         border-color: var(--primary);
         color: var(--on-accent);
+      }
+      /* The feed's own bar: All / Departments, and Filter at the far end (ADR-0044). */
+      .feedbar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+      .seg {
+        display: flex;
+        gap: 6px;
+      }
+      .seg button {
+        padding: 9px 18px;
+        font-weight: 600;
+      }
+      #filterToggle[aria-expanded='true'],
+      #filterToggle.on {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+      .unit-tile {
+        display: flex;
+        width: 100%;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        margin-bottom: 8px;
+        text-align: start;
+        white-space: normal;
+        border-radius: 10px;
+      }
+      .unit-tile .unit-name {
+        font-weight: 600;
+      }
+      .unit-tile .meta {
+        white-space: nowrap;
+      }
+      .unit-tile.empty .unit-name {
+        font-weight: 400;
+        color: var(--muted);
+      }
+      .unit-head {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .unit-head h2 {
+        margin: 0;
+      }
+      /* A post says who sent it (ADR-0044 §2). */
+      .byline {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .avatar {
+        flex: 0 0 auto;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--primary);
+        color: var(--on-accent);
+        font-weight: 600;
+      }
+      .author {
+        font-weight: 600;
+      }
+      .byline a {
+        color: inherit;
       }
       #historyPick {
         margin-bottom: 12px;
@@ -267,6 +344,21 @@
         border: 1px solid var(--line);
         background: var(--paper);
         cursor: zoom-in;
+      }
+      /* One photo fills the card; two sit side by side; more make a grid of three. */
+      .photos.n1 {
+        grid-template-columns: 1fr;
+      }
+      .photos.n1 img {
+        aspect-ratio: auto;
+        max-height: 520px;
+        object-fit: contain;
+      }
+      .photos.n2 {
+        grid-template-columns: 1fr 1fr;
+      }
+      .photos.many {
+        grid-template-columns: repeat(3, 1fr);
       }
       .pick {
         position: relative;
@@ -463,12 +555,17 @@
       <div id="view-posts" hidden>
         <!-- The DC's 30-day warning (ADR-0039 §7). Drawn only for a moderator; asked again on the server. -->
         <section id="expiring" class="warn" hidden></section>
-        <section>
+        <!-- The feed first (ADR-0044): All or Departments, and nothing else in the way. -->
+        <div class="feedbar">
+          <div class="seg" id="feedPick" role="group" aria-label="Show">
+            <button type="button" data-feed="all" aria-pressed="true">All</button>
+            <button type="button" data-feed="units" aria-pressed="false">Departments</button>
+          </div>
+          <button id="filterToggle" type="button" aria-expanded="false">Filter</button>
+        </div>
+        <p class="meta" id="scopeNote" hidden></p>
+        <section id="filterBox" hidden>
           <div class="filters">
-            <div>
-              <label for="fUnit">Department</label>
-              <select id="fUnit"></select>
-            </div>
             <div id="fPersonWrap">
               <label for="fPerson">Person</label>
               <select id="fPerson"></select>
@@ -482,8 +579,14 @@
               <input id="fTo" type="date" />
             </div>
           </div>
-          <p class="meta" id="scopeNote" style="margin-top: 8px"></p>
+          <div class="row"><button id="filterClear" type="button">Clear filter</button></div>
         </section>
+        <!-- Departments: one row each, with how many posts it holds. A tap opens its feed. -->
+        <div id="unitTiles" hidden></div>
+        <div class="unit-head" id="unitHead" hidden>
+          <button id="unitBack" type="button">All departments</button>
+          <h2 id="unitTitle" translate="no" dir="auto"></h2>
+        </div>
         <div id="feed"></div>
         <div class="row"><button id="more" type="button" hidden>Show older posts</button></div>
       </div>
