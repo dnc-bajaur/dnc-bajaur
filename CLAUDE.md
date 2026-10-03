@@ -115,8 +115,10 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   Never use the other district's cluster on this machine. Full suite runs locally (files run one
   at a time). Rarely a test process dies mid-run here ("Worker exited unexpectedly"; cause
   unknown, never seen in CI). The run's end now names the file (`testing/crashTrace.ts`,
-  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement`, `takeAction`, `contrast`, `authPassword`, `activitiesVideo`, `log`, `whatsappActivities`, `words` —
+  trace in `app/var/test-trace.log`). Seen so far: `groups`, `integrity`, `wall`, `acknowledgement`, `takeAction`, `contrast`, `authPassword`, `activitiesVideo`, `log`, `whatsappActivities`, `words`, `reports`, `districtDay` —
   different files, dying before any test runs, no exit code; not reproducible on demand.
+  **Never start a second `vitest` while the full suite runs** — they share one test database and
+  the file running at that moment fails (seen: `dashboardLive.e2e`, 17 false failures).
 - **Built (ADR-0038/0039/0040/0041):** `member` role + one gate (`memberGate.test.ts`);
   Activities — photos, 30-day expiry + ZIP + media backup (no bucket yet), videos via ffmpeg
   (`D:\dnc-bajaur-ffmpeg`, `FFMPEG_PATH`); "Install this app"; WhatsApp → Activities
@@ -128,10 +130,16 @@ Full text and test mapping in `docs/01-invariants.md`. Each has a permanent test
   Departments under Officers, Log + Recycle bin under History, Pending count. E4a Urdu switch
   (ADR-0042): `web/src/i18n.ts` + word list `web/ur.json`; the whole app and the guide in Urdu
   (E4b/E4c), wording awaits the owner. E5 sign-in link (ADR-0043, migration 0055): login given
-  by a single-use link the officer uses to set their own password. Shell v272.
+  by a single-use link the officer uses to set their own password.
   Tested with a stubbed Meta only. A `viewer` is read-only (gate in `resolveSession`).
-- **Next:** the plan's buildable work is done. What remains waits on the owner: §2 facts, §3
-  go-live, and `OWNER-QUESTIONS.md` (Urdu wording, git-history decision, installer build).
+- **2026-10-03, loose ends F1–F6 (`PLAN.md` §4a), all done:** guide rewritten for Bajaur
+  (English + Urdu; `activitiesUrdu.e2e` fails if a guide paragraph has no key in `ur.json`);
+  installer keeps hand-added `.env` lines (`installer/runtime/env-merge.mjs`); a viewer is
+  offered no write control; Pending count refreshes itself; Record table fits its own width
+  (container query); Activities ZIP writes ZIP64 past 4 GB. Shell v273 — **bump `CACHE` in
+  `web/src/sw.ts` before `npm run shell:record`**, never record alone.
+- **Next:** nothing buildable is left. Everything waits on the owner — the ordered list is at
+  the top of `OWNER-QUESTIONS.md` (Meta account first, then server/domain, then §2 facts).
 
 ## 6. Repository map
 

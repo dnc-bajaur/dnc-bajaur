@@ -111,13 +111,12 @@ E4 notes (2026-10-03):
   English).
 - RTL: the ticker runs the other way; `overflow-x: clip` on an RTL page, the dashboard and the
   Record (an overhang past the left edge made them slide sideways).
-- Known, inherited (also in English): at 1366 px the Record's last column header ("Action")
-  hangs past the right edge.
+- [x] At 1366 px the Record's last column ("Action") hung past the right edge — fixed, §4a F5.
 
 E3 notes (2026-10-03):
 - The Department list now sits under **Officers** (same permission, `activities.departments`).
   **History** opens on the Log, with a switch to the Recycle bin. The Pending count is read when
-  the page opens and each time Pending is opened — it does not update live.
+  the page opens, each time Pending is opened, and every minute after (§4a F4).
 - Activities' selected buttons now use `--on-accent` (the dark-mode faint-text note under A is fixed).
 - Pinned by `activitiesTabs.e2e.test.ts` (shell v266).
 
@@ -177,16 +176,15 @@ C2 notes (2026-10-02):
 - Housekeeping runs **hourly** (expire → bucket deletes → copy), not once a night; see the
   ADR-0039 C2 note. Until `ACTIVITIES_S3_BUCKET` is set, photos exist only on the server — the
   DC's Activities warning and `npm run doctor` both say so. The 30-day rule runs regardless.
-- The ZIP holds only what expires in the next 3 days. Past 4 GB it is refused (no ZIP64).
+- The ZIP holds only what expires in the next 3 days. Past 4 GB it is written as ZIP64 (§4a F6).
 
 Rules that hold until these ship:
 - **B1 shipped (2026-10-02):** a `member` account is refused every operational route. Accounts
   of the other roles (`operator`, `viewer`, `admin`) still act as the full control room.
 - [x] The `viewer` role is enforced (2026-10-03): every operational write refuses a viewer, on
   the same deny-by-default door as the member gate (`viewerGate.test.ts` walks the router). Its
-  own password, sign-out and Activities still work. UI follow-up: the screens still offer a
-  viewer the Report form and other write buttons, which then refuse — hide them if viewers are
-  issued; a report a viewer's handset queued stays in its outbox (INV-01).
+  own password, sign-out and Activities still work. The screens no longer offer a viewer what
+  would be refused (§4a F3); a report a viewer's handset queued stays in its outbox (INV-01).
 - WhatsApp setup and template submission happen **only** on Bajaur's new Meta business
   portfolio — never on any other district's.
 
@@ -211,10 +209,18 @@ Each is built, tested, committed and pushed on its own. What then needs the owne
 |---|---|---|
 | F1 ✅ | **"How to use" guide rewritten for Bajaur** — officers' logins, Activities, WhatsApp → Activities, Settings, Urdu, sign-in link; what no longer exists removed. English and Urdu. No Bajaur fact invented | the guide names every screen in the navigation and nothing that is gone; `help.e2e` pins it; no paragraph falls back to English in Urdu |
 | F2 ✅ | **Installer keeps hand-added `.env` settings** on a reinstall (WhatsApp keys, backup bucket) | `installer/runtime/env-merge.mjs` carries every line the installer does not own; `installerEnv.test.ts`. ⚠️ Not tried in a real `setup.exe` run |
-| F3 | **Viewer sees no write buttons** — the server already refuses; the screens stop offering | a viewer's screens show no Report form or write control; e2e |
-| F4 | **Pending count updates by itself** in Activities | the count changes without reopening the page; e2e |
-| F5 | **Record's "Action" header** hangs past the right edge at 1366 px | nothing overflows at 1366 px, English and Urdu; e2e |
-| F6 | **Activities ZIP past 4 GB** (ZIP64) instead of refusing | a ZIP past the old limit is written and readable; test |
+| F3 ✅ | **Viewer sees no write buttons** — the server already refuses; the screens stop offering | no Report tab or form (lands on the Dashboard, phone included), "Read-only account" beside the name, Status shown but cannot be pressed; `viewerScreens.e2e` |
+| F4 ✅ | **Pending count updates by itself** in Activities | asked again every minute while the page is in front, and at once on coming back to it; `activitiesTabs.e2e` |
+| F5 ✅ | **Record's "Action" column** hung past the right edge at 1366 px | the table's tracks follow the table's own width (container query); between 768 and 896 px the rows are cards; `recordWidth.e2e`, English and Urdu |
+| F6 ✅ | **Activities ZIP past 4 GB** (ZIP64) instead of refusing | `ops/zip.ts` writes ZIP64 past 4 GB or 65 535 files; `zip.test.ts`. A real 4.25 GB archive was written and read back with .NET's ZIP reader (what Windows uses) |
+
+F notes (2026-10-03):
+- F3: what was found to be offered to a viewer was only the Report form and the Status controls —
+  an incident's own action buttons are already not drawn for an account outside the administration.
+- F5 was wider than the header: the whole Action column (*Inspect →* on every row) was off screen,
+  and the page scrolled sideways, at any width from 768 to about 1550 px.
+- F6: Windows' built-in `tar` skips a file whose folder name is in Urdu script when listing the
+  ZIP (the ZIP itself is correct — .NET and Explorer read it). Inherited, not from ZIP64.
 
 ## 5. To verify (open points)
 
